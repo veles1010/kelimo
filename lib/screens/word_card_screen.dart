@@ -1,12 +1,16 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:kelimo/data/animal_words.dart';
 import 'package:kelimo/models/word.dart';
+import 'package:kelimo/services/english_tts_service.dart';
 import 'package:kelimo/utils/turkish_case.dart';
 
 class WordCardScreen extends StatefulWidget {
-  const WordCardScreen({super.key});
+  const WordCardScreen({super.key, this.ttsService});
+
+  final EnglishTtsService? ttsService;
 
   @override
   State<WordCardScreen> createState() => _WordCardScreenState();
@@ -16,12 +20,14 @@ class _WordCardScreenState extends State<WordCardScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _flipController;
   late final Animation<double> _flipAnimation;
+  late final EnglishTtsService _ttsService;
   int _currentIndex = 0;
   String? _selectedDifficulty;
 
   @override
   void initState() {
     super.initState();
+    _ttsService = widget.ttsService ?? EnglishTtsService();
     _flipController = AnimationController(
       duration: const Duration(milliseconds: 450),
       vsync: this,
@@ -34,6 +40,7 @@ class _WordCardScreenState extends State<WordCardScreen>
 
   @override
   void dispose() {
+    unawaited(_ttsService.dispose());
     _flipController.dispose();
     super.dispose();
   }
@@ -47,8 +54,20 @@ class _WordCardScreenState extends State<WordCardScreen>
   }
 
   void _showWord(int index) {
+    unawaited(_ttsService.stop());
     _flipController.reset();
     setState(() => _currentIndex = index);
+  }
+
+  Future<void> _speakWord() async {
+    final didSpeak = await _ttsService.speak(
+      animalWords[_currentIndex].english,
+    );
+    if (!didSpeak && mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Ses oynatılamadı')));
+    }
   }
 
   @override
@@ -87,7 +106,15 @@ class _WordCardScreenState extends State<WordCardScreen>
                       word: word,
                     ),
                     const SizedBox(height: 20),
-                    const _VisualActions(),
+                    ValueListenableBuilder<bool>(
+                      valueListenable: _ttsService.isSpeaking,
+                      builder: (context, isSpeaking, child) {
+                        return _VisualActions(
+                          isSpeaking: isSpeaking,
+                          onListen: () => unawaited(_speakWord()),
+                        );
+                      },
+                    ),
                     const SizedBox(height: 28),
                     _DifficultySection(
                       selectedDifficulty: _selectedDifficulty,
@@ -241,7 +268,10 @@ class _CardBack extends StatelessWidget {
 }
 
 class _VisualActions extends StatelessWidget {
-  const _VisualActions();
+  const _VisualActions({required this.isSpeaking, required this.onListen});
+
+  final bool isSpeaking;
+  final VoidCallback onListen;
 
   @override
   Widget build(BuildContext context) {
@@ -249,9 +279,14 @@ class _VisualActions extends StatelessWidget {
       children: [
         Expanded(
           child: OutlinedButton.icon(
-            onPressed: () {},
-            icon: const Icon(Icons.volume_up_rounded),
-            label: const Text('Dinle'),
+            onPressed: isSpeaking ? null : onListen,
+            icon: isSpeaking
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.volume_up_rounded),
+            label: Text(isSpeaking ? 'Dinleniyor' : 'Dinle'),
           ),
         ),
         const SizedBox(width: 12),

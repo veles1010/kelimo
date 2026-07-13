@@ -1,10 +1,50 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kelimo/data/animal_words.dart';
 import 'package:kelimo/main.dart';
 import 'package:kelimo/screens/quiz_result_screen.dart';
+import 'package:kelimo/screens/word_card_screen.dart';
+import 'package:kelimo/services/english_tts_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 import 'package:kelimo/utils/turkish_case.dart';
+
+class FakeTtsEngine implements TtsEngine {
+  String? language;
+  double? speechRate;
+  double? volume;
+  double? pitch;
+  final spokenTexts = <String>[];
+  int stopCallCount = 0;
+  Completer<bool>? speakCompleter;
+  bool failOnSpeak = false;
+
+  @override
+  Future<void> configure({
+    required String language,
+    required double speechRate,
+    required double volume,
+    required double pitch,
+  }) async {
+    this.language = language;
+    this.speechRate = speechRate;
+    this.volume = volume;
+    this.pitch = pitch;
+  }
+
+  @override
+  Future<bool> speak(String text) {
+    spokenTexts.add(text);
+    if (failOnSpeak) throw StateError('TTS unavailable');
+    return speakCompleter?.future ?? Future.value(true);
+  }
+
+  @override
+  Future<void> stop() async {
+    stopCallCount++;
+  }
+}
 
 Future<void> openAnimalsCategory(WidgetTester tester) async {
   await tester.scrollUntilVisible(find.text('Hayvanlar'), 300);
@@ -13,6 +53,66 @@ Future<void> openAnimalsCategory(WidgetTester tester) async {
 }
 
 void main() {
+  test('İngilizce TTS ayarlanır ve eşzamanlı konuşmayı engeller', () async {
+    final engine = FakeTtsEngine()..speakCompleter = Completer<bool>();
+    final service = EnglishTtsService(engine: engine);
+
+    final firstSpeech = service.speak('Dog');
+    final ignoredSpeech = await service.speak('Cat');
+    await Future<void>.delayed(Duration.zero);
+
+    expect(ignoredSpeech, isTrue);
+    expect(service.isSpeaking.value, isTrue);
+    expect(engine.language, 'en-US');
+    expect(engine.speechRate, 0.42);
+    expect(engine.volume, 1.0);
+    expect(engine.pitch, 1.0);
+    expect(engine.spokenTexts, ['Dog']);
+
+    engine.speakCompleter!.complete(true);
+    expect(await firstSpeech, isTrue);
+    expect(service.isSpeaking.value, isFalse);
+
+    await service.dispose();
+  });
+
+  testWidgets('Dinle butonu mevcut kelimeyi kullanır ve aktif durum gösterir', (
+    tester,
+  ) async {
+    final engine = FakeTtsEngine()..speakCompleter = Completer<bool>();
+    final service = EnglishTtsService(engine: engine);
+
+    await tester.pumpWidget(
+      MaterialApp(home: WordCardScreen(ttsService: service)),
+    );
+    await tester.tap(find.text('Dinle'));
+    await tester.pump();
+
+    expect(engine.spokenTexts, ['Dog']);
+    expect(find.text('Dinleniyor'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+    engine.speakCompleter!.complete(true);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Dinle'), findsOneWidget);
+    expect(find.text('Dinleniyor'), findsNothing);
+  });
+
+  testWidgets('TTS hatası kullanıcıya bildirilir', (tester) async {
+    final service = EnglishTtsService(
+      engine: FakeTtsEngine()..failOnSpeak = true,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(home: WordCardScreen(ttsService: service)),
+    );
+    await tester.tap(find.text('Dinle'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ses oynatılamadı'), findsOneWidget);
+  });
+
   test('Quiz sonucu yüzde, yıldız ve motivasyon değerlerini hesaplar', () {
     expect(calculateQuizPercentage(correct: 9, total: 10), 90);
     expect(quizStarCount(correct: 10, total: 10), 5);
