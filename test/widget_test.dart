@@ -67,4 +67,31 @@ void main() {
     expect(find.text('Köpek'), findsOneWidget);
     expect(find.byType(BackButton), findsOneWidget);
   });
+
+  testWidgets('Öğrenmeye Başla ilk kelime kartını açar ve kart çevrilir', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const KelimoApp());
+
+    await tester.tap(find.text('Hayvanlar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Öğrenmeye Başla'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 / 24'), findsOneWidget);
+    expect(find.text('DOG'), findsOneWidget);
+    expect(find.text('Kartı çevirmek için dokun'), findsOneWidget);
+    expect(find.text('Dinle'), findsOneWidget);
+    expect(find.text('Favori'), findsOneWidget);
+    expect(find.text('Bu kelime nasıldı?'), findsOneWidget);
+    expect(find.text('Önceki'), findsOneWidget);
+    expect(find.text('Sonraki'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('word-card')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('KÖPEK'), findsOneWidget);
+    expect(find.text('The dog is sleeping.'), findsOneWidget);
+    expect(find.text('Köpek uyuyor.'), findsOneWidget);
+  });
 }

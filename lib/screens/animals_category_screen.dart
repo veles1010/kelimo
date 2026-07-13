@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:kelimo/screens/word_card_screen.dart';
 import 'package:kelimo/theme/app_theme.dart';
 
 class AnimalsCategoryScreen extends StatelessWidget {
@@ -20,32 +21,39 @@ class AnimalsCategoryScreen extends StatelessWidget {
             Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 720),
-                child: const Column(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _CategoryHeader(),
-                    SizedBox(height: 24),
-                    _CategoryProgressCard(),
-                    SizedBox(height: 24),
+                    const _CategoryHeader(),
+                    const SizedBox(height: 24),
+                    const _CategoryProgressCard(),
+                    const SizedBox(height: 24),
                     _ActionCard(
                       icon: Icons.school_rounded,
                       title: 'Öğrenmeye Başla',
                       subtitle: 'Kelime kartlarıyla çalış',
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const WordCardScreen(),
+                          ),
+                        );
+                      },
                     ),
-                    SizedBox(height: 12),
-                    _ActionCard(
+                    const SizedBox(height: 12),
+                    const _ActionCard(
                       icon: Icons.quiz_rounded,
                       title: 'Quiz Çöz',
                       subtitle: 'Bilgini test et',
                     ),
-                    SizedBox(height: 12),
-                    _ActionCard(
+                    const SizedBox(height: 12),
+                    const _ActionCard(
                       icon: Icons.insights_rounded,
                       title: 'İstatistik',
                       subtitle: 'Kategori performansını gör',
                     ),
-                    SizedBox(height: 32),
-                    _RecentStudies(),
+                    const SizedBox(height: 32),
+                    const _RecentStudies(),
                   ],
                 ),
               ),
@@ -152,50 +160,55 @@ class _ActionCard extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.subtitle,
+    this.onTap,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    return Card(
-      child: Padding(
-        padding: AppDimensions.cardPadding,
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(icon, color: colorScheme.primary),
+    final content = Padding(
+      padding: AppDimensions.cardPadding,
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(14),
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+            child: Icon(icon, color: colorScheme.primary),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
                   ),
-                  const SizedBox(height: 2),
-                  Text(subtitle),
-                ],
-              ),
+                ),
+                const SizedBox(height: 2),
+                Text(subtitle),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
+    );
+
+    return Card(
+      clipBehavior: onTap == null ? Clip.none : Clip.antiAlias,
+      child: onTap == null ? content : InkWell(onTap: onTap, child: content),
     );
   }
 }
