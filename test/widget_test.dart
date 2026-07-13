@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kelimo/data/animal_words.dart';
 import 'package:kelimo/main.dart';
+import 'package:kelimo/models/word.dart';
 import 'package:kelimo/screens/quiz_result_screen.dart';
 import 'package:kelimo/screens/word_card_screen.dart';
 import 'package:kelimo/services/english_tts_service.dart';
+import 'package:kelimo/services/learning_engine.dart';
 import 'package:kelimo/theme/app_theme.dart';
 import 'package:kelimo/utils/turkish_case.dart';
 
@@ -52,7 +54,84 @@ Future<void> openAnimalsCategory(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> pumpLearningSession(WidgetTester tester) async {
+  final service = EnglishTtsService(engine: FakeTtsEngine());
+  await tester.pumpWidget(
+    MaterialApp(home: WordCardScreen(ttsService: service)),
+  );
+  await tester.ensureVisible(find.text('Kolay'));
+  await tester.pumpAndSettle();
+}
+
+Future<void> selectLearningRating(WidgetTester tester, String rating) async {
+  await tester.ensureVisible(find.text(rating));
+  await tester.tap(find.text(rating));
+  await tester.pumpAndSettle();
+}
+
 void main() {
+  test('LearningEngine sonraki ve önceki kelimeyi yönetir', () {
+    final engine = LearningEngine(animalWords);
+
+    expect(engine.currentWord.english, 'Dog');
+    expect(engine.canPrevious, isFalse);
+    expect(engine.nextWord().english, 'Cat');
+    expect(engine.canPrevious, isTrue);
+    expect(engine.previousWord().english, 'Dog');
+  });
+
+  test('LearningEngine Kolay kelimeyi dokuz kart sonra getirir', () {
+    final engine = LearningEngine(animalWords);
+
+    expect(engine.rateEasy().english, 'Cat');
+    for (final english in [
+      'Bird',
+      'Fish',
+      'Horse',
+      'Cow',
+      'Sheep',
+      'Goat',
+      'Duck',
+      'Chicken',
+      'Dog',
+    ]) {
+      expect(engine.rateEasy().english, english);
+    }
+  });
+
+  test('LearningEngine Tekrar Et kelimesini iki kart sonra getirir', () {
+    final engine = LearningEngine(animalWords);
+
+    expect(engine.rateAgain().english, 'Cat');
+    expect(engine.rateEasy().english, 'Bird');
+    expect(engine.rateEasy().english, 'Dog');
+  });
+
+  test('LearningEngine Zor kelimeyi bir kart sonra getirir', () {
+    final engine = LearningEngine(animalWords);
+
+    expect(engine.rateHard().english, 'Cat');
+    expect(engine.rateEasy().english, 'Dog');
+  });
+
+  test('LearningEngine yalnızca tüm kelimeler Kolay olunca tamamlanır', () {
+    final engine = LearningEngine(animalWords);
+    Word? previousWord;
+    var evaluationCount = 0;
+
+    while (!engine.isComplete && evaluationCount < 100) {
+      expect(engine.currentWord, isNot(same(previousWord)));
+      previousWord = engine.currentWord;
+      engine.rateEasy();
+      evaluationCount++;
+    }
+
+    expect(engine.isComplete, isTrue);
+    expect(evaluationCount, 48);
+    expect(engine.canNext, isFalse);
+    expect(engine.canPrevious, isFalse);
+  });
+
   test('İngilizce TTS ayarlanır ve eşzamanlı konuşmayı engeller', () async {
     final engine = FakeTtsEngine()..speakCompleter = Completer<bool>();
     final service = EnglishTtsService(engine: engine);
@@ -111,6 +190,53 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Ses oynatılamadı'), findsOneWidget);
+  });
+
+  testWidgets('Zor seçilen kelime bir kart sonra yeniden gösterilir', (
+    tester,
+  ) async {
+    await pumpLearningSession(tester);
+
+    expect(find.text('DOG'), findsOneWidget);
+    await selectLearningRating(tester, 'Zor');
+    expect(find.text('CAT'), findsOneWidget);
+
+    await selectLearningRating(tester, 'Kolay');
+    expect(find.text('DOG'), findsOneWidget);
+  });
+
+  testWidgets('Tekrar Et seçilen kelime iki kart sonra yeniden gösterilir', (
+    tester,
+  ) async {
+    await pumpLearningSession(tester);
+
+    await selectLearningRating(tester, 'Tekrar Et');
+    expect(find.text('CAT'), findsOneWidget);
+    await selectLearningRating(tester, 'Kolay');
+    expect(find.text('BIRD'), findsOneWidget);
+    await selectLearningRating(tester, 'Kolay');
+
+    expect(find.text('DOG'), findsOneWidget);
+  });
+
+  testWidgets('Tüm kelimeler Kolay seçilince kategori tamamlanır', (
+    tester,
+  ) async {
+    await pumpLearningSession(tester);
+
+    for (
+      var index = 0;
+      index < 100 && find.text('Kategori Tamamlandı').evaluate().isEmpty;
+      index++
+    ) {
+      await selectLearningRating(tester, 'Kolay');
+    }
+
+    expect(find.text('Kategori Tamamlandı'), findsOneWidget);
+    expect(
+      find.text('Hayvanlar kategorisindeki tüm kelimeleri tamamladın!'),
+      findsOneWidget,
+    );
   });
 
   test('Quiz sonucu yüzde, yıldız ve motivasyon değerlerini hesaplar', () {

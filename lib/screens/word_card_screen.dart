@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:kelimo/data/animal_words.dart';
 import 'package:kelimo/models/word.dart';
 import 'package:kelimo/services/english_tts_service.dart';
+import 'package:kelimo/services/learning_engine.dart';
 import 'package:kelimo/utils/turkish_case.dart';
 
 class WordCardScreen extends StatefulWidget {
@@ -16,18 +17,30 @@ class WordCardScreen extends StatefulWidget {
   State<WordCardScreen> createState() => _WordCardScreenState();
 }
 
+enum _LearningRating {
+  easy('Kolay'),
+  repeat('Tekrar Et'),
+  hard('Zor');
+
+  const _LearningRating(this.label);
+
+  final String label;
+}
+
 class _WordCardScreenState extends State<WordCardScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _flipController;
   late final Animation<double> _flipAnimation;
   late final EnglishTtsService _ttsService;
-  int _currentIndex = 0;
-  String? _selectedDifficulty;
+  late final LearningEngine _learningEngine;
+  _LearningRating? _selectedDifficulty;
+  bool _isEvaluating = false;
 
   @override
   void initState() {
     super.initState();
     _ttsService = widget.ttsService ?? EnglishTtsService();
+    _learningEngine = LearningEngine(animalWords);
     _flipController = AnimationController(
       duration: const Duration(milliseconds: 450),
       vsync: this,
@@ -53,15 +66,87 @@ class _WordCardScreenState extends State<WordCardScreen>
     }
   }
 
-  void _showWord(int index) {
+  void _showNextWord() {
+    if (!_learningEngine.canNext || _isEvaluating) return;
+
     unawaited(_ttsService.stop());
     _flipController.reset();
-    setState(() => _currentIndex = index);
+    setState(() {
+      _learningEngine.nextWord();
+      _selectedDifficulty = null;
+    });
+  }
+
+  void _showPreviousWord() {
+    if (!_learningEngine.canPrevious || _isEvaluating) return;
+
+    unawaited(_ttsService.stop());
+    _flipController.reset();
+    setState(() {
+      _learningEngine.previousWord();
+      _selectedDifficulty = null;
+    });
+  }
+
+  Future<void> _evaluateWord(_LearningRating rating) async {
+    if (_isEvaluating || _learningEngine.isComplete) return;
+
+    setState(() {
+      _selectedDifficulty = rating;
+      _isEvaluating = true;
+    });
+
+    await Future<void>.delayed(const Duration(milliseconds: 220));
+    if (!mounted) return;
+
+    unawaited(_ttsService.stop());
+    _flipController.reset();
+
+    setState(() {
+      switch (rating) {
+        case _LearningRating.easy:
+          _learningEngine.rateEasy();
+          break;
+        case _LearningRating.repeat:
+          _learningEngine.rateAgain();
+          break;
+        case _LearningRating.hard:
+          _learningEngine.rateHard();
+          break;
+      }
+      _selectedDifficulty = null;
+      _isEvaluating = false;
+    });
+
+    if (_learningEngine.isComplete) await _showCompletionDialog();
+  }
+
+  Future<void> _showCompletionDialog() {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: Icon(
+          Icons.celebration_rounded,
+          color: Theme.of(context).colorScheme.primary,
+        ),
+        title: const Text('Kategori Tamamlandı'),
+        content: const Text(
+          'Hayvanlar kategorisindeki tüm kelimeleri tamamladın!',
+          textAlign: TextAlign.center,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Tamam'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _speakWord() async {
     final didSpeak = await _ttsService.speak(
-      animalWords[_currentIndex].english,
+      _learningEngine.currentWord.english,
     );
     if (!didSpeak && mounted) {
       ScaffoldMessenger.of(
@@ -72,7 +157,7 @@ class _WordCardScreenState extends State<WordCardScreen>
 
   @override
   Widget build(BuildContext context) {
-    final word = animalWords[_currentIndex];
+    final word = _learningEngine.currentWord;
 
     return Scaffold(
       appBar: AppBar(
@@ -84,7 +169,10 @@ class _WordCardScreenState extends State<WordCardScreen>
           Padding(
             padding: const EdgeInsets.only(right: 24),
             child: Center(
-              child: Text('${_currentIndex + 1} / ${animalWords.length}'),
+              child: Text(
+                '${_learningEngine.currentWordNumber} / '
+                '${_learningEngine.totalWordCount}',
+              ),
             ),
           ),
         ],
@@ -118,18 +206,17 @@ class _WordCardScreenState extends State<WordCardScreen>
                     const SizedBox(height: 28),
                     _DifficultySection(
                       selectedDifficulty: _selectedDifficulty,
-                      onSelected: (difficulty) {
-                        setState(() => _selectedDifficulty = difficulty);
-                      },
+                      enabled: !_isEvaluating && !_learningEngine.isComplete,
+                      onSelected: (rating) => unawaited(_evaluateWord(rating)),
                     ),
                     const SizedBox(height: 28),
                     _WordNavigation(
-                      onPrevious: _currentIndex == 0
+                      onPrevious: !_learningEngine.canPrevious || _isEvaluating
                           ? null
-                          : () => _showWord(_currentIndex - 1),
-                      onNext: _currentIndex == animalWords.length - 1
+                          : _showPreviousWord,
+                      onNext: !_learningEngine.canNext || _isEvaluating
                           ? null
-                          : () => _showWord(_currentIndex + 1),
+                          : _showNextWord,
                     ),
                   ],
                 ),
@@ -305,11 +392,13 @@ class _VisualActions extends StatelessWidget {
 class _DifficultySection extends StatelessWidget {
   const _DifficultySection({
     required this.selectedDifficulty,
+    required this.enabled,
     required this.onSelected,
   });
 
-  final String? selectedDifficulty;
-  final ValueChanged<String> onSelected;
+  final _LearningRating? selectedDifficulty;
+  final bool enabled;
+  final ValueChanged<_LearningRating> onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -327,11 +416,11 @@ class _DifficultySection extends StatelessWidget {
           spacing: 10,
           runSpacing: 10,
           children: [
-            for (final label in const ['Kolay', 'Tekrar Et', 'Zor'])
+            for (final rating in _LearningRating.values)
               ChoiceChip(
-                label: Text(label),
-                selected: selectedDifficulty == label,
-                onSelected: (_) => onSelected(label),
+                label: Text(rating.label),
+                selected: selectedDifficulty == rating,
+                onSelected: enabled ? (_) => onSelected(rating) : null,
               ),
           ],
         ),

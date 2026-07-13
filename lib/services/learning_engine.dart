@@ -1,0 +1,84 @@
+import 'dart:math' as math;
+
+import 'package:kelimo/models/word.dart';
+
+class LearningEngine {
+  LearningEngine(List<Word> words)
+    : assert(words.isNotEmpty),
+      _allWords = List.of(words),
+      _sessionQueue = List.of(words);
+
+  final List<Word> _allWords;
+  final List<Word> _sessionQueue;
+  final List<Word> _manualHistory = [];
+  final Set<Word> _easyConfirmations = {};
+  bool _isComplete = false;
+
+  Word get currentWord => _sessionQueue.first;
+  int get currentWordNumber => _allWords.indexOf(currentWord) + 1;
+  int get totalWordCount => _allWords.length;
+  bool get isComplete => _isComplete;
+  bool get canNext => !_isComplete && _sessionQueue.length > 1;
+  bool get canPrevious => !_isComplete && _manualHistory.isNotEmpty;
+
+  Word nextWord() {
+    if (!canNext) return currentWord;
+
+    final previousWord = _sessionQueue.removeAt(0);
+    _sessionQueue.add(previousWord);
+    _manualHistory.add(previousWord);
+    return currentWord;
+  }
+
+  Word previousWord() {
+    if (!canPrevious) return currentWord;
+
+    final previousWord = _manualHistory.removeLast();
+    _sessionQueue.remove(previousWord);
+    _sessionQueue.insert(0, previousWord);
+    return currentWord;
+  }
+
+  Word rateEasy() {
+    if (_isComplete) return currentWord;
+
+    _manualHistory.clear();
+    final current = currentWord;
+    final isConfirmed = _easyConfirmations.contains(current);
+
+    if (_sessionQueue.length == 1) {
+      _isComplete = true;
+      return currentWord;
+    }
+
+    if (isConfirmed) {
+      _easyConfirmations.remove(current);
+      _sessionQueue.removeAt(0);
+      return currentWord;
+    }
+
+    _easyConfirmations.add(current);
+    return _rescheduleCurrentWord(9);
+  }
+
+  Word rateAgain() {
+    if (_isComplete) return currentWord;
+    _easyConfirmations.remove(currentWord);
+    return _rescheduleCurrentWord(2);
+  }
+
+  Word rateHard() {
+    if (_isComplete) return currentWord;
+    _easyConfirmations.remove(currentWord);
+    return _rescheduleCurrentWord(1);
+  }
+
+  Word _rescheduleCurrentWord(int spacing) {
+    if (_isComplete) return currentWord;
+
+    _manualHistory.clear();
+    final current = _sessionQueue.removeAt(0);
+    _sessionQueue.insert(math.min(spacing, _sessionQueue.length), current);
+    return currentWord;
+  }
+}
