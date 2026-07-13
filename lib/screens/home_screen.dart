@@ -169,7 +169,203 @@ class _HeaderAndProgress extends StatelessWidget {
         Text('Bugün öğrenmeye hazır mısın?', style: textTheme.titleMedium),
         const SizedBox(height: 24),
         const _DailyProgressCard(),
+        const SizedBox(height: 16),
+        const _LevelCard(),
+        const SizedBox(height: 16),
+        const _DailyOverviewCards(),
       ],
+    );
+  }
+}
+
+class _LevelCard extends StatelessWidget {
+  const _LevelCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Card(
+      child: Padding(
+        padding: AppDimensions.cardPadding,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    Icons.workspace_premium_rounded,
+                    color: colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Seviye 4',
+                        style: textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text('Bir sonraki seviyeye doğru'),
+                    ],
+                  ),
+                ),
+                Text(
+                  '720 / 1000 XP',
+                  style: textTheme.labelLarge?.copyWith(
+                    color: colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            LinearProgressIndicator(
+              value: 0.72,
+              minHeight: 10,
+              borderRadius: BorderRadius.circular(5),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DailyOverviewCards extends StatelessWidget {
+  const _DailyOverviewCards();
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth >= 600;
+        final cardWidth = isWide
+            ? (constraints.maxWidth - 12) / 2
+            : constraints.maxWidth;
+
+        return Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            SizedBox(width: cardWidth, child: const _DailyStreakCard()),
+            SizedBox(width: cardWidth, child: const _DailyTaskCard()),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _DailyStreakCard extends StatelessWidget {
+  const _DailyStreakCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Card(
+      child: Padding(
+        padding: AppDimensions.cardPadding,
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: colorScheme.secondaryContainer,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(
+                Icons.local_fire_department_rounded,
+                color: colorScheme.secondary,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Günlük Seri',
+                    style: textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '7 gün',
+                    style: textTheme.titleLarge?.copyWith(
+                      color: colorScheme.secondary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DailyTaskCard extends StatelessWidget {
+  const _DailyTaskCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Card(
+      child: Padding(
+        padding: AppDimensions.cardPadding,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.task_alt_rounded, color: colorScheme.primary),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Günlük Görev',
+                    style: textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                Text(
+                  '6 / 10',
+                  style: textTheme.labelLarge?.copyWith(
+                    color: colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            const Text('Bugün 10 kelime öğren'),
+            const SizedBox(height: 10),
+            const LinearProgressIndicator(value: 0.60),
+          ],
+        ),
+      ),
     );
   }
 }

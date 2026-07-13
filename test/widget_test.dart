@@ -6,6 +6,12 @@ import 'package:kelimo/screens/quiz_result_screen.dart';
 import 'package:kelimo/theme/app_theme.dart';
 import 'package:kelimo/utils/turkish_case.dart';
 
+Future<void> openAnimalsCategory(WidgetTester tester) async {
+  await tester.scrollUntilVisible(find.text('Hayvanlar'), 300);
+  await tester.tap(find.text('Hayvanlar'));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   test('Quiz sonucu yüzde, yıldız ve motivasyon değerlerini hesaplar', () {
     expect(calculateQuizPercentage(correct: 9, total: 10), 90);
@@ -50,6 +56,14 @@ void main() {
     expect(find.text('Günlük ilerleme'), findsOneWidget);
     expect(find.text('18 / 30 kelime'), findsOneWidget);
     expect(find.text('🔥 7 günlük seri'), findsOneWidget);
+    expect(find.text('Seviye 4'), findsOneWidget);
+    expect(find.text('720 / 1000 XP'), findsOneWidget);
+    expect(find.text('Günlük Seri'), findsOneWidget);
+    expect(find.text('7 gün'), findsOneWidget);
+    expect(find.text('Günlük Görev'), findsOneWidget);
+    expect(find.text('Bugün 10 kelime öğren'), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsNWidgets(3));
+    await tester.scrollUntilVisible(find.text('Kategoriler'), 300);
     expect(find.text('Kategoriler'), findsOneWidget);
     expect(find.byType(NavigationBar), findsOneWidget);
   });
@@ -65,13 +79,9 @@ void main() {
       'Aile',
       'Ulaşım',
     ]) {
-      expect(find.text(category, skipOffstage: false), findsOneWidget);
+      await tester.scrollUntilVisible(find.text(category), 200);
+      expect(find.text(category), findsOneWidget);
     }
-
-    expect(
-      find.byType(LinearProgressIndicator, skipOffstage: false),
-      findsNWidgets(7),
-    );
   });
 
   testWidgets('uygulama Türkçe ve Material 3 kullanır', (tester) async {
@@ -91,8 +101,7 @@ void main() {
   testWidgets('Hayvanlar kartı kategori detay ekranını açar', (tester) async {
     await tester.pumpWidget(const KelimoApp());
 
-    await tester.tap(find.text('Hayvanlar'));
-    await tester.pumpAndSettle();
+    await openAnimalsCategory(tester);
 
     expect(find.text('Kategori ilerlemesi'), findsOneWidget);
     expect(find.text('12 / 24 kelime'), findsOneWidget);
@@ -111,8 +120,7 @@ void main() {
   ) async {
     await tester.pumpWidget(const KelimoApp());
 
-    await tester.tap(find.text('Hayvanlar'));
-    await tester.pumpAndSettle();
+    await openAnimalsCategory(tester);
     await tester.tap(find.text('Öğrenmeye Başla'));
     await tester.pumpAndSettle();
 
@@ -153,8 +161,7 @@ void main() {
   ) async {
     await tester.pumpWidget(const KelimoApp());
 
-    await tester.tap(find.text('Hayvanlar'));
-    await tester.pumpAndSettle();
+    await openAnimalsCategory(tester);
     await tester.tap(find.text('Quiz Çöz'));
     await tester.pumpAndSettle();
 
@@ -200,8 +207,7 @@ void main() {
   ) async {
     await tester.pumpWidget(const KelimoApp());
 
-    await tester.tap(find.text('Hayvanlar'));
-    await tester.pumpAndSettle();
+    await openAnimalsCategory(tester);
     await tester.tap(find.text('Quiz Çöz'));
     await tester.pumpAndSettle();
 
