@@ -4,17 +4,35 @@ import 'package:kelimo/main.dart';
 import 'package:kelimo/theme/app_theme.dart';
 
 void main() {
-  testWidgets('ana ekran temel içerikleri gösterir', (tester) async {
+  testWidgets('ana ekran gerekli bölümleri gösterir', (tester) async {
     await tester.pumpWidget(const KelimoApp());
 
-    expect(find.text('Kelimo'), findsOneWidget);
+    expect(find.text('Merhaba!'), findsOneWidget);
+    expect(find.text('Bugün öğrenmeye hazır mısın?'), findsOneWidget);
+    expect(find.text('Günlük ilerleme'), findsOneWidget);
+    expect(find.text('18 / 30 kelime'), findsOneWidget);
+    expect(find.text('🔥 7 günlük seri'), findsOneWidget);
+    expect(find.text('Kategoriler'), findsOneWidget);
+    expect(find.byType(NavigationBar), findsOneWidget);
+  });
+
+  testWidgets('altı kategori kartı ve içerikleri bulunur', (tester) async {
+    await tester.pumpWidget(const KelimoApp());
+
+    for (final category in [
+      'Hayvanlar',
+      'Yiyecekler',
+      'Renkler',
+      'Ev',
+      'Aile',
+      'Ulaşım',
+    ]) {
+      expect(find.text(category, skipOffstage: false), findsOneWidget);
+    }
+
     expect(
-      find.text('Kelimeleri keşfet, öğrenmenin keyfini çıkar.'),
-      findsOneWidget,
-    );
-    expect(
-      find.widgetWithText(FilledButton, 'Öğrenmeye başla'),
-      findsOneWidget,
+      find.byType(LinearProgressIndicator, skipOffstage: false),
+      findsNWidgets(7),
     );
   });
 
@@ -30,5 +48,23 @@ void main() {
     expect(app.darkTheme?.scaffoldBackgroundColor, AppColors.darkBackground);
     expect(app.theme?.colorScheme.primary, AppColors.turquoise);
     expect(app.theme?.colorScheme.secondary, AppColors.warmOrange);
+  });
+
+  testWidgets('Hayvanlar kartı kategori detay ekranını açar', (tester) async {
+    await tester.pumpWidget(const KelimoApp());
+
+    await tester.tap(find.text('Hayvanlar'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Kategori ilerlemesi'), findsOneWidget);
+    expect(find.text('12 / 24 kelime'), findsOneWidget);
+    expect(find.text('%50 tamamlandı'), findsOneWidget);
+    expect(find.text('Öğrenmeye Başla'), findsOneWidget);
+    expect(find.text('Quiz Çöz'), findsOneWidget);
+    expect(find.text('İstatistik'), findsOneWidget);
+    expect(find.text('Son çalışmalar'), findsOneWidget);
+    expect(find.text('Dog'), findsOneWidget);
+    expect(find.text('Köpek'), findsOneWidget);
+    expect(find.byType(BackButton), findsOneWidget);
   });
 }
