@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:kelimo/screens/animals_quiz_screen.dart';
 import 'package:kelimo/screens/word_card_screen.dart';
 import 'package:kelimo/theme/app_theme.dart';
 
@@ -41,10 +42,17 @@ class AnimalsCategoryScreen extends StatelessWidget {
                       },
                     ),
                     const SizedBox(height: 12),
-                    const _ActionCard(
+                    _ActionCard(
                       icon: Icons.quiz_rounded,
                       title: 'Quiz Çöz',
                       subtitle: 'Bilgini test et',
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const AnimalsQuizScreen(),
+                          ),
+                        );
+                      },
                     ),
                     const SizedBox(height: 12),
                     const _ActionCard(

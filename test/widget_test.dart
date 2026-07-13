@@ -2,10 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kelimo/data/animal_words.dart';
 import 'package:kelimo/main.dart';
+import 'package:kelimo/screens/quiz_result_screen.dart';
 import 'package:kelimo/theme/app_theme.dart';
 import 'package:kelimo/utils/turkish_case.dart';
 
 void main() {
+  test('Quiz sonucu yüzde, yıldız ve motivasyon değerlerini hesaplar', () {
+    expect(calculateQuizPercentage(correct: 9, total: 10), 90);
+    expect(quizStarCount(correct: 10, total: 10), 5);
+    expect(quizStarCount(correct: 9, total: 10), 4);
+    expect(quizStarCount(correct: 7, total: 10), 3);
+    expect(quizStarCount(correct: 5, total: 10), 2);
+    expect(quizStarCount(correct: 1, total: 10), 1);
+    expect(quizStarCount(correct: 0, total: 10), 0);
+    expect(quizMotivation(100), 'Mükemmel!');
+    expect(quizMotivation(80), 'Harika gidiyorsun!');
+    expect(quizMotivation(60), 'Güzel iş!');
+    expect(quizMotivation(40), 'Biraz daha çalışırsan çok daha iyi olacak.');
+    expect(quizMotivation(30), 'Pes etme, tekrar deneyelim!');
+  });
+
   test('Türkçe metni dil kurallarına uygun büyük harfe dönüştürür', () {
     expect(toTurkishUpperCase('kedi'), 'KEDİ');
     expect(toTurkishUpperCase('tilki'), 'TİLKİ');
@@ -130,5 +146,132 @@ void main() {
 
     expect(find.text('1 / 24'), findsOneWidget);
     expect(find.text('DOG'), findsOneWidget);
+  });
+
+  testWidgets('Quiz seçimi kilitlenir ve doğru cevap gösterilir', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const KelimoApp());
+
+    await tester.tap(find.text('Hayvanlar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Quiz Çöz'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Hayvanlar Quiz'), findsOneWidget);
+    expect(find.text('Soru 1 / 10'), findsOneWidget);
+    expect(find.text('DOG'), findsOneWidget);
+    expect(find.text('Doğru Türkçe karşılığı seç'), findsOneWidget);
+
+    var nextButton = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Sonraki Soru'),
+    );
+    expect(nextButton.onPressed, isNull);
+
+    await tester.tap(find.byKey(const ValueKey('quiz-option-Kedi')));
+    await tester.pump();
+
+    expect(find.byIcon(Icons.cancel_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.check_circle_rounded), findsOneWidget);
+
+    final lockedOption = tester.widget<InkWell>(
+      find.byKey(const ValueKey('quiz-option-Kedi')),
+    );
+    expect(lockedOption.onTap, isNull);
+
+    nextButton = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Sonraki Soru'),
+    );
+    expect(nextButton.onPressed, isNotNull);
+
+    await tester.ensureVisible(find.text('Sonraki Soru'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Sonraki Soru'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Soru 2 / 10'), findsOneWidget);
+    expect(find.text('CAT'), findsOneWidget);
+    expect(find.byIcon(Icons.cancel_rounded), findsNothing);
+    expect(find.byIcon(Icons.check_circle_rounded), findsNothing);
+  });
+
+  testWidgets('Quiz tamamlanınca sonuç gösterilir ve tekrar başlatılır', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const KelimoApp());
+
+    await tester.tap(find.text('Hayvanlar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Quiz Çöz'));
+    await tester.pumpAndSettle();
+
+    for (var index = 0; index < 10; index++) {
+      final correctOption = find.byKey(
+        ValueKey('quiz-option-${animalWords[index].turkish}'),
+      );
+      await tester.ensureVisible(correctOption);
+      await tester.pumpAndSettle();
+      await tester.tap(correctOption);
+      await tester.pump();
+
+      final buttonLabel = index == 9 ? 'Sonucu Gör' : 'Sonraki Soru';
+      await tester.ensureVisible(find.text(buttonLabel));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(buttonLabel));
+      await tester.pumpAndSettle();
+    }
+
+    expect(find.text('Tebrikler!'), findsOneWidget);
+    expect(find.text('Hayvanlar Quizi Tamamlandı'), findsOneWidget);
+    expect(find.text('10 / 10'), findsOneWidget);
+    expect(find.text('%100 başarı'), findsOneWidget);
+    expect(find.text('Mükemmel!'), findsOneWidget);
+    expect(find.byIcon(Icons.star_rounded), findsNWidgets(5));
+    expect(find.text('7 doğru'), findsOneWidget);
+    expect(find.text('1 dk 42 sn'), findsOneWidget);
+    expect(find.text('+120 XP'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Tekrar Çöz'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Tekrar Çöz'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Hayvanlar Quiz'), findsOneWidget);
+    expect(find.text('Soru 1 / 10'), findsOneWidget);
+    final nextButton = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Sonraki Soru'),
+    );
+    expect(nextButton.onPressed, isNull);
+  });
+
+  testWidgets('Sonuç ekranı dönüş butonlarını doğru callbacklere bağlar', (
+    tester,
+  ) async {
+    var selectedAction = '';
+
+    Widget resultScreen() => MaterialApp(
+      home: QuizResultScreen(
+        categoryName: 'Hayvanlar',
+        correctAnswerCount: 8,
+        totalQuestionCount: 10,
+        successPercentage: 80,
+        onRetry: () => selectedAction = 'retry',
+        onReturnToCategory: () => selectedAction = 'category',
+        onReturnHome: () => selectedAction = 'home',
+      ),
+    );
+
+    await tester.pumpWidget(resultScreen());
+    await tester.ensureVisible(find.text('Kategoriye Dön'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Kategoriye Dön'));
+    expect(selectedAction, 'category');
+
+    selectedAction = '';
+    await tester.pumpWidget(resultScreen());
+    await tester.ensureVisible(find.text('Ana Sayfa'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ana Sayfa'));
+    expect(selectedAction, 'home');
   });
 }
