@@ -1,6 +1,9 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:kelimo/data/animal_words.dart';
+import 'package:kelimo/models/word.dart';
+import 'package:kelimo/utils/turkish_case.dart';
 
 class WordCardScreen extends StatefulWidget {
   const WordCardScreen({super.key});
@@ -13,6 +16,7 @@ class _WordCardScreenState extends State<WordCardScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _flipController;
   late final Animation<double> _flipAnimation;
+  int _currentIndex = 0;
   String? _selectedDifficulty;
 
   @override
@@ -42,18 +46,27 @@ class _WordCardScreenState extends State<WordCardScreen>
     }
   }
 
+  void _showWord(int index) {
+    _flipController.reset();
+    setState(() => _currentIndex = index);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final word = animalWords[_currentIndex];
+
     return Scaffold(
       appBar: AppBar(
         leading: const BackButton(),
         title: const Text('Hayvanlar'),
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
-        actions: const [
+        actions: [
           Padding(
-            padding: EdgeInsets.only(right: 24),
-            child: Center(child: Text('1 / 24')),
+            padding: const EdgeInsets.only(right: 24),
+            child: Center(
+              child: Text('${_currentIndex + 1} / ${animalWords.length}'),
+            ),
           ),
         ],
       ),
@@ -71,6 +84,7 @@ class _WordCardScreenState extends State<WordCardScreen>
                     _FlippableWordCard(
                       animation: _flipAnimation,
                       onTap: _flipCard,
+                      word: word,
                     ),
                     const SizedBox(height: 20),
                     const _VisualActions(),
@@ -82,7 +96,14 @@ class _WordCardScreenState extends State<WordCardScreen>
                       },
                     ),
                     const SizedBox(height: 28),
-                    const _WordNavigation(),
+                    _WordNavigation(
+                      onPrevious: _currentIndex == 0
+                          ? null
+                          : () => _showWord(_currentIndex - 1),
+                      onNext: _currentIndex == animalWords.length - 1
+                          ? null
+                          : () => _showWord(_currentIndex + 1),
+                    ),
                   ],
                 ),
               ),
@@ -95,10 +116,15 @@ class _WordCardScreenState extends State<WordCardScreen>
 }
 
 class _FlippableWordCard extends StatelessWidget {
-  const _FlippableWordCard({required this.animation, required this.onTap});
+  const _FlippableWordCard({
+    required this.animation,
+    required this.onTap,
+    required this.word,
+  });
 
   final Animation<double> animation;
   final VoidCallback onTap;
+  final Word word;
 
   @override
   Widget build(BuildContext context) {
@@ -125,9 +151,9 @@ class _FlippableWordCard extends StatelessWidget {
                     ? Transform(
                         alignment: Alignment.center,
                         transform: Matrix4.rotationY(math.pi),
-                        child: const _CardBack(),
+                        child: _CardBack(word: word),
                       )
-                    : const _CardFront(),
+                    : _CardFront(word: word),
               ),
             ),
           ),
@@ -138,7 +164,9 @@ class _FlippableWordCard extends StatelessWidget {
 }
 
 class _CardFront extends StatelessWidget {
-  const _CardFront();
+  const _CardFront({required this.word});
+
+  final Word word;
 
   @override
   Widget build(BuildContext context) {
@@ -149,10 +177,10 @@ class _CardFront extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Text('🐶', style: TextStyle(fontSize: 80)),
+          Text(word.emoji, style: const TextStyle(fontSize: 80)),
           const SizedBox(height: 20),
           Text(
-            'DOG',
+            word.english.toUpperCase(),
             style: textTheme.displayMedium?.copyWith(
               fontWeight: FontWeight.bold,
               letterSpacing: 2,
@@ -171,7 +199,9 @@ class _CardFront extends StatelessWidget {
 }
 
 class _CardBack extends StatelessWidget {
-  const _CardBack();
+  const _CardBack({required this.word});
+
+  final Word word;
 
   @override
   Widget build(BuildContext context) {
@@ -184,7 +214,7 @@ class _CardBack extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
-            'KÖPEK',
+            toTurkishUpperCase(word.turkish),
             textAlign: TextAlign.center,
             style: textTheme.displaySmall?.copyWith(
               color: colorScheme.primary,
@@ -194,13 +224,13 @@ class _CardBack extends StatelessWidget {
           ),
           const SizedBox(height: 28),
           Text(
-            'The dog is sleeping.',
+            word.exampleSentence,
             textAlign: TextAlign.center,
             style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           Text(
-            'Köpek uyuyor.',
+            word.exampleTranslation,
             textAlign: TextAlign.center,
             style: textTheme.titleMedium,
           ),
@@ -276,7 +306,10 @@ class _DifficultySection extends StatelessWidget {
 }
 
 class _WordNavigation extends StatelessWidget {
-  const _WordNavigation();
+  const _WordNavigation({required this.onPrevious, required this.onNext});
+
+  final VoidCallback? onPrevious;
+  final VoidCallback? onNext;
 
   @override
   Widget build(BuildContext context) {
@@ -284,7 +317,7 @@ class _WordNavigation extends StatelessWidget {
       children: [
         Expanded(
           child: OutlinedButton.icon(
-            onPressed: null,
+            onPressed: onPrevious,
             icon: const Icon(Icons.arrow_back_rounded),
             label: const Text('Önceki'),
           ),
@@ -292,7 +325,7 @@ class _WordNavigation extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: FilledButton.icon(
-            onPressed: () {},
+            onPressed: onNext,
             icon: const Icon(Icons.arrow_forward_rounded),
             label: const Text('Sonraki'),
           ),

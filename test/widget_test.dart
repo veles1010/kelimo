@@ -1,9 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:kelimo/data/animal_words.dart';
 import 'package:kelimo/main.dart';
 import 'package:kelimo/theme/app_theme.dart';
+import 'package:kelimo/utils/turkish_case.dart';
 
 void main() {
+  test('Türkçe metni dil kurallarına uygun büyük harfe dönüştürür', () {
+    expect(toTurkishUpperCase('kedi'), 'KEDİ');
+    expect(toTurkishUpperCase('tilki'), 'TİLKİ');
+    expect(toTurkishUpperCase('inek'), 'İNEK');
+    expect(toTurkishUpperCase('ışık şğüöç'), 'IŞIK ŞĞÜÖÇ');
+  });
+
+  test('Hayvanlar listesi 24 benzersiz ve eksiksiz kelime içerir', () {
+    expect(animalWords, hasLength(24));
+    expect(animalWords.map((word) => word.english).toSet(), hasLength(24));
+
+    for (final word in animalWords) {
+      expect(word.english, isNotEmpty);
+      expect(word.turkish, isNotEmpty);
+      expect(word.emoji, isNotEmpty);
+      expect(word.exampleSentence, isNotEmpty);
+      expect(word.exampleTranslation, isNotEmpty);
+    }
+  });
+
   testWidgets('ana ekran gerekli bölümleri gösterir', (tester) async {
     await tester.pumpWidget(const KelimoApp());
 
@@ -93,5 +115,20 @@ void main() {
     expect(find.text('KÖPEK'), findsOneWidget);
     expect(find.text('The dog is sleeping.'), findsOneWidget);
     expect(find.text('Köpek uyuyor.'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Sonraki'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Sonraki'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('2 / 24'), findsOneWidget);
+    expect(find.text('CAT'), findsOneWidget);
+    expect(find.text('Kartı çevirmek için dokun'), findsOneWidget);
+
+    await tester.tap(find.text('Önceki'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 / 24'), findsOneWidget);
+    expect(find.text('DOG'), findsOneWidget);
   });
 }
