@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kelimo/main.dart';
+import 'package:kelimo/theme/app_theme.dart';
 
 void main() {
   testWidgets('ana ekran temel içerikleri gösterir', (tester) async {
@@ -25,5 +26,9 @@ void main() {
     expect(app.locale, const Locale('tr', 'TR'));
     expect(app.theme?.useMaterial3, isTrue);
     expect(app.darkTheme?.useMaterial3, isTrue);
+    expect(app.theme?.scaffoldBackgroundColor, AppColors.lightBackground);
+    expect(app.darkTheme?.scaffoldBackgroundColor, AppColors.darkBackground);
+    expect(app.theme?.colorScheme.primary, AppColors.turquoise);
+    expect(app.theme?.colorScheme.secondary, AppColors.warmOrange);
   });
 }

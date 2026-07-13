@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:kelimo/theme/app_theme.dart';
 
 void main() {
   runApp(const KelimoApp());
@@ -7,27 +8,14 @@ void main() {
 class KelimoApp extends StatelessWidget {
   const KelimoApp({super.key});
 
-  static const _seedColor = Color(0xFFF28C62);
-
-  ThemeData _theme(Brightness brightness) {
-    return ThemeData(
-      useMaterial3: true,
-      brightness: brightness,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: _seedColor,
-        brightness: brightness,
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Kelimo',
       debugShowCheckedModeBanner: false,
       locale: const Locale('tr', 'TR'),
-      theme: _theme(Brightness.light),
-      darkTheme: _theme(Brightness.dark),
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
       themeMode: ThemeMode.system,
       home: const HomeScreen(),
     );
