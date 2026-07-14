@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:kelimo/models/progress_statistics.dart';
 import 'package:kelimo/repositories/quiz_repository.dart';
@@ -36,10 +38,12 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    unawaited(widget.statisticsService.refresh());
     _animalsProgress = widget.statisticsService.loadCategory('animals');
   }
 
   void _reloadAnimalsProgress() {
+    unawaited(widget.statisticsService.refresh());
     setState(() {
       _animalsProgress = widget.statisticsService.loadCategory('animals');
     });
@@ -72,6 +76,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               child: _HeaderAndProgress(
                                 streakService: streakService,
                                 xpService: xpService,
+                                statisticsService: widget.statisticsService,
                               ),
                             ),
                           ),
@@ -234,17 +239,23 @@ class _HeaderAndProgress extends StatelessWidget {
   const _HeaderAndProgress({
     required this.streakService,
     required this.xpService,
+    required this.statisticsService,
   });
 
   final StreakService streakService;
   final XpService xpService;
+  final StatisticsService statisticsService;
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
 
     return AnimatedBuilder(
-      animation: Listenable.merge([streakService, xpService]),
+      animation: Listenable.merge([
+        streakService,
+        xpService,
+        statisticsService,
+      ]),
       builder: (context, child) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -257,7 +268,7 @@ class _HeaderAndProgress extends StatelessWidget {
           const SizedBox(height: 4),
           Text('Bugün öğrenmeye hazır mısın?', style: textTheme.titleMedium),
           const SizedBox(height: 24),
-          _DailyProgressCard(currentStreak: streakService.currentStreak),
+          _GeneralProgressCard(statisticsService: statisticsService),
           const SizedBox(height: 16),
           _LevelCard(xpService: xpService),
           const SizedBox(height: 16),
@@ -492,15 +503,60 @@ class _DailyTaskCard extends StatelessWidget {
   }
 }
 
-class _DailyProgressCard extends StatelessWidget {
-  const _DailyProgressCard({required this.currentStreak});
+String generalProgressDescription(WordLearningDistribution distribution) {
+  if (distribution.totalCount == 0) return 'Henüz kelime bulunmuyor';
+  if (distribution.learnedCount == distribution.totalCount) {
+    return 'Tüm kelimeleri öğrendin!';
+  }
+  if (distribution.learningCount > 0) {
+    return '${distribution.learningCount} kelime öğreniliyor';
+  }
+  return 'Henüz öğrenmeye başlamadın';
+}
 
-  final int currentStreak;
+class _GeneralProgressCard extends StatelessWidget {
+  const _GeneralProgressCard({required this.statisticsService});
+
+  final StatisticsService statisticsService;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final statistics = statisticsService.statistics;
+
+    if (statisticsService.isLoading && statistics == null) {
+      return Card(
+        child: Padding(
+          padding: AppDimensions.cardPadding,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Genel ilerleme',
+                style: textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const LinearProgressIndicator(),
+              const SizedBox(height: 16),
+              const Text('İlerleme yükleniyor...'),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final distribution =
+        statistics?.distribution ??
+        const WordLearningDistribution(
+          totalCount: 0,
+          newCount: 0,
+          learningCount: 0,
+          learnedCount: 0,
+        );
+    final progress = distribution.ratioFor(distribution.learnedCount);
 
     return Card(
       child: Padding(
@@ -512,14 +568,15 @@ class _DailyProgressCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    'Günlük ilerleme',
+                    'Genel ilerleme',
                     style: textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
                 Text(
-                  '18 / 30 kelime',
+                  '${distribution.learnedCount} / '
+                  '${distribution.totalCount} kelime',
                   style: textTheme.titleMedium?.copyWith(
                     color: colorScheme.primary,
                     fontWeight: FontWeight.bold,
@@ -528,12 +585,15 @@ class _DailyProgressCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 16),
-            const LinearProgressIndicator(value: 0.60),
+            LinearProgressIndicator(
+              key: const ValueKey('general-progress'),
+              value: progress,
+            ),
             const SizedBox(height: 16),
             Text(
-              '🔥 $currentStreak günlük seri',
+              generalProgressDescription(distribution),
               style: textTheme.titleMedium?.copyWith(
-                color: colorScheme.secondary,
+                color: colorScheme.primary,
                 fontWeight: FontWeight.w600,
               ),
             ),

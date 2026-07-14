@@ -6,6 +6,7 @@ import 'package:kelimo/data/animal_words.dart';
 import 'package:kelimo/data/local/database_service.dart';
 import 'package:kelimo/main.dart';
 import 'package:kelimo/models/daily_progress.dart';
+import 'package:kelimo/models/progress_statistics.dart';
 import 'package:kelimo/models/quiz_attempt.dart';
 import 'package:kelimo/models/word.dart';
 import 'package:kelimo/models/word_progress.dart';
@@ -1071,6 +1072,17 @@ void main() {
     expect(statistics.recentAttempts, isEmpty);
   });
 
+  test('Genel ilerleme veri olmadığında güvenli boş açıklama üretir', () {
+    const distribution = WordLearningDistribution(
+      totalCount: 0,
+      newCount: 0,
+      learningCount: 0,
+      learnedCount: 0,
+    );
+
+    expect(generalProgressDescription(distribution), 'Henüz kelime bulunmuyor');
+  });
+
   test(
     'İstatistikler kelime dağılımı, quiz sırası ve kategori değerlerini hesaplar',
     () async {
@@ -1171,9 +1183,12 @@ void main() {
 
     expect(find.text('Merhaba!'), findsOneWidget);
     expect(find.text('Bugün öğrenmeye hazır mısın?'), findsOneWidget);
-    expect(find.text('Günlük ilerleme'), findsOneWidget);
-    expect(find.text('18 / 30 kelime'), findsOneWidget);
-    expect(find.text('🔥 7 günlük seri'), findsOneWidget);
+    expect(find.text('Genel ilerleme'), findsOneWidget);
+    expect(find.text('0 / 24 kelime'), findsOneWidget);
+    expect(find.text('Henüz öğrenmeye başlamadın'), findsOneWidget);
+    expect(find.text('Günlük ilerleme'), findsNothing);
+    expect(find.text('18 / 30 kelime'), findsNothing);
+    expect(find.text('🔥 7 günlük seri'), findsNothing);
     expect(find.text('Seviye 1'), findsOneWidget);
     expect(find.text('0 / 1000 XP'), findsOneWidget);
     expect(find.text('Günlük Seri'), findsOneWidget);
@@ -1250,7 +1265,7 @@ void main() {
       ),
     );
 
-    expect(find.text('🔥 8 günlük seri'), findsOneWidget);
+    expect(find.text('🔥 8 günlük seri'), findsNothing);
     expect(find.text('8 gün'), findsOneWidget);
     expect(find.text('5 / 5'), findsOneWidget);
     expect(find.text('Günlük hedef tamamlandı'), findsOneWidget);
@@ -1399,6 +1414,13 @@ void main() {
         wordProgressStore: FakeWordProgressStore(records),
       );
 
+      expect(find.text('22 / 24 kelime'), findsOneWidget);
+      expect(find.text('2 kelime öğreniliyor'), findsOneWidget);
+      final generalProgress = tester.widget<LinearProgressIndicator>(
+        find.byKey(const ValueKey('general-progress')),
+      );
+      expect(generalProgress.value, 22 / 24);
+
       await tester.scrollUntilVisible(find.text('Hayvanlar'), 300);
       expect(find.text('%92'), findsOneWidget);
 
@@ -1413,6 +1435,31 @@ void main() {
       expect(find.text('22'), findsOneWidget);
     },
   );
+
+  testWidgets('Bütün kelimeler öğrenildiğinde genel ilerleme tamamlanır', (
+    tester,
+  ) async {
+    final records = {
+      for (final word in animalWords)
+        word.id: testWordProgress(
+          wordId: word.id,
+          mastery: 'easy',
+          repetitionCount: 1,
+        ),
+    };
+
+    await pumpKelimoApp(
+      tester,
+      wordProgressStore: FakeWordProgressStore(records),
+    );
+
+    expect(find.text('24 / 24 kelime'), findsOneWidget);
+    expect(find.text('Tüm kelimeleri öğrendin!'), findsOneWidget);
+    final generalProgress = tester.widget<LinearProgressIndicator>(
+      find.byKey(const ValueKey('general-progress')),
+    );
+    expect(generalProgress.value, 1.0);
+  });
 
   testWidgets(
     'Kelime değerlendirmesinden sonra kategori ilerlemesi yenilenir',
