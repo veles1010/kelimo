@@ -20,6 +20,7 @@ import 'package:kelimo/screens/word_card_screen.dart';
 import 'package:kelimo/services/english_tts_service.dart';
 import 'package:kelimo/services/learning_engine.dart';
 import 'package:kelimo/services/streak_service.dart';
+import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 import 'package:kelimo/utils/turkish_case.dart';
@@ -110,6 +111,26 @@ class FakeWordProgressStore implements WordProgressStore {
   Future<void> resetProgress(String wordId) async {
     records.remove(wordId);
   }
+}
+
+WordProgress testWordProgress({
+  required String wordId,
+  String mastery = 'new',
+  int repetitionCount = 0,
+  bool isFavorite = false,
+}) {
+  final now = DateTime.parse('2026-07-14T12:00:00.000');
+  return WordProgress(
+    wordId: wordId,
+    isFavorite: isFavorite,
+    mastery: mastery,
+    repetitionCount: repetitionCount,
+    correctCount: mastery == 'easy' ? 1 : 0,
+    wrongCount: mastery == 'again' || mastery == 'hard' ? 1 : 0,
+    lastReviewedAt: repetitionCount > 0 ? now : null,
+    nextReviewAt: null,
+    updatedAt: now,
+  );
 }
 
 class FakeDailyStorage {
@@ -315,15 +336,30 @@ Future<XpService> createXpService({
   return service;
 }
 
+StatisticsService createStatisticsService({
+  required StreakService streakService,
+  required XpService xpService,
+  WordProgressStore? wordProgressStore,
+  QuizStore? quizStore,
+}) {
+  return StatisticsService(
+    wordProgressStore: wordProgressStore ?? FakeWordProgressStore(),
+    quizStore: quizStore ?? FakeQuizStore(FakeQuizStorage(), FakeXpStorage()),
+    streakService: streakService,
+    xpService: xpService,
+  );
+}
+
 Future<void> pumpKelimoApp(
   WidgetTester tester, {
   FakeXpStorage? xpStorage,
   FakeQuizStorage? quizStorage,
+  WordProgressStore? wordProgressStore,
 }) async {
   final sharedXpStorage = xpStorage ?? FakeXpStorage();
   await tester.pumpWidget(
     KelimoApp(
-      wordProgressStore: FakeWordProgressStore(),
+      wordProgressStore: wordProgressStore ?? FakeWordProgressStore(),
       dailyProgressStore: FakeDailyProgressStore(),
       xpStore: FakeXpStore(sharedXpStorage),
       quizStore: FakeQuizStore(
@@ -1007,6 +1043,129 @@ void main() {
     }
   });
 
+  test('İstatistikler boş veride güvenli başlangıç değerleri üretir', () async {
+    final streakService = StreakService(initialStreak: 0);
+    final xpService = await createXpService();
+    final statisticsService = createStatisticsService(
+      streakService: streakService,
+      xpService: xpService,
+    );
+    addTearDown(streakService.dispose);
+    addTearDown(xpService.dispose);
+    addTearDown(statisticsService.dispose);
+
+    await statisticsService.refresh();
+    final statistics = statisticsService.statistics!;
+
+    expect(statistics.currentLevel, 1);
+    expect(statistics.totalXp, 0);
+    expect(statistics.currentStreak, 0);
+    expect(statistics.todayReviewCount, 0);
+    expect(statistics.startedWordCount, 0);
+    expect(statistics.favoriteWordCount, 0);
+    expect(statistics.distribution.newCount, 24);
+    expect(statistics.distribution.learningCount, 0);
+    expect(statistics.distribution.learnedCount, 0);
+    expect(statistics.quizStatistics.totalQuizCount, 0);
+    expect(statistics.quizStatistics.generalSuccessPercentage, 0);
+    expect(statistics.recentAttempts, isEmpty);
+  });
+
+  test(
+    'İstatistikler kelime dağılımı, quiz sırası ve kategori değerlerini hesaplar',
+    () async {
+      final wordStore = FakeWordProgressStore({
+        'dog': testWordProgress(
+          wordId: 'dog',
+          mastery: 'easy',
+          repetitionCount: 1,
+          isFavorite: true,
+        ),
+        'cat': testWordProgress(wordId: 'cat', isFavorite: true),
+        'bird': testWordProgress(
+          wordId: 'bird',
+          mastery: 'hard',
+          repetitionCount: 2,
+        ),
+        'fish': testWordProgress(
+          wordId: 'fish',
+          mastery: 'again',
+          repetitionCount: 1,
+        ),
+        'horse': testWordProgress(
+          wordId: 'horse',
+          mastery: 'easy',
+          repetitionCount: 1,
+        ),
+      });
+      final xpStorage = FakeXpStorage(totalXp: 250);
+      final quizStorage = FakeQuizStorage();
+      final quizStore = FakeQuizStore(quizStorage, xpStorage);
+      final attempts = [
+        ('animals', 10, 100),
+        ('animals', 7, 70),
+        ('animals', 5, 50),
+        ('animals', 9, 90),
+        ('animals', 8, 80),
+        ('animals', 6, 60),
+        ('foods', 4, 40),
+      ];
+      for (var index = 0; index < attempts.length; index++) {
+        final attempt = attempts[index];
+        await quizStore.saveCompletedQuiz(
+          categoryId: attempt.$1,
+          correctCount: attempt.$2,
+          totalQuestions: 10,
+          scorePercent: attempt.$3,
+          completedAt: DateTime(2026, 7, index + 1),
+        );
+      }
+      final streakService = StreakService(initialStreak: 3);
+      for (var count = 0; count < 4; count++) {
+        await streakService.recordEvaluation();
+      }
+      final xpService = await createXpService(
+        repository: FakeXpStore(xpStorage),
+      );
+      final statisticsService = createStatisticsService(
+        streakService: streakService,
+        xpService: xpService,
+        wordProgressStore: wordStore,
+        quizStore: quizStore,
+      );
+      addTearDown(streakService.dispose);
+      addTearDown(xpService.dispose);
+      addTearDown(statisticsService.dispose);
+
+      await statisticsService.refresh();
+      final statistics = statisticsService.statistics!;
+      final category = await statisticsService.loadCategory('animals');
+
+      expect(statistics.startedWordCount, 4);
+      expect(statistics.favoriteWordCount, 2);
+      expect(statistics.distribution.newCount, 20);
+      expect(statistics.distribution.learningCount, 2);
+      expect(statistics.distribution.learnedCount, 2);
+      expect(statistics.quizStatistics.totalQuizCount, 7);
+      expect(statistics.quizStatistics.generalSuccessPercentage, 70);
+      expect(statistics.bestCategoryName, 'Hayvanlar');
+      expect(statistics.highestQuizScore, 100);
+      expect(statistics.recentAttempts, hasLength(5));
+      expect(statistics.recentAttempts.first.categoryId, 'foods');
+      expect(statistics.recentAttempts.first.completedAt, DateTime(2026, 7, 7));
+      expect(statistics.recentAttempts.last.completedAt, DateTime(2026, 7, 3));
+
+      expect(category.totalWordCount, 24);
+      expect(category.reviewedWordCount, 4);
+      expect(category.learnedWordCount, 2);
+      expect(category.favoriteWordCount, 2);
+      expect(category.averageMasteryPercentage, 13);
+      expect(category.completedQuizCount, 6);
+      expect(category.highestQuizScore, 100);
+      expect(category.averageQuizPercentage, 75);
+    },
+  );
+
   testWidgets('ana ekran gerekli bölümleri gösterir', (tester) async {
     await pumpKelimoApp(tester);
 
@@ -1028,6 +1187,40 @@ void main() {
     expect(find.byType(NavigationBar), findsOneWidget);
   });
 
+  testWidgets(
+    'İlerleme ekranı boş veride güvenli değerleri ve boş quiz durumunu gösterir',
+    (tester) async {
+      await pumpKelimoApp(tester);
+
+      await tester.tap(find.text('İlerleme'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Tüm çalışmalarının güncel özeti'), findsOneWidget);
+      expect(find.text('Toplam XP'), findsOneWidget);
+      expect(find.text('Başlanan kelime'), findsOneWidget);
+      expect(find.text('Favori kelime'), findsOneWidget);
+      expect(find.text('Tamamlanan quiz'), findsOneWidget);
+      expect(find.text('Quiz başarısı'), findsOneWidget);
+      expect(find.text('Yeni'), findsOneWidget);
+      expect(find.text('24 • %100'), findsOneWidget);
+      expect(find.text('Henüz tamamlanmış bir quiz yok.'), findsOneWidget);
+    },
+  );
+
+  testWidgets('İlerleme ekranı küçük boyutta taşma yapmaz', (tester) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(320, 568));
+    await pumpKelimoApp(tester);
+
+    await tester.tap(find.text('İlerleme'));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Kelime öğrenme dağılımı'), findsOneWidget);
+  });
+
   testWidgets('Ana ekran tamamlanan günlük hedefi servisten gösterir', (
     tester,
   ) async {
@@ -1038,6 +1231,11 @@ void main() {
       await streakService.recordEvaluation();
     }
     final xpService = await createXpService();
+    final statisticsService = createStatisticsService(
+      streakService: streakService,
+      xpService: xpService,
+    );
+    addTearDown(statisticsService.dispose);
 
     await tester.pumpWidget(
       MaterialApp(
@@ -1047,6 +1245,7 @@ void main() {
           wordProgressStore: FakeWordProgressStore(),
           xpService: xpService,
           quizStore: FakeQuizStore(FakeQuizStorage(), FakeXpStorage()),
+          statisticsService: statisticsService,
         ),
       ),
     );
@@ -1065,6 +1264,11 @@ void main() {
     addTearDown(streakService.dispose);
     addTearDown(xpService.dispose);
     await streakService.initialize();
+    final statisticsService = createStatisticsService(
+      streakService: streakService,
+      xpService: xpService,
+    );
+    addTearDown(statisticsService.dispose);
 
     await tester.pumpWidget(
       MaterialApp(
@@ -1074,6 +1278,7 @@ void main() {
           wordProgressStore: FakeWordProgressStore(),
           xpService: xpService,
           quizStore: FakeQuizStore(FakeQuizStorage(), FakeXpStorage()),
+          statisticsService: statisticsService,
         ),
       ),
     );
@@ -1096,6 +1301,11 @@ void main() {
         await streakService.recordEvaluation();
       }
       final xpService = await createXpService();
+      final statisticsService = createStatisticsService(
+        streakService: streakService,
+        xpService: xpService,
+      );
+      addTearDown(statisticsService.dispose);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -1105,6 +1315,7 @@ void main() {
             wordProgressStore: FakeWordProgressStore(),
             xpService: xpService,
             quizStore: FakeQuizStore(FakeQuizStorage(), FakeXpStorage()),
+            statisticsService: statisticsService,
           ),
         ),
       );
@@ -1159,8 +1370,8 @@ void main() {
     await openAnimalsCategory(tester);
 
     expect(find.text('Kategori ilerlemesi'), findsOneWidget);
-    expect(find.text('12 / 24 kelime'), findsOneWidget);
-    expect(find.text('%50 tamamlandı'), findsOneWidget);
+    expect(find.text('0 / 24 kelime'), findsOneWidget);
+    expect(find.text('%0 tamamlandı'), findsOneWidget);
     expect(find.text('Öğrenmeye Başla'), findsOneWidget);
     expect(find.text('Quiz Çöz'), findsOneWidget);
     expect(find.text('İstatistik'), findsOneWidget);
@@ -1168,6 +1379,84 @@ void main() {
     expect(find.text('Dog'), findsOneWidget);
     expect(find.text('Köpek'), findsOneWidget);
     expect(find.byType(BackButton), findsOneWidget);
+  });
+
+  testWidgets(
+    'Ana ekran, kategori ekranı ve istatistik ekranı aynı öğrenilen sayısını kullanır',
+    (tester) async {
+      final records = <String, WordProgress>{};
+      for (var index = 0; index < animalWords.length; index++) {
+        final word = animalWords[index];
+        records[word.id] = testWordProgress(
+          wordId: word.id,
+          mastery: index < 22 ? 'easy' : 'hard',
+          repetitionCount: 1,
+        );
+      }
+
+      await pumpKelimoApp(
+        tester,
+        wordProgressStore: FakeWordProgressStore(records),
+      );
+
+      await tester.scrollUntilVisible(find.text('Hayvanlar'), 300);
+      expect(find.text('%92'), findsOneWidget);
+
+      await tester.tap(find.text('Hayvanlar'));
+      await tester.pumpAndSettle();
+      expect(find.text('22 / 24 kelime'), findsOneWidget);
+      expect(find.text('%92 tamamlandı'), findsOneWidget);
+
+      await tester.tap(find.text('İstatistik'));
+      await tester.pumpAndSettle();
+      expect(find.text('Öğrenilen'), findsOneWidget);
+      expect(find.text('22'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Kelime değerlendirmesinden sonra kategori ilerlemesi yenilenir',
+    (tester) async {
+      final wordStore = FakeWordProgressStore();
+      await pumpKelimoApp(tester, wordProgressStore: wordStore);
+
+      await openAnimalsCategory(tester);
+      expect(find.text('0 / 24 kelime'), findsOneWidget);
+
+      await tester.tap(find.text('Öğrenmeye Başla'));
+      await tester.pumpAndSettle();
+      await selectLearningRating(tester, 'Kolay');
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+
+      expect(find.text('1 / 24 kelime'), findsOneWidget);
+      expect(find.text('%4 tamamlandı'), findsOneWidget);
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.text('Hayvanlar'), 300);
+      expect(find.text('%4'), findsOneWidget);
+    },
+  );
+
+  testWidgets('Kategori İstatistik kartı gerçek kategori özetini açar', (
+    tester,
+  ) async {
+    await pumpKelimoApp(tester);
+    await openAnimalsCategory(tester);
+
+    await tester.tap(find.text('İstatistik'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Hayvanlar İstatistikleri'), findsOneWidget);
+    expect(find.text('Hayvanlar performansı'), findsOneWidget);
+    expect(find.text('Toplam kelime'), findsOneWidget);
+    expect(find.text('Değerlendirilen'), findsOneWidget);
+    expect(find.text('Öğrenilen'), findsOneWidget);
+    expect(find.text('Ortalama mastery'), findsOneWidget);
+    expect(find.text('Tamamlanan quiz'), findsOneWidget);
+    expect(find.text('En yüksek skor'), findsOneWidget);
+    expect(find.text('Ortalama quiz'), findsOneWidget);
   });
 
   testWidgets('Öğrenmeye Başla ilk kelime kartını açar ve kart çevrilir', (

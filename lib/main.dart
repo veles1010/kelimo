@@ -6,6 +6,7 @@ import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/repositories/xp_repository.dart';
 import 'package:kelimo/screens/home_screen.dart';
 import 'package:kelimo/services/streak_service.dart';
+import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 
@@ -37,6 +38,7 @@ class _KelimoAppState extends State<KelimoApp> {
   late final StreakService _streakService;
   late final XpService _xpService;
   late final QuizStore _quizStore;
+  late final StatisticsService _statisticsService;
   late final Future<void> _initialization;
 
   @override
@@ -52,6 +54,12 @@ class _KelimoAppState extends State<KelimoApp> {
       repository: widget.xpStore ?? XpRepository(databaseService),
     );
     _quizStore = widget.quizStore ?? QuizRepository(databaseService);
+    _statisticsService = StatisticsService(
+      wordProgressStore: _wordProgressStore,
+      quizStore: _quizStore,
+      streakService: _streakService,
+      xpService: _xpService,
+    );
     _initialization = _initializePersistence();
   }
 
@@ -69,6 +77,7 @@ class _KelimoAppState extends State<KelimoApp> {
   void dispose() {
     _streakService.dispose();
     _xpService.dispose();
+    _statisticsService.dispose();
     super.dispose();
   }
 
@@ -94,6 +103,7 @@ class _KelimoAppState extends State<KelimoApp> {
             wordProgressStore: _wordProgressStore,
             xpService: _xpService,
             quizStore: _quizStore,
+            statisticsService: _statisticsService,
           );
         },
       ),

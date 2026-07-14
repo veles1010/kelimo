@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:kelimo/models/progress_statistics.dart';
 import 'package:kelimo/repositories/quiz_repository.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/screens/animals_category_screen.dart';
+import 'package:kelimo/screens/progress_screen.dart';
+import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({
     required this.streakService,
     required this.wordProgressStore,
     required this.xpService,
     required this.quizStore,
+    required this.statisticsService,
     super.key,
   });
 
@@ -19,131 +23,186 @@ class HomeScreen extends StatelessWidget {
   final WordProgressStore wordProgressStore;
   final XpService xpService;
   final QuizStore quizStore;
+  final StatisticsService statisticsService;
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  int _selectedIndex = 0;
+  late Future<CategoryProgressStatistics> _animalsProgress;
+
+  @override
+  void initState() {
+    super.initState();
+    _animalsProgress = widget.statisticsService.loadCategory('animals');
+  }
+
+  void _reloadAnimalsProgress() {
+    setState(() {
+      _animalsProgress = widget.statisticsService.loadCategory('animals');
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    final streakService = widget.streakService;
+    final wordProgressStore = widget.wordProgressStore;
+    final xpService = widget.xpService;
+    final quizStore = widget.quizStore;
+
     return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final columnCount = constraints.maxWidth >= 700 ? 2 : 1;
+      body: _selectedIndex == 2
+          ? ProgressScreen(statisticsService: widget.statisticsService)
+          : SafeArea(
+              bottom: false,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final columnCount = constraints.maxWidth >= 700 ? 2 : 1;
 
-            return CustomScrollView(
-              slivers: [
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
-                  sliver: SliverToBoxAdapter(
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 960),
-                        child: _HeaderAndProgress(
-                          streakService: streakService,
-                          xpService: xpService,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-                  sliver: SliverToBoxAdapter(
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 960),
-                        child: Text(
-                          'Kategoriler',
-                          style: Theme.of(context).textTheme.headlineSmall
-                              ?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-                  sliver: SliverLayoutBuilder(
-                    builder: (context, constraints) {
-                      final gridWidth = constraints.crossAxisExtent.clamp(
-                        0.0,
-                        960.0,
-                      );
-
-                      return SliverPadding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal:
-                              (constraints.crossAxisExtent - gridWidth) / 2,
-                        ),
-                        sliver: SliverGrid(
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: columnCount,
-                                mainAxisExtent: 164,
-                                crossAxisSpacing: 16,
-                                mainAxisSpacing: 16,
+                  return CustomScrollView(
+                    slivers: [
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
+                        sliver: SliverToBoxAdapter(
+                          child: Center(
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 960),
+                              child: _HeaderAndProgress(
+                                streakService: streakService,
+                                xpService: xpService,
                               ),
-                          delegate: SliverChildListDelegate.fixed([
-                            _CategoryCard(
-                              icon: '🐶',
-                              name: 'Hayvanlar',
-                              wordCount: 24,
-                              progress: 0.75,
-                              onTap: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute<void>(
-                                    builder: (_) => AnimalsCategoryScreen(
-                                      streakService: streakService,
-                                      wordProgressStore: wordProgressStore,
-                                      xpService: xpService,
-                                      quizStore: quizStore,
-                                    ),
-                                  ),
-                                );
-                              },
                             ),
-                            const _CategoryCard(
-                              icon: '🍎',
-                              name: 'Yiyecekler',
-                              wordCount: 20,
-                              progress: 0.45,
-                            ),
-                            const _CategoryCard(
-                              icon: '🎨',
-                              name: 'Renkler',
-                              wordCount: 16,
-                              progress: 0.60,
-                            ),
-                            const _CategoryCard(
-                              icon: '🏠',
-                              name: 'Ev',
-                              wordCount: 22,
-                              progress: 0.30,
-                            ),
-                            const _CategoryCard(
-                              icon: '👨‍👩‍👧',
-                              name: 'Aile',
-                              wordCount: 18,
-                              progress: 0.50,
-                            ),
-                            const _CategoryCard(
-                              icon: '🚌',
-                              name: 'Ulaşım',
-                              wordCount: 20,
-                              progress: 0.20,
-                            ),
-                          ]),
+                          ),
                         ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
-      ),
+                      ),
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+                        sliver: SliverToBoxAdapter(
+                          child: Center(
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 960),
+                              child: Text(
+                                'Kategoriler',
+                                style: Theme.of(context).textTheme.headlineSmall
+                                    ?.copyWith(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+                        sliver: SliverLayoutBuilder(
+                          builder: (context, constraints) {
+                            final gridWidth = constraints.crossAxisExtent.clamp(
+                              0.0,
+                              960.0,
+                            );
+
+                            return SliverPadding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal:
+                                    (constraints.crossAxisExtent - gridWidth) /
+                                    2,
+                              ),
+                              sliver: SliverGrid(
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: columnCount,
+                                      mainAxisExtent: 164,
+                                      crossAxisSpacing: 16,
+                                      mainAxisSpacing: 16,
+                                    ),
+                                delegate: SliverChildListDelegate.fixed([
+                                  FutureBuilder<CategoryProgressStatistics>(
+                                    future: _animalsProgress,
+                                    builder: (context, snapshot) {
+                                      final statistics = snapshot.data;
+                                      final total =
+                                          statistics?.totalWordCount ?? 24;
+                                      final learned =
+                                          statistics?.learnedWordCount ?? 0;
+
+                                      return _CategoryCard(
+                                        icon: '🐶',
+                                        name: 'Hayvanlar',
+                                        wordCount: total,
+                                        progress: total == 0
+                                            ? 0
+                                            : learned / total,
+                                        onTap: () async {
+                                          await Navigator.of(context).push(
+                                            MaterialPageRoute<void>(
+                                              builder: (_) =>
+                                                  AnimalsCategoryScreen(
+                                                    streakService:
+                                                        streakService,
+                                                    wordProgressStore:
+                                                        wordProgressStore,
+                                                    xpService: xpService,
+                                                    quizStore: quizStore,
+                                                    statisticsService: widget
+                                                        .statisticsService,
+                                                  ),
+                                            ),
+                                          );
+                                          if (mounted) {
+                                            _reloadAnimalsProgress();
+                                          }
+                                        },
+                                      );
+                                    },
+                                  ),
+                                  const _CategoryCard(
+                                    icon: '🍎',
+                                    name: 'Yiyecekler',
+                                    wordCount: 20,
+                                    progress: 0.45,
+                                  ),
+                                  const _CategoryCard(
+                                    icon: '🎨',
+                                    name: 'Renkler',
+                                    wordCount: 16,
+                                    progress: 0.60,
+                                  ),
+                                  const _CategoryCard(
+                                    icon: '🏠',
+                                    name: 'Ev',
+                                    wordCount: 22,
+                                    progress: 0.30,
+                                  ),
+                                  const _CategoryCard(
+                                    icon: '👨‍👩‍👧',
+                                    name: 'Aile',
+                                    wordCount: 18,
+                                    progress: 0.50,
+                                  ),
+                                  const _CategoryCard(
+                                    icon: '🚌',
+                                    name: 'Ulaşım',
+                                    wordCount: 20,
+                                    progress: 0.20,
+                                  ),
+                                ]),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: 0,
+        selectedIndex: _selectedIndex,
+        onDestinationSelected: (index) {
+          if (index == 0 || index == 2) {
+            setState(() => _selectedIndex = index);
+          }
+        },
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.home_outlined),

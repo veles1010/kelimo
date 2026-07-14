@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:kelimo/models/progress_statistics.dart';
 import 'package:kelimo/repositories/quiz_repository.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/screens/animals_quiz_screen.dart';
+import 'package:kelimo/screens/category_statistics_screen.dart';
 import 'package:kelimo/screens/word_card_screen.dart';
 import 'package:kelimo/services/streak_service.dart';
+import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 
-class AnimalsCategoryScreen extends StatelessWidget {
+class AnimalsCategoryScreen extends StatefulWidget {
   const AnimalsCategoryScreen({
     required this.streakService,
     required this.wordProgressStore,
     required this.xpService,
     required this.quizStore,
+    required this.statisticsService,
     super.key,
   });
 
@@ -20,9 +24,35 @@ class AnimalsCategoryScreen extends StatelessWidget {
   final WordProgressStore wordProgressStore;
   final XpService xpService;
   final QuizStore quizStore;
+  final StatisticsService statisticsService;
+
+  @override
+  State<AnimalsCategoryScreen> createState() => _AnimalsCategoryScreenState();
+}
+
+class _AnimalsCategoryScreenState extends State<AnimalsCategoryScreen> {
+  late Future<CategoryProgressStatistics> _categoryProgress;
+
+  @override
+  void initState() {
+    super.initState();
+    _categoryProgress = widget.statisticsService.loadCategory('animals');
+  }
+
+  void _reloadCategoryProgress() {
+    setState(() {
+      _categoryProgress = widget.statisticsService.loadCategory('animals');
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    final streakService = widget.streakService;
+    final wordProgressStore = widget.wordProgressStore;
+    final xpService = widget.xpService;
+    final quizStore = widget.quizStore;
+    final statisticsService = widget.statisticsService;
+
     return Scaffold(
       appBar: AppBar(
         leading: const BackButton(),
@@ -42,14 +72,14 @@ class AnimalsCategoryScreen extends StatelessWidget {
                   children: [
                     const _CategoryHeader(),
                     const SizedBox(height: 24),
-                    const _CategoryProgressCard(),
+                    _CategoryProgressCard(statistics: _categoryProgress),
                     const SizedBox(height: 24),
                     _ActionCard(
                       icon: Icons.school_rounded,
                       title: 'Öğrenmeye Başla',
                       subtitle: 'Kelime kartlarıyla çalış',
-                      onTap: () {
-                        Navigator.of(context).push(
+                      onTap: () async {
+                        await Navigator.of(context).push(
                           MaterialPageRoute<void>(
                             builder: (_) => WordCardScreen(
                               streakService: streakService,
@@ -58,6 +88,9 @@ class AnimalsCategoryScreen extends StatelessWidget {
                             ),
                           ),
                         );
+                        if (mounted) {
+                          _reloadCategoryProgress();
+                        }
                       },
                     ),
                     const SizedBox(height: 12),
@@ -77,10 +110,20 @@ class AnimalsCategoryScreen extends StatelessWidget {
                       },
                     ),
                     const SizedBox(height: 12),
-                    const _ActionCard(
+                    _ActionCard(
                       icon: Icons.insights_rounded,
                       title: 'İstatistik',
                       subtitle: 'Kategori performansını gör',
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => CategoryStatisticsScreen(
+                              categoryId: 'animals',
+                              statisticsService: statisticsService,
+                            ),
+                          ),
+                        );
+                      },
                     ),
                     const SizedBox(height: 32),
                     const _RecentStudies(),
@@ -137,10 +180,33 @@ class _CategoryHeader extends StatelessWidget {
 }
 
 class _CategoryProgressCard extends StatelessWidget {
-  const _CategoryProgressCard();
+  const _CategoryProgressCard({required this.statistics});
+
+  final Future<CategoryProgressStatistics> statistics;
 
   @override
   Widget build(BuildContext context) {
+    return FutureBuilder<CategoryProgressStatistics>(
+      future: statistics,
+      builder: (context, snapshot) {
+        final category = snapshot.data;
+        final total = category?.totalWordCount ?? 24;
+        final learned = category?.learnedWordCount ?? 0;
+        final progress = total == 0 ? 0.0 : learned / total;
+        final percentage = (progress * 100).round();
+
+        return _buildCard(context, learned, total, progress, percentage);
+      },
+    );
+  }
+
+  Widget _buildCard(
+    BuildContext context,
+    int learned,
+    int total,
+    double progress,
+    int percentage,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
@@ -158,7 +224,7 @@ class _CategoryProgressCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              '12 / 24 kelime',
+              '$learned / $total kelime',
               style: textTheme.titleMedium?.copyWith(
                 color: colorScheme.primary,
                 fontWeight: FontWeight.bold,
@@ -166,13 +232,13 @@ class _CategoryProgressCard extends StatelessWidget {
             ),
             const SizedBox(height: 18),
             LinearProgressIndicator(
-              value: 0.50,
+              value: progress,
               minHeight: 12,
               borderRadius: BorderRadius.circular(6),
             ),
             const SizedBox(height: 12),
             Text(
-              '%50 tamamlandı',
+              '%$percentage tamamlandı',
               style: textTheme.labelLarge?.copyWith(
                 color: colorScheme.primary,
                 fontWeight: FontWeight.bold,
