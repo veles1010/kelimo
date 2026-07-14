@@ -4,7 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kelimo/data/animal_words.dart';
 import 'package:kelimo/main.dart';
+import 'package:kelimo/models/daily_progress.dart';
 import 'package:kelimo/models/word.dart';
+import 'package:kelimo/models/word_progress.dart';
+import 'package:kelimo/repositories/daily_progress_repository.dart';
+import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/screens/quiz_result_screen.dart';
 import 'package:kelimo/screens/home_screen.dart';
 import 'package:kelimo/screens/word_card_screen.dart';
@@ -50,6 +54,130 @@ class FakeTtsEngine implements TtsEngine {
   }
 }
 
+class FakeWordProgressStore implements WordProgressStore {
+  FakeWordProgressStore([Map<String, WordProgress>? records])
+    : records = records ?? {};
+
+  final Map<String, WordProgress> records;
+
+  @override
+  Future<void> initialize() async {}
+
+  @override
+  List<WordProgress> getAllProgress() => List.unmodifiable(records.values);
+
+  @override
+  WordProgress progressFor(String wordId) {
+    return records[wordId] ?? WordProgress.initial(wordId);
+  }
+
+  @override
+  Future<void> saveProgress(WordProgress progress) async {
+    records[progress.wordId] = progress;
+  }
+
+  @override
+  Future<WordProgress> saveFavorite(String wordId, bool isFavorite) async {
+    final progress = progressFor(
+      wordId,
+    ).copyWith(isFavorite: isFavorite, updatedAt: DateTime.now());
+    await saveProgress(progress);
+    return progress;
+  }
+
+  @override
+  Future<WordProgress> saveLearningResult(
+    LearningReviewResult result, {
+    DateTime? reviewedAt,
+  }) async {
+    final current = progressFor(result.word.id);
+    final progress = wordProgressAfterLearningResult(
+      current,
+      result,
+      reviewedAt: reviewedAt,
+    );
+    await saveProgress(progress);
+    return progress;
+  }
+
+  @override
+  Future<void> resetProgress(String wordId) async {
+    records.remove(wordId);
+  }
+}
+
+class FakeDailyStorage {
+  final Map<String, DailyProgress> dailyProgress = {};
+  StreakState streak = const StreakState(currentStreak: 7);
+}
+
+class FakeDailyProgressStore implements DailyProgressStore {
+  FakeDailyProgressStore([FakeDailyStorage? storage])
+    : storage = storage ?? FakeDailyStorage();
+
+  final FakeDailyStorage storage;
+
+  @override
+  Future<DailyProgressSnapshot> loadToday({
+    int initialStreak = 7,
+    DateTime? now,
+  }) async {
+    final dateKey = localDateKey(now ?? DateTime.now());
+    return DailyProgressSnapshot(
+      progress:
+          storage.dailyProgress[dateKey] ?? DailyProgress.initial(dateKey),
+      streak: storage.streak,
+    );
+  }
+
+  @override
+  Future<DailyProgressSnapshot> incrementReview({
+    required int dailyGoal,
+    int initialStreak = 7,
+    DateTime? now,
+  }) async {
+    final date = (now ?? DateTime.now()).toLocal();
+    final dateKey = localDateKey(date);
+    final current =
+        storage.dailyProgress[dateKey] ?? DailyProgress.initial(dateKey);
+    final reviewCount = current.reviewCount + 1;
+    final justCompleted = !current.isGoalCompleted && reviewCount >= dailyGoal;
+    final progress = DailyProgress(
+      dateKey: dateKey,
+      reviewCount: reviewCount,
+      isGoalCompleted: current.isGoalCompleted || justCompleted,
+      streakAwarded: current.streakAwarded || justCompleted,
+    );
+    storage.dailyProgress[dateKey] = progress;
+    if (justCompleted) {
+      storage.streak = StreakState(
+        currentStreak: storage.streak.currentStreak + 1,
+        lastCompletedDate: DateTime(date.year, date.month, date.day),
+      );
+    }
+    return DailyProgressSnapshot(
+      progress: progress,
+      streak: storage.streak,
+      justCompleted: justCompleted,
+    );
+  }
+
+  @override
+  Future<void> saveStreak(StreakState streak) async {
+    storage.streak = streak;
+  }
+}
+
+Future<void> pumpKelimoApp(WidgetTester tester) async {
+  await tester.pumpWidget(
+    KelimoApp(
+      wordProgressStore: FakeWordProgressStore(),
+      dailyProgressStore: FakeDailyProgressStore(),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
 Future<void> openAnimalsCategory(WidgetTester tester) async {
   await tester.scrollUntilVisible(find.text('Hayvanlar'), 300);
   await tester.tap(find.text('Hayvanlar'));
@@ -59,7 +187,12 @@ Future<void> openAnimalsCategory(WidgetTester tester) async {
 Future<void> pumpLearningSession(WidgetTester tester) async {
   final service = EnglishTtsService(engine: FakeTtsEngine());
   await tester.pumpWidget(
-    MaterialApp(home: WordCardScreen(ttsService: service)),
+    MaterialApp(
+      home: WordCardScreen(
+        wordProgressStore: FakeWordProgressStore(),
+        ttsService: service,
+      ),
+    ),
   );
   await tester.ensureVisible(find.text('Kolay'));
   await tester.pumpAndSettle();
@@ -134,35 +267,149 @@ void main() {
     expect(engine.canPrevious, isFalse);
   });
 
-  test('Günlük hedef beş değerlendirmede tamamlanır ve seri bir kez artar', () {
-    final service = StreakService();
-    addTearDown(service.dispose);
+  test('Word progress toMap ve fromMap değerleri korur', () {
+    final reviewedAt = DateTime.parse('2026-07-14T10:30:00.000');
+    final nextReviewAt = DateTime.parse('2026-07-15T10:30:00.000');
+    final progress = WordProgress(
+      wordId: 'dog',
+      isFavorite: true,
+      mastery: 'hard',
+      repetitionCount: 3,
+      correctCount: 1,
+      wrongCount: 2,
+      lastReviewedAt: reviewedAt,
+      nextReviewAt: nextReviewAt,
+      updatedAt: reviewedAt,
+    );
 
-    expect(service.todayCount, 0);
-    expect(service.dailyGoal, 5);
-    expect(service.currentStreak, 7);
-    expect(service.isTodayCompleted, isFalse);
-    expect(service.remainingForToday, 5);
+    final restored = WordProgress.fromMap(progress.toMap());
 
-    for (var count = 1; count < service.dailyGoal; count++) {
-      expect(service.recordEvaluation(), isFalse);
-      expect(service.todayCount, count);
-      expect(service.remainingForToday, service.dailyGoal - count);
-      expect(service.currentStreak, 7);
-    }
-
-    expect(service.recordEvaluation(), isTrue);
-    expect(service.todayCount, 5);
-    expect(service.remainingForToday, 0);
-    expect(service.isTodayCompleted, isTrue);
-    expect(service.currentStreak, 8);
-
-    expect(service.recordEvaluation(), isFalse);
-    expect(service.recordEvaluation(), isFalse);
-    expect(service.todayCount, 7);
-    expect(service.remainingForToday, 0);
-    expect(service.currentStreak, 8);
+    expect(restored.wordId, 'dog');
+    expect(restored.isFavorite, isTrue);
+    expect(restored.mastery, 'hard');
+    expect(restored.repetitionCount, 3);
+    expect(restored.correctCount, 1);
+    expect(restored.wrongCount, 2);
+    expect(restored.lastReviewedAt, reviewedAt);
+    expect(restored.nextReviewAt, nextReviewAt);
+    expect(restored.updatedAt, reviewedAt);
+    expect(progress.toMap()['is_favorite'], 1);
   });
+
+  test('Günlük progress mapping bool değerlerini 0 ve 1 olarak saklar', () {
+    const progress = DailyProgress(
+      dateKey: '2026-07-14',
+      reviewCount: 5,
+      isGoalCompleted: true,
+      streakAwarded: true,
+    );
+
+    final map = progress.toMap();
+    final restored = DailyProgress.fromMap(map);
+
+    expect(map['is_goal_completed'], 1);
+    expect(map['streak_awarded'], 1);
+    expect(restored.dateKey, '2026-07-14');
+    expect(restored.reviewCount, 5);
+    expect(restored.isGoalCompleted, isTrue);
+    expect(restored.streakAwarded, isTrue);
+  });
+
+  test('Favori durumu repository yeniden oluşturulduğunda korunur', () async {
+    final records = <String, WordProgress>{};
+    final firstRepository = FakeWordProgressStore(records);
+    await firstRepository.saveFavorite('dog', true);
+
+    final recreatedRepository = FakeWordProgressStore(records);
+    await recreatedRepository.initialize();
+
+    expect(recreatedRepository.progressFor('dog').isFavorite, isTrue);
+  });
+
+  test(
+    'LearningEngine sonucu kelime repository ilerlemesine aktarılır',
+    () async {
+      final engine = LearningEngine(animalWords);
+      final repository = FakeWordProgressStore();
+
+      engine.rateHard();
+      await repository.saveLearningResult(
+        engine.lastReview!,
+        reviewedAt: DateTime.parse('2026-07-14T10:30:00.000'),
+      );
+
+      final progress = repository.progressFor('dog');
+      expect(progress.mastery, 'hard');
+      expect(progress.repetitionCount, 1);
+      expect(progress.correctCount, 0);
+      expect(progress.wrongCount, 1);
+      expect(progress.lastReviewedAt, isNotNull);
+    },
+  );
+
+  test(
+    'Günlük hedef beş değerlendirmede tamamlanır ve seri bir kez artar',
+    () async {
+      final service = StreakService(repository: FakeDailyProgressStore());
+      addTearDown(service.dispose);
+      await service.initialize();
+
+      expect(service.todayCount, 0);
+      expect(service.dailyGoal, 5);
+      expect(service.currentStreak, 7);
+      expect(service.isTodayCompleted, isFalse);
+      expect(service.remainingForToday, 5);
+
+      for (var count = 1; count < service.dailyGoal; count++) {
+        expect(await service.recordEvaluation(), isFalse);
+        expect(service.todayCount, count);
+        expect(service.remainingForToday, service.dailyGoal - count);
+        expect(service.currentStreak, 7);
+      }
+
+      expect(await service.recordEvaluation(), isTrue);
+      expect(service.todayCount, 5);
+      expect(service.remainingForToday, 0);
+      expect(service.isTodayCompleted, isTrue);
+      expect(service.currentStreak, 8);
+
+      expect(await service.recordEvaluation(), isFalse);
+      expect(await service.recordEvaluation(), isFalse);
+      expect(service.todayCount, 7);
+      expect(service.remainingForToday, 0);
+      expect(service.currentStreak, 8);
+    },
+  );
+
+  test(
+    'Seri servisi yeniden oluşturulduğunda kayıtlı değerleri yükler',
+    () async {
+      final storage = FakeDailyStorage();
+      final firstService = StreakService(
+        repository: FakeDailyProgressStore(storage),
+      );
+      await firstService.initialize();
+      for (var count = 0; count < 3; count++) {
+        await firstService.recordEvaluation();
+      }
+      firstService.dispose();
+
+      final recreatedService = StreakService(
+        repository: FakeDailyProgressStore(storage),
+      );
+      addTearDown(recreatedService.dispose);
+      await recreatedService.initialize();
+
+      expect(recreatedService.todayCount, 3);
+      expect(recreatedService.remainingForToday, 2);
+      expect(recreatedService.currentStreak, 7);
+      expect(recreatedService.isTodayCompleted, isFalse);
+
+      await recreatedService.recordEvaluation();
+      expect(await recreatedService.recordEvaluation(), isTrue);
+      expect(recreatedService.currentStreak, 8);
+    },
+  );
 
   test('İngilizce TTS ayarlanır ve eşzamanlı konuşmayı engeller', () async {
     final engine = FakeTtsEngine()..speakCompleter = Completer<bool>();
@@ -194,7 +441,12 @@ void main() {
     final service = EnglishTtsService(engine: engine);
 
     await tester.pumpWidget(
-      MaterialApp(home: WordCardScreen(ttsService: service)),
+      MaterialApp(
+        home: WordCardScreen(
+          wordProgressStore: FakeWordProgressStore(),
+          ttsService: service,
+        ),
+      ),
     );
     await tester.tap(find.text('Dinle'));
     await tester.pump();
@@ -216,12 +468,43 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(home: WordCardScreen(ttsService: service)),
+      MaterialApp(
+        home: WordCardScreen(
+          wordProgressStore: FakeWordProgressStore(),
+          ttsService: service,
+        ),
+      ),
     );
     await tester.tap(find.text('Dinle'));
     await tester.pumpAndSettle();
 
     expect(find.text('Ses oynatılamadı'), findsOneWidget);
+  });
+
+  testWidgets('Favori seçimi anında görünür ve repository kaydından yüklenir', (
+    tester,
+  ) async {
+    final repository = FakeWordProgressStore();
+
+    Widget wordCard() => MaterialApp(
+      home: WordCardScreen(
+        wordProgressStore: repository,
+        ttsService: EnglishTtsService(engine: FakeTtsEngine()),
+      ),
+    );
+
+    await tester.pumpWidget(wordCard());
+    expect(find.byIcon(Icons.favorite_border_rounded), findsOneWidget);
+
+    await tester.tap(find.text('Favori'));
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.favorite_rounded), findsOneWidget);
+    expect(repository.progressFor('dog').isFavorite, isTrue);
+
+    await tester.pumpWidget(wordCard());
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.favorite_rounded), findsOneWidget);
   });
 
   testWidgets('Zor seçilen kelime bir kart sonra yeniden gösterilir', (
@@ -260,6 +543,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: WordCardScreen(
+          wordProgressStore: FakeWordProgressStore(),
           ttsService: EnglishTtsService(engine: FakeTtsEngine()),
           streakService: streakService,
         ),
@@ -333,7 +617,7 @@ void main() {
   });
 
   testWidgets('ana ekran gerekli bölümleri gösterir', (tester) async {
-    await tester.pumpWidget(const KelimoApp());
+    await pumpKelimoApp(tester);
 
     expect(find.text('Merhaba!'), findsOneWidget);
     expect(find.text('Bugün öğrenmeye hazır mısın?'), findsOneWidget);
@@ -356,16 +640,20 @@ void main() {
   testWidgets('Ana ekran tamamlanan günlük hedefi servisten gösterir', (
     tester,
   ) async {
-    final streakService = StreakService();
+    final streakService = StreakService(repository: FakeDailyProgressStore());
     addTearDown(streakService.dispose);
+    await streakService.initialize();
     for (var count = 0; count < streakService.dailyGoal; count++) {
-      streakService.recordEvaluation();
+      await streakService.recordEvaluation();
     }
 
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.light,
-        home: HomeScreen(streakService: streakService),
+        home: HomeScreen(
+          streakService: streakService,
+          wordProgressStore: FakeWordProgressStore(),
+        ),
       ),
     );
 
@@ -375,8 +663,42 @@ void main() {
     expect(find.text('Günlük hedef tamamlandı'), findsOneWidget);
   });
 
+  testWidgets(
+    'Günlük görev kartı hedef üstü sayacı yalnızca görünümde sınırlar',
+    (tester) async {
+      final streakService = StreakService(repository: FakeDailyProgressStore());
+      addTearDown(streakService.dispose);
+      await streakService.initialize();
+      for (var count = 0; count < 52; count++) {
+        await streakService.recordEvaluation();
+      }
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: HomeScreen(
+            streakService: streakService,
+            wordProgressStore: FakeWordProgressStore(),
+          ),
+        ),
+      );
+
+      expect(streakService.todayCount, 52);
+      expect(find.text('5 / 5'), findsOneWidget);
+      expect(find.text('52 / 5'), findsNothing);
+      expect(find.text('Günlük hedef tamamlandı'), findsOneWidget);
+
+      final taskProgress = tester
+          .widgetList<LinearProgressIndicator>(
+            find.byType(LinearProgressIndicator),
+          )
+          .last;
+      expect(taskProgress.value, 1.0);
+    },
+  );
+
   testWidgets('altı kategori kartı ve içerikleri bulunur', (tester) async {
-    await tester.pumpWidget(const KelimoApp());
+    await pumpKelimoApp(tester);
 
     for (final category in [
       'Hayvanlar',
@@ -392,7 +714,7 @@ void main() {
   });
 
   testWidgets('uygulama Türkçe ve Material 3 kullanır', (tester) async {
-    await tester.pumpWidget(const KelimoApp());
+    await pumpKelimoApp(tester);
 
     final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
 
@@ -406,7 +728,7 @@ void main() {
   });
 
   testWidgets('Hayvanlar kartı kategori detay ekranını açar', (tester) async {
-    await tester.pumpWidget(const KelimoApp());
+    await pumpKelimoApp(tester);
 
     await openAnimalsCategory(tester);
 
@@ -425,7 +747,7 @@ void main() {
   testWidgets('Öğrenmeye Başla ilk kelime kartını açar ve kart çevrilir', (
     tester,
   ) async {
-    await tester.pumpWidget(const KelimoApp());
+    await pumpKelimoApp(tester);
 
     await openAnimalsCategory(tester);
     await tester.tap(find.text('Öğrenmeye Başla'));
@@ -466,7 +788,7 @@ void main() {
   testWidgets('Quiz seçimi kilitlenir ve doğru cevap gösterilir', (
     tester,
   ) async {
-    await tester.pumpWidget(const KelimoApp());
+    await pumpKelimoApp(tester);
 
     await openAnimalsCategory(tester);
     await tester.tap(find.text('Quiz Çöz'));
@@ -512,7 +834,7 @@ void main() {
   testWidgets('Quiz tamamlanınca sonuç gösterilir ve tekrar başlatılır', (
     tester,
   ) async {
-    await tester.pumpWidget(const KelimoApp());
+    await pumpKelimoApp(tester);
 
     await openAnimalsCategory(tester);
     await tester.tap(find.text('Quiz Çöz'));

@@ -4,14 +4,21 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:kelimo/data/animal_words.dart';
 import 'package:kelimo/models/word.dart';
+import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/services/english_tts_service.dart';
 import 'package:kelimo/services/learning_engine.dart';
 import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/utils/turkish_case.dart';
 
 class WordCardScreen extends StatefulWidget {
-  const WordCardScreen({super.key, this.ttsService, this.streakService});
+  const WordCardScreen({
+    required this.wordProgressStore,
+    super.key,
+    this.ttsService,
+    this.streakService,
+  });
 
+  final WordProgressStore wordProgressStore;
   final EnglishTtsService? ttsService;
   final StreakService? streakService;
 
@@ -39,6 +46,7 @@ class _WordCardScreenState extends State<WordCardScreen>
   late final bool _ownsStreakService;
   _LearningRating? _selectedDifficulty;
   bool _isEvaluating = false;
+  bool _isFavorite = false;
 
   @override
   void initState() {
@@ -47,6 +55,9 @@ class _WordCardScreenState extends State<WordCardScreen>
     _learningEngine = LearningEngine(animalWords);
     _ownsStreakService = widget.streakService == null;
     _streakService = widget.streakService ?? StreakService();
+    _isFavorite = widget.wordProgressStore
+        .progressFor(_learningEngine.currentWord.id)
+        .isFavorite;
     _flipController = AnimationController(
       duration: const Duration(milliseconds: 450),
       vsync: this,
@@ -81,6 +92,7 @@ class _WordCardScreenState extends State<WordCardScreen>
     setState(() {
       _learningEngine.nextWord();
       _selectedDifficulty = null;
+      _syncFavoriteState();
     });
   }
 
@@ -92,28 +104,18 @@ class _WordCardScreenState extends State<WordCardScreen>
     setState(() {
       _learningEngine.previousWord();
       _selectedDifficulty = null;
+      _syncFavoriteState();
     });
   }
 
   Future<void> _evaluateWord(_LearningRating rating) async {
     if (_isEvaluating || _learningEngine.isComplete) return;
 
-    final completedDailyGoal = _streakService.recordEvaluation();
-    if (completedDailyGoal && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '🔥 Günlük hedef tamamlandı! Serin '
-            '${_streakService.currentStreak} güne çıktı.',
-          ),
-        ),
-      );
-    }
-
     setState(() {
       _selectedDifficulty = rating;
       _isEvaluating = true;
     });
+    final dailyProgress = _streakService.recordEvaluation();
 
     await Future<void>.delayed(const Duration(milliseconds: 220));
     if (!mounted) return;
@@ -121,6 +123,7 @@ class _WordCardScreenState extends State<WordCardScreen>
     unawaited(_ttsService.stop());
     _flipController.reset();
 
+    late final LearningReviewResult learningResult;
     setState(() {
       switch (rating) {
         case _LearningRating.easy:
@@ -133,11 +136,59 @@ class _WordCardScreenState extends State<WordCardScreen>
           _learningEngine.rateHard();
           break;
       }
+      learningResult = _learningEngine.lastReview!;
       _selectedDifficulty = null;
       _isEvaluating = false;
+      _syncFavoriteState();
     });
 
+    try {
+      await widget.wordProgressStore.saveLearningResult(learningResult);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('İlerleme kaydedilemedi')));
+      }
+    }
+
+    final completedDailyGoal = await dailyProgress;
+    if (completedDailyGoal && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '🔥 Günlük hedef tamamlandı! Serin '
+            '${_streakService.currentStreak} güne çıktı.',
+          ),
+        ),
+      );
+    }
+
     if (_learningEngine.isComplete) await _showCompletionDialog();
+  }
+
+  void _syncFavoriteState() {
+    _isFavorite = widget.wordProgressStore
+        .progressFor(_learningEngine.currentWord.id)
+        .isFavorite;
+  }
+
+  Future<void> _toggleFavorite() async {
+    final wordId = _learningEngine.currentWord.id;
+    final isFavorite = !_isFavorite;
+    setState(() => _isFavorite = isFavorite);
+
+    try {
+      await widget.wordProgressStore.saveFavorite(wordId, isFavorite);
+    } catch (_) {
+      if (!mounted) return;
+      if (_learningEngine.currentWord.id == wordId) {
+        setState(() => _isFavorite = !isFavorite);
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Favori kaydedilemedi')));
+    }
   }
 
   Future<void> _showCompletionDialog() {
@@ -218,7 +269,9 @@ class _WordCardScreenState extends State<WordCardScreen>
                       builder: (context, isSpeaking, child) {
                         return _VisualActions(
                           isSpeaking: isSpeaking,
+                          isFavorite: _isFavorite,
                           onListen: () => unawaited(_speakWord()),
+                          onFavorite: () => unawaited(_toggleFavorite()),
                         );
                       },
                     ),
@@ -374,10 +427,17 @@ class _CardBack extends StatelessWidget {
 }
 
 class _VisualActions extends StatelessWidget {
-  const _VisualActions({required this.isSpeaking, required this.onListen});
+  const _VisualActions({
+    required this.isSpeaking,
+    required this.isFavorite,
+    required this.onListen,
+    required this.onFavorite,
+  });
 
   final bool isSpeaking;
+  final bool isFavorite;
   final VoidCallback onListen;
+  final VoidCallback onFavorite;
 
   @override
   Widget build(BuildContext context) {
@@ -398,8 +458,12 @@ class _VisualActions extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: OutlinedButton.icon(
-            onPressed: () {},
-            icon: const Icon(Icons.favorite_border_rounded),
+            onPressed: onFavorite,
+            icon: Icon(
+              isFavorite
+                  ? Icons.favorite_rounded
+                  : Icons.favorite_border_rounded,
+            ),
             label: const Text('Favori'),
           ),
         ),

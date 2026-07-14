@@ -2,6 +2,15 @@ import 'dart:math' as math;
 
 import 'package:kelimo/models/word.dart';
 
+enum LearningRating { easy, again, hard }
+
+class LearningReviewResult {
+  const LearningReviewResult({required this.word, required this.rating});
+
+  final Word word;
+  final LearningRating rating;
+}
+
 class LearningEngine {
   LearningEngine(List<Word> words)
     : assert(words.isNotEmpty),
@@ -13,6 +22,7 @@ class LearningEngine {
   final List<Word> _manualHistory = [];
   final Set<Word> _easyConfirmations = {};
   bool _isComplete = false;
+  LearningReviewResult? _lastReview;
 
   Word get currentWord => _sessionQueue.first;
   int get currentWordNumber => _allWords.indexOf(currentWord) + 1;
@@ -20,6 +30,7 @@ class LearningEngine {
   bool get isComplete => _isComplete;
   bool get canNext => !_isComplete && _sessionQueue.length > 1;
   bool get canPrevious => !_isComplete && _manualHistory.isNotEmpty;
+  LearningReviewResult? get lastReview => _lastReview;
 
   Word nextWord() {
     if (!canNext) return currentWord;
@@ -44,6 +55,10 @@ class LearningEngine {
 
     _manualHistory.clear();
     final current = currentWord;
+    _lastReview = LearningReviewResult(
+      word: current,
+      rating: LearningRating.easy,
+    );
     final isConfirmed = _easyConfirmations.contains(current);
 
     if (_sessionQueue.length == 1) {
@@ -63,12 +78,20 @@ class LearningEngine {
 
   Word rateAgain() {
     if (_isComplete) return currentWord;
+    _lastReview = LearningReviewResult(
+      word: currentWord,
+      rating: LearningRating.again,
+    );
     _easyConfirmations.remove(currentWord);
     return _rescheduleCurrentWord(2);
   }
 
   Word rateHard() {
     if (_isComplete) return currentWord;
+    _lastReview = LearningReviewResult(
+      word: currentWord,
+      rating: LearningRating.hard,
+    );
     _easyConfirmations.remove(currentWord);
     return _rescheduleCurrentWord(1);
   }

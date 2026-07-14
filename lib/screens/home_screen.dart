@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/screens/animals_category_screen.dart';
 import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({required this.streakService, super.key});
+  const HomeScreen({
+    required this.streakService,
+    required this.wordProgressStore,
+    super.key,
+  });
 
   final StreakService streakService;
+  final WordProgressStore wordProgressStore;
 
   @override
   Widget build(BuildContext context) {
@@ -78,6 +84,7 @@ class HomeScreen extends StatelessWidget {
                                   MaterialPageRoute<void>(
                                     builder: (_) => AnimalsCategoryScreen(
                                       streakService: streakService,
+                                      wordProgressStore: wordProgressStore,
                                     ),
                                   ),
                                 );
@@ -364,6 +371,7 @@ class _DailyTaskCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final displayedCount = todayCount > dailyGoal ? dailyGoal : todayCount;
 
     return Card(
       child: Padding(
@@ -384,7 +392,7 @@ class _DailyTaskCard extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '$todayCount / $dailyGoal',
+                  '$displayedCount / $dailyGoal',
                   style: textTheme.labelLarge?.copyWith(
                     color: colorScheme.primary,
                     fontWeight: FontWeight.bold,
@@ -399,9 +407,7 @@ class _DailyTaskCard extends StatelessWidget {
                   : 'Bugün $dailyGoal kelime değerlendir',
             ),
             const SizedBox(height: 10),
-            LinearProgressIndicator(
-              value: (todayCount / dailyGoal).clamp(0.0, 1.0),
-            ),
+            LinearProgressIndicator(value: displayedCount / dailyGoal),
           ],
         ),
       ),

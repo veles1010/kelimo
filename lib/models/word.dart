@@ -12,4 +12,6 @@ class Word {
   final String emoji;
   final String exampleSentence;
   final String exampleTranslation;
+
+  String get id => english.toLowerCase();
 }
