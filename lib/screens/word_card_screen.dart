@@ -8,17 +8,20 @@ import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/services/english_tts_service.dart';
 import 'package:kelimo/services/learning_engine.dart';
 import 'package:kelimo/services/streak_service.dart';
+import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/utils/turkish_case.dart';
 
 class WordCardScreen extends StatefulWidget {
   const WordCardScreen({
     required this.wordProgressStore,
+    required this.xpService,
     super.key,
     this.ttsService,
     this.streakService,
   });
 
   final WordProgressStore wordProgressStore;
+  final XpService xpService;
   final EnglishTtsService? ttsService;
   final StreakService? streakService;
 
@@ -144,6 +147,14 @@ class _WordCardScreenState extends State<WordCardScreen>
 
     try {
       await widget.wordProgressStore.saveLearningResult(learningResult);
+      final xpSaved = await widget.xpService.addXp(
+        xpRewardForRating(learningResult.rating),
+      );
+      if (!xpSaved && mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('XP kaydedilemedi')));
+      }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(

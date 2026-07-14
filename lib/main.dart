@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:kelimo/data/local/database_service.dart';
 import 'package:kelimo/repositories/daily_progress_repository.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
+import 'package:kelimo/repositories/xp_repository.dart';
 import 'package:kelimo/screens/home_screen.dart';
 import 'package:kelimo/services/streak_service.dart';
+import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 
 void main() {
@@ -11,10 +13,16 @@ void main() {
 }
 
 class KelimoApp extends StatefulWidget {
-  const KelimoApp({super.key, this.wordProgressStore, this.dailyProgressStore});
+  const KelimoApp({
+    super.key,
+    this.wordProgressStore,
+    this.dailyProgressStore,
+    this.xpStore,
+  });
 
   final WordProgressStore? wordProgressStore;
   final DailyProgressStore? dailyProgressStore;
+  final XpStore? xpStore;
 
   @override
   State<KelimoApp> createState() => _KelimoAppState();
@@ -24,6 +32,7 @@ class _KelimoAppState extends State<KelimoApp> {
   late final WordProgressStore _wordProgressStore;
   late final DailyProgressStore _dailyProgressStore;
   late final StreakService _streakService;
+  late final XpService _xpService;
   late final Future<void> _initialization;
 
   @override
@@ -35,6 +44,9 @@ class _KelimoAppState extends State<KelimoApp> {
     _dailyProgressStore =
         widget.dailyProgressStore ?? DailyProgressRepository(databaseService);
     _streakService = StreakService(repository: _dailyProgressStore);
+    _xpService = XpService(
+      repository: widget.xpStore ?? XpRepository(databaseService),
+    );
     _initialization = _initializePersistence();
   }
 
@@ -45,11 +57,13 @@ class _KelimoAppState extends State<KelimoApp> {
       debugPrint('Kelime verileri olmadan devam ediliyor: $error\n$stackTrace');
     }
     await _streakService.initialize();
+    await _xpService.initialize();
   }
 
   @override
   void dispose() {
     _streakService.dispose();
+    _xpService.dispose();
     super.dispose();
   }
 
@@ -73,6 +87,7 @@ class _KelimoAppState extends State<KelimoApp> {
           return HomeScreen(
             streakService: _streakService,
             wordProgressStore: _wordProgressStore,
+            xpService: _xpService,
           );
         },
       ),

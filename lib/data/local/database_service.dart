@@ -4,7 +4,7 @@ import 'package:sqflite/sqflite.dart';
 
 class DatabaseService {
   static const databaseName = 'kelimo.db';
-  static const databaseVersion = 1;
+  static const databaseVersion = 2;
 
   static Database? _database;
   static Future<Database>? _openingDatabase;
@@ -35,12 +35,17 @@ class DatabaseService {
     return openDatabase(
       p.join(databasesPath, databaseName),
       version: databaseVersion,
-      onCreate: _createVersion1,
+      onCreate: _createDatabase,
       onUpgrade: _upgradeDatabase,
     );
   }
 
-  Future<void> _createVersion1(Database database, int version) async {
+  Future<void> _createDatabase(Database database, int version) async {
+    await _createVersion1(database);
+    if (version >= 2) await _migrateVersion1To2(database);
+  }
+
+  Future<void> _createVersion1(Database database) async {
     await database.execute('''
       CREATE TABLE word_progress (
         word_id TEXT PRIMARY KEY,
@@ -76,6 +81,23 @@ class DatabaseService {
     int oldVersion,
     int newVersion,
   ) async {
-    // Gelecekteki migration adımları sürüm sırasıyla burada çalıştırılacak.
+    if (oldVersion < 2 && newVersion >= 2) {
+      await _migrateVersion1To2(database);
+    }
+  }
+
+  Future<void> _migrateVersion1To2(Database database) async {
+    await database.execute('''
+      CREATE TABLE IF NOT EXISTS xp_state (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        total_xp INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL
+      )
+    ''');
+    await database.insert('xp_state', {
+      'id': 1,
+      'total_xp': 0,
+      'updated_at': DateTime.now().toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
   }
 }

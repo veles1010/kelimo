@@ -3,18 +3,22 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kelimo/data/animal_words.dart';
+import 'package:kelimo/data/local/database_service.dart';
 import 'package:kelimo/main.dart';
 import 'package:kelimo/models/daily_progress.dart';
 import 'package:kelimo/models/word.dart';
 import 'package:kelimo/models/word_progress.dart';
+import 'package:kelimo/models/xp_state.dart';
 import 'package:kelimo/repositories/daily_progress_repository.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
+import 'package:kelimo/repositories/xp_repository.dart';
 import 'package:kelimo/screens/quiz_result_screen.dart';
 import 'package:kelimo/screens/home_screen.dart';
 import 'package:kelimo/screens/word_card_screen.dart';
 import 'package:kelimo/services/english_tts_service.dart';
 import 'package:kelimo/services/learning_engine.dart';
 import 'package:kelimo/services/streak_service.dart';
+import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 import 'package:kelimo/utils/turkish_case.dart';
 
@@ -168,11 +172,57 @@ class FakeDailyProgressStore implements DailyProgressStore {
   }
 }
 
+class FakeXpStorage {
+  FakeXpStorage({int totalXp = 0})
+    : state = XpState(totalXp: totalXp, updatedAt: DateTime.now());
+
+  XpState state;
+}
+
+class FakeXpStore implements XpStore {
+  FakeXpStore([FakeXpStorage? storage]) : storage = storage ?? FakeXpStorage();
+
+  final FakeXpStorage storage;
+
+  @override
+  int get currentTotalXp => storage.state.totalXp;
+
+  @override
+  Future<XpState> loadState() async => storage.state;
+
+  @override
+  Future<XpState> addXp(int amount) async {
+    if (amount <= 0) throw ArgumentError.value(amount);
+    storage.state = XpState(
+      totalXp: storage.state.totalXp + amount,
+      updatedAt: DateTime.now(),
+    );
+    return storage.state;
+  }
+
+  @override
+  Future<void> resetXp() async {
+    storage.state = XpState.initial();
+  }
+}
+
+Future<XpService> createXpService({
+  int totalXp = 0,
+  XpStore? repository,
+}) async {
+  final service = XpService(
+    repository: repository ?? FakeXpStore(FakeXpStorage(totalXp: totalXp)),
+  );
+  await service.initialize();
+  return service;
+}
+
 Future<void> pumpKelimoApp(WidgetTester tester) async {
   await tester.pumpWidget(
     KelimoApp(
       wordProgressStore: FakeWordProgressStore(),
       dailyProgressStore: FakeDailyProgressStore(),
+      xpStore: FakeXpStore(),
     ),
   );
   await tester.pumpAndSettle();
@@ -186,10 +236,12 @@ Future<void> openAnimalsCategory(WidgetTester tester) async {
 
 Future<void> pumpLearningSession(WidgetTester tester) async {
   final service = EnglishTtsService(engine: FakeTtsEngine());
+  final xpService = await createXpService();
   await tester.pumpWidget(
     MaterialApp(
       home: WordCardScreen(
         wordProgressStore: FakeWordProgressStore(),
+        xpService: xpService,
         ttsService: service,
       ),
     ),
@@ -313,6 +365,75 @@ void main() {
     expect(restored.reviewCount, 5);
     expect(restored.isGoalCompleted, isTrue);
     expect(restored.streakAwarded, isTrue);
+  });
+
+  test('XP modeli değerlerini SQLite map dönüşümünde korur', () {
+    final updatedAt = DateTime.parse('2026-07-14T12:00:00.000');
+    final state = XpState(totalXp: 1005, updatedAt: updatedAt);
+
+    final restored = XpState.fromMap(state.toMap());
+
+    expect(state.toMap()['id'], 1);
+    expect(restored.totalXp, 1005);
+    expect(restored.updatedAt, updatedAt);
+  });
+
+  test('Veritabanı şema sürümü XP migration ile 2 olur', () {
+    expect(DatabaseService.databaseVersion, 2);
+  });
+
+  test('Flashcard değerlendirmeleri doğru XP ödülünü üretir', () {
+    expect(xpRewardForRating(LearningRating.easy), 5);
+    expect(xpRewardForRating(LearningRating.again), 2);
+    expect(xpRewardForRating(LearningRating.hard), 3);
+  });
+
+  test('XP servisi seviye sınırlarını ve progress değerini hesaplar', () async {
+    final service = await createXpService();
+    addTearDown(service.dispose);
+
+    expect(service.totalXp, 0);
+    expect(service.currentLevel, 1);
+    expect(service.xpInCurrentLevel, 0);
+    expect(service.xpRequiredForNextLevel, 1000);
+    expect(service.progress, 0.0);
+    expect(service.isLoading, isFalse);
+
+    expect(await service.addXp(999), isTrue);
+    expect(service.currentLevel, 1);
+    expect(service.xpInCurrentLevel, 999);
+    expect(service.progress, 0.999);
+
+    expect(await service.addXp(1), isTrue);
+    expect(service.totalXp, 1000);
+    expect(service.currentLevel, 2);
+    expect(service.xpInCurrentLevel, 0);
+    expect(service.progress, 0.0);
+
+    expect(await service.addXp(5), isTrue);
+    expect(service.totalXp, 1005);
+    expect(service.currentLevel, 2);
+    expect(service.xpInCurrentLevel, 5);
+    expect(service.progress, 0.005);
+  });
+
+  test('XP repository kaydı servis yeniden oluşturulunca yüklenir', () async {
+    final storage = FakeXpStorage();
+    final repository = FakeXpStore(storage);
+    final firstService = await createXpService(repository: repository);
+
+    expect(await firstService.addXp(5), isTrue);
+    expect(repository.currentTotalXp, 5);
+    firstService.dispose();
+
+    final recreatedService = await createXpService(
+      repository: FakeXpStore(storage),
+    );
+    addTearDown(recreatedService.dispose);
+
+    expect(recreatedService.totalXp, 5);
+    expect(recreatedService.currentLevel, 1);
+    expect(recreatedService.xpInCurrentLevel, 5);
   });
 
   test('Favori durumu repository yeniden oluşturulduğunda korunur', () async {
@@ -439,11 +560,13 @@ void main() {
   ) async {
     final engine = FakeTtsEngine()..speakCompleter = Completer<bool>();
     final service = EnglishTtsService(engine: engine);
+    final xpService = await createXpService();
 
     await tester.pumpWidget(
       MaterialApp(
         home: WordCardScreen(
           wordProgressStore: FakeWordProgressStore(),
+          xpService: xpService,
           ttsService: service,
         ),
       ),
@@ -466,11 +589,13 @@ void main() {
     final service = EnglishTtsService(
       engine: FakeTtsEngine()..failOnSpeak = true,
     );
+    final xpService = await createXpService();
 
     await tester.pumpWidget(
       MaterialApp(
         home: WordCardScreen(
           wordProgressStore: FakeWordProgressStore(),
+          xpService: xpService,
           ttsService: service,
         ),
       ),
@@ -485,10 +610,12 @@ void main() {
     tester,
   ) async {
     final repository = FakeWordProgressStore();
+    final xpService = await createXpService();
 
     Widget wordCard() => MaterialApp(
       home: WordCardScreen(
         wordProgressStore: repository,
+        xpService: xpService,
         ttsService: EnglishTtsService(engine: FakeTtsEngine()),
       ),
     );
@@ -534,16 +661,47 @@ void main() {
     expect(find.text('DOG'), findsOneWidget);
   });
 
+  testWidgets('Flashcard seçimleri XP değerini 5, 8 ve 10 yapar', (
+    tester,
+  ) async {
+    final storage = FakeXpStorage();
+    final xpService = await createXpService(repository: FakeXpStore(storage));
+    addTearDown(xpService.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WordCardScreen(
+          wordProgressStore: FakeWordProgressStore(),
+          xpService: xpService,
+          ttsService: EnglishTtsService(engine: FakeTtsEngine()),
+        ),
+      ),
+    );
+
+    await selectLearningRating(tester, 'Kolay');
+    expect(xpService.totalXp, 5);
+    expect(storage.state.totalXp, 5);
+
+    await selectLearningRating(tester, 'Zor');
+    expect(xpService.totalXp, 8);
+
+    await selectLearningRating(tester, 'Tekrar Et');
+    expect(xpService.totalXp, 10);
+    expect(storage.state.totalXp, 10);
+  });
+
   testWidgets('Günlük hedef ilk kez tamamlanınca geri bildirim gösterilir', (
     tester,
   ) async {
     final streakService = StreakService(dailyGoal: 1);
+    final xpService = await createXpService();
     addTearDown(streakService.dispose);
 
     await tester.pumpWidget(
       MaterialApp(
         home: WordCardScreen(
           wordProgressStore: FakeWordProgressStore(),
+          xpService: xpService,
           ttsService: EnglishTtsService(engine: FakeTtsEngine()),
           streakService: streakService,
         ),
@@ -624,8 +782,8 @@ void main() {
     expect(find.text('Günlük ilerleme'), findsOneWidget);
     expect(find.text('18 / 30 kelime'), findsOneWidget);
     expect(find.text('🔥 7 günlük seri'), findsOneWidget);
-    expect(find.text('Seviye 4'), findsOneWidget);
-    expect(find.text('720 / 1000 XP'), findsOneWidget);
+    expect(find.text('Seviye 1'), findsOneWidget);
+    expect(find.text('0 / 1000 XP'), findsOneWidget);
     expect(find.text('Günlük Seri'), findsOneWidget);
     expect(find.text('7 gün'), findsOneWidget);
     expect(find.text('Günlük Görev'), findsOneWidget);
@@ -646,6 +804,7 @@ void main() {
     for (var count = 0; count < streakService.dailyGoal; count++) {
       await streakService.recordEvaluation();
     }
+    final xpService = await createXpService();
 
     await tester.pumpWidget(
       MaterialApp(
@@ -653,6 +812,7 @@ void main() {
         home: HomeScreen(
           streakService: streakService,
           wordProgressStore: FakeWordProgressStore(),
+          xpService: xpService,
         ),
       ),
     );
@@ -661,6 +821,34 @@ void main() {
     expect(find.text('8 gün'), findsOneWidget);
     expect(find.text('5 / 5'), findsOneWidget);
     expect(find.text('Günlük hedef tamamlandı'), findsOneWidget);
+  });
+
+  testWidgets('Ana ekran seviye kartını gerçek XP servisinden gösterir', (
+    tester,
+  ) async {
+    final streakService = StreakService(repository: FakeDailyProgressStore());
+    final xpService = await createXpService(totalXp: 1005);
+    addTearDown(streakService.dispose);
+    addTearDown(xpService.dispose);
+    await streakService.initialize();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: HomeScreen(
+          streakService: streakService,
+          wordProgressStore: FakeWordProgressStore(),
+          xpService: xpService,
+        ),
+      ),
+    );
+
+    expect(find.text('Seviye 2'), findsOneWidget);
+    expect(find.text('5 / 1000 XP'), findsOneWidget);
+    final levelProgress = tester.widget<LinearProgressIndicator>(
+      find.byType(LinearProgressIndicator).at(1),
+    );
+    expect(levelProgress.value, 0.005);
   });
 
   testWidgets(
@@ -672,6 +860,7 @@ void main() {
       for (var count = 0; count < 52; count++) {
         await streakService.recordEvaluation();
       }
+      final xpService = await createXpService();
 
       await tester.pumpWidget(
         MaterialApp(
@@ -679,6 +868,7 @@ void main() {
           home: HomeScreen(
             streakService: streakService,
             wordProgressStore: FakeWordProgressStore(),
+            xpService: xpService,
           ),
         ),
       );

@@ -3,17 +3,20 @@ import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/screens/animals_quiz_screen.dart';
 import 'package:kelimo/screens/word_card_screen.dart';
 import 'package:kelimo/services/streak_service.dart';
+import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 
 class AnimalsCategoryScreen extends StatelessWidget {
   const AnimalsCategoryScreen({
     required this.streakService,
     required this.wordProgressStore,
+    required this.xpService,
     super.key,
   });
 
   final StreakService streakService;
   final WordProgressStore wordProgressStore;
+  final XpService xpService;
 
   @override
   Widget build(BuildContext context) {
@@ -48,6 +51,7 @@ class AnimalsCategoryScreen extends StatelessWidget {
                             builder: (_) => WordCardScreen(
                               streakService: streakService,
                               wordProgressStore: wordProgressStore,
+                              xpService: xpService,
                             ),
                           ),
                         );

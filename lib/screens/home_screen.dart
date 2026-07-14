@@ -2,17 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/screens/animals_category_screen.dart';
 import 'package:kelimo/services/streak_service.dart';
+import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({
     required this.streakService,
     required this.wordProgressStore,
+    required this.xpService,
     super.key,
   });
 
   final StreakService streakService;
   final WordProgressStore wordProgressStore;
+  final XpService xpService;
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +34,10 @@ class HomeScreen extends StatelessWidget {
                     child: Center(
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 960),
-                        child: _HeaderAndProgress(streakService: streakService),
+                        child: _HeaderAndProgress(
+                          streakService: streakService,
+                          xpService: xpService,
+                        ),
                       ),
                     ),
                   ),
@@ -85,6 +91,7 @@ class HomeScreen extends StatelessWidget {
                                     builder: (_) => AnimalsCategoryScreen(
                                       streakService: streakService,
                                       wordProgressStore: wordProgressStore,
+                                      xpService: xpService,
                                     ),
                                   ),
                                 );
@@ -161,16 +168,20 @@ class HomeScreen extends StatelessWidget {
 }
 
 class _HeaderAndProgress extends StatelessWidget {
-  const _HeaderAndProgress({required this.streakService});
+  const _HeaderAndProgress({
+    required this.streakService,
+    required this.xpService,
+  });
 
   final StreakService streakService;
+  final XpService xpService;
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
 
     return AnimatedBuilder(
-      animation: streakService,
+      animation: Listenable.merge([streakService, xpService]),
       builder: (context, child) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -185,7 +196,7 @@ class _HeaderAndProgress extends StatelessWidget {
           const SizedBox(height: 24),
           _DailyProgressCard(currentStreak: streakService.currentStreak),
           const SizedBox(height: 16),
-          const _LevelCard(),
+          _LevelCard(xpService: xpService),
           const SizedBox(height: 16),
           _DailyOverviewCards(streakService: streakService),
         ],
@@ -195,7 +206,9 @@ class _HeaderAndProgress extends StatelessWidget {
 }
 
 class _LevelCard extends StatelessWidget {
-  const _LevelCard();
+  const _LevelCard({required this.xpService});
+
+  final XpService xpService;
 
   @override
   Widget build(BuildContext context) {
@@ -229,7 +242,7 @@ class _LevelCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Seviye 4',
+                        'Seviye ${xpService.currentLevel}',
                         style: textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -240,7 +253,8 @@ class _LevelCard extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '720 / 1000 XP',
+                  '${xpService.xpInCurrentLevel} / '
+                  '${xpService.xpRequiredForNextLevel} XP',
                   style: textTheme.labelLarge?.copyWith(
                     color: colorScheme.primary,
                     fontWeight: FontWeight.bold,
@@ -250,7 +264,7 @@ class _LevelCard extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             LinearProgressIndicator(
-              value: 0.72,
+              value: xpService.progress,
               minHeight: 10,
               borderRadius: BorderRadius.circular(5),
             ),
