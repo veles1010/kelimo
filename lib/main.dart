@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:kelimo/data/local/database_service.dart';
 import 'package:kelimo/repositories/daily_progress_repository.dart';
+import 'package:kelimo/repositories/quiz_repository.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/repositories/xp_repository.dart';
 import 'package:kelimo/screens/home_screen.dart';
@@ -18,11 +19,13 @@ class KelimoApp extends StatefulWidget {
     this.wordProgressStore,
     this.dailyProgressStore,
     this.xpStore,
+    this.quizStore,
   });
 
   final WordProgressStore? wordProgressStore;
   final DailyProgressStore? dailyProgressStore;
   final XpStore? xpStore;
+  final QuizStore? quizStore;
 
   @override
   State<KelimoApp> createState() => _KelimoAppState();
@@ -33,6 +36,7 @@ class _KelimoAppState extends State<KelimoApp> {
   late final DailyProgressStore _dailyProgressStore;
   late final StreakService _streakService;
   late final XpService _xpService;
+  late final QuizStore _quizStore;
   late final Future<void> _initialization;
 
   @override
@@ -47,6 +51,7 @@ class _KelimoAppState extends State<KelimoApp> {
     _xpService = XpService(
       repository: widget.xpStore ?? XpRepository(databaseService),
     );
+    _quizStore = widget.quizStore ?? QuizRepository(databaseService);
     _initialization = _initializePersistence();
   }
 
@@ -88,6 +93,7 @@ class _KelimoAppState extends State<KelimoApp> {
             streakService: _streakService,
             wordProgressStore: _wordProgressStore,
             xpService: _xpService,
+            quizStore: _quizStore,
           );
         },
       ),

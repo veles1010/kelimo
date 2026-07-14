@@ -1,11 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:kelimo/data/animal_words.dart';
 import 'package:kelimo/models/word.dart';
+import 'package:kelimo/repositories/quiz_repository.dart';
 import 'package:kelimo/screens/quiz_result_screen.dart';
+import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 
 class AnimalsQuizScreen extends StatefulWidget {
-  const AnimalsQuizScreen({super.key});
+  const AnimalsQuizScreen({
+    required this.quizStore,
+    required this.xpService,
+    super.key,
+  });
+
+  final QuizStore quizStore;
+  final XpService xpService;
 
   @override
   State<AnimalsQuizScreen> createState() => _AnimalsQuizScreenState();
@@ -17,6 +26,7 @@ class _AnimalsQuizScreenState extends State<AnimalsQuizScreen> {
   int _questionIndex = 0;
   int _correctAnswerCount = 0;
   String? _selectedAnswer;
+  bool _isCompleting = false;
 
   Word get _currentWord => animalWords[_questionIndex];
 
@@ -43,7 +53,7 @@ class _AnimalsQuizScreenState extends State<AnimalsQuizScreen> {
   }
 
   void _continueQuiz() {
-    if (_selectedAnswer == null) return;
+    if (_selectedAnswer == null || _isCompleting) return;
 
     if (_questionIndex == _questionCount - 1) {
       _showResult();
@@ -56,31 +66,55 @@ class _AnimalsQuizScreenState extends State<AnimalsQuizScreen> {
     });
   }
 
-  void _showResult() {
+  Future<void> _showResult() async {
+    if (_isCompleting) return;
     final navigator = Navigator.of(context);
-
-    navigator.pushReplacement(
-      MaterialPageRoute<void>(
-        builder: (_) => QuizResultScreen(
-          categoryName: 'Hayvanlar',
-          correctAnswerCount: _correctAnswerCount,
-          totalQuestionCount: _questionCount,
-          successPercentage: calculateQuizPercentage(
-            correct: _correctAnswerCount,
-            total: _questionCount,
-          ),
-          onRetry: () {
-            navigator.pushReplacement(
-              MaterialPageRoute<void>(
-                builder: (_) => const AnimalsQuizScreen(),
-              ),
-            );
-          },
-          onReturnToCategory: navigator.pop,
-          onReturnHome: () => navigator.popUntil((route) => route.isFirst),
-        ),
-      ),
+    final successPercentage = calculateQuizPercentage(
+      correct: _correctAnswerCount,
+      total: _questionCount,
     );
+    setState(() => _isCompleting = true);
+
+    try {
+      final completion = await widget.quizStore.saveCompletedQuiz(
+        categoryId: 'animals',
+        correctCount: _correctAnswerCount,
+        totalQuestions: _questionCount,
+        scorePercent: successPercentage,
+      );
+      widget.xpService.applyPersistedState(completion.xpState);
+      if (!mounted) return;
+
+      navigator.pushReplacement(
+        MaterialPageRoute<void>(
+          builder: (_) => QuizResultScreen(
+            categoryName: 'Hayvanlar',
+            correctAnswerCount: _correctAnswerCount,
+            totalQuestionCount: _questionCount,
+            successPercentage: successPercentage,
+            xpAwarded: completion.attempt.xpAwarded,
+            onRetry: () {
+              navigator.pushReplacement(
+                MaterialPageRoute<void>(
+                  builder: (_) => AnimalsQuizScreen(
+                    quizStore: widget.quizStore,
+                    xpService: widget.xpService,
+                  ),
+                ),
+              );
+            },
+            onReturnToCategory: navigator.pop,
+            onReturnHome: () => navigator.popUntil((route) => route.isFirst),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isCompleting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Quiz sonucu kaydedilemedi')),
+      );
+    }
   }
 
   @override
@@ -132,7 +166,9 @@ class _AnimalsQuizScreenState extends State<AnimalsQuizScreen> {
                     ],
                     const SizedBox(height: 8),
                     FilledButton(
-                      onPressed: _selectedAnswer == null ? null : _continueQuiz,
+                      onPressed: _selectedAnswer == null || _isCompleting
+                          ? null
+                          : _continueQuiz,
                       child: Text(
                         _questionIndex == _questionCount - 1
                             ? 'Sonucu Gör'

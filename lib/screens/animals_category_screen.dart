@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:kelimo/repositories/quiz_repository.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/screens/animals_quiz_screen.dart';
 import 'package:kelimo/screens/word_card_screen.dart';
@@ -11,12 +12,14 @@ class AnimalsCategoryScreen extends StatelessWidget {
     required this.streakService,
     required this.wordProgressStore,
     required this.xpService,
+    required this.quizStore,
     super.key,
   });
 
   final StreakService streakService;
   final WordProgressStore wordProgressStore;
   final XpService xpService;
+  final QuizStore quizStore;
 
   @override
   Widget build(BuildContext context) {
@@ -65,7 +68,10 @@ class AnimalsCategoryScreen extends StatelessWidget {
                       onTap: () {
                         Navigator.of(context).push(
                           MaterialPageRoute<void>(
-                            builder: (_) => const AnimalsQuizScreen(),
+                            builder: (_) => AnimalsQuizScreen(
+                              quizStore: quizStore,
+                              xpService: xpService,
+                            ),
                           ),
                         );
                       },

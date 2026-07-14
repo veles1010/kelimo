@@ -6,10 +6,12 @@ import 'package:kelimo/data/animal_words.dart';
 import 'package:kelimo/data/local/database_service.dart';
 import 'package:kelimo/main.dart';
 import 'package:kelimo/models/daily_progress.dart';
+import 'package:kelimo/models/quiz_attempt.dart';
 import 'package:kelimo/models/word.dart';
 import 'package:kelimo/models/word_progress.dart';
 import 'package:kelimo/models/xp_state.dart';
 import 'package:kelimo/repositories/daily_progress_repository.dart';
+import 'package:kelimo/repositories/quiz_repository.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/repositories/xp_repository.dart';
 import 'package:kelimo/screens/quiz_result_screen.dart';
@@ -188,6 +190,11 @@ class FakeXpStore implements XpStore {
   int get currentTotalXp => storage.state.totalXp;
 
   @override
+  void synchronizeState(XpState state) {
+    storage.state = state;
+  }
+
+  @override
   Future<XpState> loadState() async => storage.state;
 
   @override
@@ -206,6 +213,97 @@ class FakeXpStore implements XpStore {
   }
 }
 
+class FakeQuizStorage {
+  final List<QuizAttempt> attempts = [];
+  int nextId = 1;
+}
+
+class FakeQuizStore implements QuizStore {
+  FakeQuizStore(this.storage, this.xpStorage);
+
+  final FakeQuizStorage storage;
+  final FakeXpStorage xpStorage;
+
+  @override
+  Future<QuizCompletion> saveCompletedQuiz({
+    required String categoryId,
+    required int correctCount,
+    required int totalQuestions,
+    required int scorePercent,
+    DateTime? completedAt,
+  }) async {
+    final xpAwarded = quizXpForScore(scorePercent);
+    final attempt = QuizAttempt(
+      id: storage.nextId++,
+      categoryId: categoryId,
+      correctCount: correctCount,
+      totalQuestions: totalQuestions,
+      scorePercent: scorePercent,
+      completedAt: completedAt ?? DateTime.now(),
+      xpAwarded: xpAwarded,
+    );
+    final xpState = XpState(
+      totalXp: xpStorage.state.totalXp + xpAwarded,
+      updatedAt: DateTime.now(),
+    );
+    storage.attempts.add(attempt);
+    xpStorage.state = xpState;
+    return QuizCompletion(attempt: attempt, xpState: xpState);
+  }
+
+  @override
+  Future<List<QuizAttempt>> getAllAttempts() async {
+    return List.unmodifiable(storage.attempts.reversed);
+  }
+
+  @override
+  Future<List<QuizAttempt>> getAttemptsByCategory(String categoryId) async {
+    return storage.attempts
+        .where((attempt) => attempt.categoryId == categoryId)
+        .toList()
+        .reversed
+        .toList(growable: false);
+  }
+
+  @override
+  Future<int> getHighestScore(String categoryId) async {
+    final scores = storage.attempts
+        .where((attempt) => attempt.categoryId == categoryId)
+        .map((attempt) => attempt.scorePercent);
+    return scores.isEmpty ? 0 : scores.reduce((a, b) => a > b ? a : b);
+  }
+
+  @override
+  Future<int> getTotalQuizCount() async => storage.attempts.length;
+
+  @override
+  Future<QuizStatistics> getStatistics() async {
+    final totalCorrect = storage.attempts.fold<int>(
+      0,
+      (total, attempt) => total + attempt.correctCount,
+    );
+    final totalQuestions = storage.attempts.fold<int>(
+      0,
+      (total, attempt) => total + attempt.totalQuestions,
+    );
+    final categories = storage.attempts
+        .map((attempt) => attempt.categoryId)
+        .toSet();
+    return QuizStatistics(
+      totalQuizCount: storage.attempts.length,
+      totalCorrectCount: totalCorrect,
+      totalQuestionCount: totalQuestions,
+      generalSuccessPercentage: totalQuestions == 0
+          ? 0
+          : ((totalCorrect / totalQuestions) * 100).round(),
+      highestScoreByCategory: {
+        for (final category in categories)
+          category: await getHighestScore(category),
+      },
+    );
+  }
+}
+
 Future<XpService> createXpService({
   int totalXp = 0,
   XpStore? repository,
@@ -217,12 +315,21 @@ Future<XpService> createXpService({
   return service;
 }
 
-Future<void> pumpKelimoApp(WidgetTester tester) async {
+Future<void> pumpKelimoApp(
+  WidgetTester tester, {
+  FakeXpStorage? xpStorage,
+  FakeQuizStorage? quizStorage,
+}) async {
+  final sharedXpStorage = xpStorage ?? FakeXpStorage();
   await tester.pumpWidget(
     KelimoApp(
       wordProgressStore: FakeWordProgressStore(),
       dailyProgressStore: FakeDailyProgressStore(),
-      xpStore: FakeXpStore(),
+      xpStore: FakeXpStore(sharedXpStorage),
+      quizStore: FakeQuizStore(
+        quizStorage ?? FakeQuizStorage(),
+        sharedXpStorage,
+      ),
     ),
   );
   await tester.pumpAndSettle();
@@ -254,6 +361,25 @@ Future<void> selectLearningRating(WidgetTester tester, String rating) async {
   await tester.ensureVisible(find.text(rating));
   await tester.tap(find.text(rating));
   await tester.pumpAndSettle();
+}
+
+Future<void> completeQuiz(WidgetTester tester, {bool perfect = true}) async {
+  for (var index = 0; index < 10; index++) {
+    final answer = !perfect && index == 0
+        ? animalWords[1].turkish
+        : animalWords[index].turkish;
+    final option = find.byKey(ValueKey('quiz-option-$answer'));
+    await tester.ensureVisible(option);
+    await tester.pumpAndSettle();
+    await tester.tap(option);
+    await tester.pump();
+
+    final buttonLabel = index == 9 ? 'Sonucu Gör' : 'Sonraki Soru';
+    await tester.ensureVisible(find.text(buttonLabel));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(buttonLabel));
+    await tester.pumpAndSettle();
+  }
 }
 
 void main() {
@@ -378,8 +504,115 @@ void main() {
     expect(restored.updatedAt, updatedAt);
   });
 
-  test('Veritabanı şema sürümü XP migration ile 2 olur', () {
-    expect(DatabaseService.databaseVersion, 2);
+  test('Veritabanı şema sürümü quiz migration ile 3 olur', () {
+    expect(DatabaseService.databaseVersion, 3);
+  });
+
+  test('QuizAttempt SQLite map dönüşümünde sonuç ve tarihi korur', () {
+    final completedAt = DateTime.parse('2026-07-14T15:30:00.000');
+    final attempt = QuizAttempt(
+      id: 4,
+      categoryId: 'animals',
+      correctCount: 10,
+      totalQuestions: 10,
+      scorePercent: 100,
+      completedAt: completedAt,
+      xpAwarded: 25,
+    );
+
+    final restored = QuizAttempt.fromMap(attempt.toMap());
+
+    expect(restored.id, 4);
+    expect(restored.categoryId, 'animals');
+    expect(restored.correctCount, 10);
+    expect(restored.totalQuestions, 10);
+    expect(restored.scorePercent, 100);
+    expect(restored.completedAt, completedAt);
+    expect(restored.xpAwarded, 25);
+  });
+
+  test('Kusursuz quiz +25 XP verir ve düşük sonuç XP vermez', () async {
+    final xpStorage = FakeXpStorage(totalXp: 250);
+    final quizStorage = FakeQuizStorage();
+    final repository = FakeQuizStore(quizStorage, xpStorage);
+
+    final perfect = await repository.saveCompletedQuiz(
+      categoryId: 'animals',
+      correctCount: 10,
+      totalQuestions: 10,
+      scorePercent: 100,
+    );
+    final lowerScore = await repository.saveCompletedQuiz(
+      categoryId: 'animals',
+      correctCount: 9,
+      totalQuestions: 10,
+      scorePercent: 90,
+    );
+
+    expect(perfect.attempt.xpAwarded, 25);
+    expect(perfect.xpState.totalXp, 275);
+    expect(lowerScore.attempt.xpAwarded, 0);
+    expect(lowerScore.xpState.totalXp, 275);
+    expect(quizStorage.attempts, hasLength(2));
+    expect(quizStorage.attempts.last.scorePercent, 90);
+  });
+
+  test(
+    'Quiz istatistik altyapısı toplamları ve en yüksek skoru hesaplar',
+    () async {
+      final repository = FakeQuizStore(FakeQuizStorage(), FakeXpStorage());
+      await repository.saveCompletedQuiz(
+        categoryId: 'animals',
+        correctCount: 10,
+        totalQuestions: 10,
+        scorePercent: 100,
+      );
+      await repository.saveCompletedQuiz(
+        categoryId: 'animals',
+        correctCount: 7,
+        totalQuestions: 10,
+        scorePercent: 70,
+      );
+      await repository.saveCompletedQuiz(
+        categoryId: 'foods',
+        correctCount: 5,
+        totalQuestions: 10,
+        scorePercent: 50,
+      );
+
+      final statistics = await repository.getStatistics();
+
+      expect(await repository.getTotalQuizCount(), 3);
+      expect(await repository.getAllAttempts(), hasLength(3));
+      expect(await repository.getHighestScore('animals'), 100);
+      expect(await repository.getAttemptsByCategory('animals'), hasLength(2));
+      expect(statistics.totalQuizCount, 3);
+      expect(statistics.totalCorrectCount, 22);
+      expect(statistics.totalQuestionCount, 30);
+      expect(statistics.generalSuccessPercentage, 73);
+      expect(statistics.highestScoreByCategory, {'animals': 100, 'foods': 50});
+    },
+  );
+
+  test('Aynı kusursuz quiz tekrar tamamlanınca yeniden 25 XP verir', () async {
+    final xpStorage = FakeXpStorage();
+    final repository = FakeQuizStore(FakeQuizStorage(), xpStorage);
+
+    await repository.saveCompletedQuiz(
+      categoryId: 'animals',
+      correctCount: 10,
+      totalQuestions: 10,
+      scorePercent: 100,
+    );
+    await repository.saveCompletedQuiz(
+      categoryId: 'animals',
+      correctCount: 10,
+      totalQuestions: 10,
+      scorePercent: 100,
+    );
+
+    expect(xpStorage.state.totalXp, 50);
+    expect(await repository.getTotalQuizCount(), 2);
   });
 
   test('Flashcard değerlendirmeleri doğru XP ödülünü üretir', () {
@@ -813,6 +1046,7 @@ void main() {
           streakService: streakService,
           wordProgressStore: FakeWordProgressStore(),
           xpService: xpService,
+          quizStore: FakeQuizStore(FakeQuizStorage(), FakeXpStorage()),
         ),
       ),
     );
@@ -839,6 +1073,7 @@ void main() {
           streakService: streakService,
           wordProgressStore: FakeWordProgressStore(),
           xpService: xpService,
+          quizStore: FakeQuizStore(FakeQuizStorage(), FakeXpStorage()),
         ),
       ),
     );
@@ -869,6 +1104,7 @@ void main() {
             streakService: streakService,
             wordProgressStore: FakeWordProgressStore(),
             xpService: xpService,
+            quizStore: FakeQuizStore(FakeQuizStorage(), FakeXpStorage()),
           ),
         ),
       );
@@ -1029,22 +1265,7 @@ void main() {
     await openAnimalsCategory(tester);
     await tester.tap(find.text('Quiz Çöz'));
     await tester.pumpAndSettle();
-
-    for (var index = 0; index < 10; index++) {
-      final correctOption = find.byKey(
-        ValueKey('quiz-option-${animalWords[index].turkish}'),
-      );
-      await tester.ensureVisible(correctOption);
-      await tester.pumpAndSettle();
-      await tester.tap(correctOption);
-      await tester.pump();
-
-      final buttonLabel = index == 9 ? 'Sonucu Gör' : 'Sonraki Soru';
-      await tester.ensureVisible(find.text(buttonLabel));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text(buttonLabel));
-      await tester.pumpAndSettle();
-    }
+    await completeQuiz(tester);
 
     expect(find.text('Tebrikler!'), findsOneWidget);
     expect(find.text('Hayvanlar Quizi Tamamlandı'), findsOneWidget);
@@ -1054,7 +1275,8 @@ void main() {
     expect(find.byIcon(Icons.star_rounded), findsNWidgets(5));
     expect(find.text('7 doğru'), findsOneWidget);
     expect(find.text('1 dk 42 sn'), findsOneWidget);
-    expect(find.text('+120 XP'), findsOneWidget);
+    expect(find.text('+25 XP'), findsOneWidget);
+    expect(find.text('🏆 Kusursuz sonuç! +25 XP kazandın.'), findsOneWidget);
 
     await tester.ensureVisible(find.text('Tekrar Çöz'));
     await tester.pumpAndSettle();
@@ -1069,6 +1291,84 @@ void main() {
     expect(nextButton.onPressed, isNull);
   });
 
+  testWidgets('Sonuç ekranı rebuild olduğunda quiz ve XP ikinci kez eklenmez', (
+    tester,
+  ) async {
+    final xpStorage = FakeXpStorage();
+    final quizStorage = FakeQuizStorage();
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await pumpKelimoApp(tester, xpStorage: xpStorage, quizStorage: quizStorage);
+    await openAnimalsCategory(tester);
+    await tester.tap(find.text('Quiz Çöz'));
+    await tester.pumpAndSettle();
+    await completeQuiz(tester);
+
+    expect(quizStorage.attempts, hasLength(1));
+    expect(xpStorage.state.totalXp, 25);
+
+    await tester.binding.setSurfaceSize(const Size(700, 1000));
+    await tester.pumpAndSettle();
+
+    expect(find.text('🏆 Kusursuz sonuç! +25 XP kazandın.'), findsOneWidget);
+    expect(quizStorage.attempts, hasLength(1));
+    expect(xpStorage.state.totalXp, 25);
+  });
+
+  testWidgets('Düşük quiz sonucu kaydedilir fakat XP kazandırmaz', (
+    tester,
+  ) async {
+    final xpStorage = FakeXpStorage();
+    final quizStorage = FakeQuizStorage();
+    await pumpKelimoApp(tester, xpStorage: xpStorage, quizStorage: quizStorage);
+    await openAnimalsCategory(tester);
+    await tester.tap(find.text('Quiz Çöz'));
+    await tester.pumpAndSettle();
+    await completeQuiz(tester, perfect: false);
+
+    expect(find.text('%90 başarı'), findsOneWidget);
+    expect(find.text('0 XP'), findsOneWidget);
+    expect(find.text('🏆 Kusursuz sonuç! +25 XP kazandın.'), findsNothing);
+    expect(quizStorage.attempts.single.xpAwarded, 0);
+    expect(xpStorage.state.totalXp, 0);
+  });
+
+  testWidgets(
+    '250 XP ile kusursuz quiz sonrası ana ekran ve yeniden açılış 275 gösterir',
+    (tester) async {
+      final xpStorage = FakeXpStorage(totalXp: 250);
+      final quizStorage = FakeQuizStorage();
+      await pumpKelimoApp(
+        tester,
+        xpStorage: xpStorage,
+        quizStorage: quizStorage,
+      );
+      await openAnimalsCategory(tester);
+      await tester.tap(find.text('Quiz Çöz'));
+      await tester.pumpAndSettle();
+      await completeQuiz(tester);
+
+      await tester.ensureVisible(find.text('Ana Sayfa'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ana Sayfa'));
+      await tester.pumpAndSettle();
+      await tester.fling(
+        find.byType(CustomScrollView),
+        const Offset(0, 1000),
+        1000,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('275 / 1000 XP'), findsOneWidget);
+
+      await pumpKelimoApp(
+        tester,
+        xpStorage: xpStorage,
+        quizStorage: quizStorage,
+      );
+      expect(find.text('275 / 1000 XP'), findsOneWidget);
+      expect(quizStorage.attempts, hasLength(1));
+    },
+  );
+
   testWidgets('Sonuç ekranı dönüş butonlarını doğru callbacklere bağlar', (
     tester,
   ) async {
@@ -1080,6 +1380,7 @@ void main() {
         correctAnswerCount: 8,
         totalQuestionCount: 10,
         successPercentage: 80,
+        xpAwarded: 0,
         onRetry: () => selectedAction = 'retry',
         onReturnToCategory: () => selectedAction = 'category',
         onReturnHome: () => selectedAction = 'home',
@@ -1087,6 +1388,8 @@ void main() {
     );
 
     await tester.pumpWidget(resultScreen());
+    expect(find.text('0 XP'), findsOneWidget);
+    expect(find.text('🏆 Kusursuz sonuç! +25 XP kazandın.'), findsNothing);
     await tester.ensureVisible(find.text('Kategoriye Dön'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Kategoriye Dön'));

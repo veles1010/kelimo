@@ -33,18 +33,21 @@ class QuizResultScreen extends StatelessWidget {
     required this.correctAnswerCount,
     required this.totalQuestionCount,
     required this.successPercentage,
+    required this.xpAwarded,
     required this.onRetry,
     required this.onReturnToCategory,
     required this.onReturnHome,
   }) : assert(totalQuestionCount > 0),
        assert(correctAnswerCount >= 0),
        assert(correctAnswerCount <= totalQuestionCount),
-       assert(successPercentage >= 0 && successPercentage <= 100);
+       assert(successPercentage >= 0 && successPercentage <= 100),
+       assert(xpAwarded >= 0);
 
   final String categoryName;
   final int correctAnswerCount;
   final int totalQuestionCount;
   final int successPercentage;
+  final int xpAwarded;
   final VoidCallback onRetry;
   final VoidCallback onReturnToCategory;
   final VoidCallback onReturnHome;
@@ -103,8 +106,19 @@ class QuizResultScreen extends StatelessWidget {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+                    if (xpAwarded > 0) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        '🏆 Kusursuz sonuç! +25 XP kazandın.',
+                        textAlign: TextAlign.center,
+                        style: textTheme.titleMedium?.copyWith(
+                          color: Colors.amber.shade800,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 24),
-                    const _SummaryCards(),
+                    _SummaryCards(xpAwarded: xpAwarded),
                     const SizedBox(height: 28),
                     FilledButton(
                       onPressed: onRetry,
@@ -199,22 +213,28 @@ class _ScoreCard extends StatelessWidget {
 }
 
 class _SummaryCards extends StatelessWidget {
-  const _SummaryCards();
+  const _SummaryCards({required this.xpAwarded});
+
+  final int xpAwarded;
 
   @override
   Widget build(BuildContext context) {
-    const cards = [
-      _SummaryCard(
+    final cards = [
+      const _SummaryCard(
         icon: Icons.local_fire_department_rounded,
         label: 'Seri',
         value: '7 doğru',
       ),
-      _SummaryCard(
+      const _SummaryCard(
         icon: Icons.timer_outlined,
         label: 'Süre',
         value: '1 dk 42 sn',
       ),
-      _SummaryCard(icon: Icons.bolt_rounded, label: 'XP', value: '+120 XP'),
+      _SummaryCard(
+        icon: Icons.bolt_rounded,
+        label: 'XP',
+        value: xpAwarded > 0 ? '+$xpAwarded XP' : '0 XP',
+      ),
     ];
 
     return LayoutBuilder(

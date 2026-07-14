@@ -7,6 +7,7 @@ abstract interface class XpStore {
   Future<XpState> loadState();
   Future<XpState> addXp(int amount);
   int get currentTotalXp;
+  void synchronizeState(XpState state);
   Future<void> resetXp();
 }
 
@@ -18,6 +19,11 @@ class XpRepository implements XpStore {
 
   @override
   int get currentTotalXp => _state.totalXp;
+
+  @override
+  void synchronizeState(XpState state) {
+    _state = state;
+  }
 
   @override
   Future<XpState> loadState() async {

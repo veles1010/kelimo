@@ -4,7 +4,7 @@ import 'package:sqflite/sqflite.dart';
 
 class DatabaseService {
   static const databaseName = 'kelimo.db';
-  static const databaseVersion = 2;
+  static const databaseVersion = 3;
 
   static Database? _database;
   static Future<Database>? _openingDatabase;
@@ -43,6 +43,7 @@ class DatabaseService {
   Future<void> _createDatabase(Database database, int version) async {
     await _createVersion1(database);
     if (version >= 2) await _migrateVersion1To2(database);
+    if (version >= 3) await _migrateVersion2To3(database);
   }
 
   Future<void> _createVersion1(Database database) async {
@@ -84,6 +85,9 @@ class DatabaseService {
     if (oldVersion < 2 && newVersion >= 2) {
       await _migrateVersion1To2(database);
     }
+    if (oldVersion < 3 && newVersion >= 3) {
+      await _migrateVersion2To3(database);
+    }
   }
 
   Future<void> _migrateVersion1To2(Database database) async {
@@ -99,5 +103,19 @@ class DatabaseService {
       'total_xp': 0,
       'updated_at': DateTime.now().toIso8601String(),
     }, conflictAlgorithm: ConflictAlgorithm.ignore);
+  }
+
+  Future<void> _migrateVersion2To3(Database database) async {
+    await database.execute('''
+      CREATE TABLE IF NOT EXISTS quiz_attempts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        category_id TEXT NOT NULL,
+        correct_count INTEGER NOT NULL,
+        total_questions INTEGER NOT NULL,
+        score_percent INTEGER NOT NULL,
+        completed_at TEXT NOT NULL,
+        xp_awarded INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
   }
 }

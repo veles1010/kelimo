@@ -53,6 +53,12 @@ class XpService extends ChangeNotifier {
     }
   }
 
+  void applyPersistedState(XpState state) {
+    repository.synchronizeState(state);
+    _applyState(state);
+    notifyListeners();
+  }
+
   void _applyState(XpState state) {
     _totalXp = state.totalXp < 0 ? 0 : state.totalXp;
   }
