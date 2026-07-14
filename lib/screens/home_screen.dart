@@ -1,10 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:kelimo/data/category_catalog.dart';
+import 'package:kelimo/models/learning_category.dart';
 import 'package:kelimo/models/progress_statistics.dart';
 import 'package:kelimo/repositories/quiz_repository.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
-import 'package:kelimo/screens/animals_category_screen.dart';
+import 'package:kelimo/screens/category_screen.dart';
 import 'package:kelimo/screens/progress_screen.dart';
 import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/services/streak_service.dart';
@@ -33,19 +35,27 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
-  late Future<CategoryProgressStatistics> _animalsProgress;
+  late Map<String, Future<CategoryProgressStatistics>> _categoryProgress;
 
   @override
   void initState() {
     super.initState();
     unawaited(widget.statisticsService.refresh());
-    _animalsProgress = widget.statisticsService.loadCategory('animals');
+    _categoryProgress = _loadCategoryProgress();
   }
 
-  void _reloadAnimalsProgress() {
+  Map<String, Future<CategoryProgressStatistics>> _loadCategoryProgress() {
+    return {
+      for (final category in CategoryCatalog.categories)
+        if (category.isAvailable)
+          category.id: widget.statisticsService.loadCategory(category.id),
+    };
+  }
+
+  void _reloadCategoryProgress() {
     unawaited(widget.statisticsService.refresh());
     setState(() {
-      _animalsProgress = widget.statisticsService.loadCategory('animals');
+      _categoryProgress = _loadCategoryProgress();
     });
   }
 
@@ -121,27 +131,30 @@ class _HomeScreenState extends State<HomeScreen> {
                                       mainAxisSpacing: 16,
                                     ),
                                 delegate: SliverChildListDelegate.fixed([
-                                  FutureBuilder<CategoryProgressStatistics>(
-                                    future: _animalsProgress,
-                                    builder: (context, snapshot) {
-                                      final statistics = snapshot.data;
-                                      final total =
-                                          statistics?.totalWordCount ?? 24;
-                                      final learned =
-                                          statistics?.learnedWordCount ?? 0;
+                                  for (final category
+                                      in CategoryCatalog.categories)
+                                    if (category.isAvailable)
+                                      FutureBuilder<CategoryProgressStatistics>(
+                                        future: _categoryProgress[category.id],
+                                        builder: (context, snapshot) {
+                                          final statistics = snapshot.data;
+                                          final total =
+                                              statistics?.totalWordCount ??
+                                              category.words.length;
+                                          final learned =
+                                              statistics?.learnedWordCount ?? 0;
 
-                                      return _CategoryCard(
-                                        icon: '🐶',
-                                        name: 'Hayvanlar',
-                                        wordCount: total,
-                                        progress: total == 0
-                                            ? 0
-                                            : learned / total,
-                                        onTap: () async {
-                                          await Navigator.of(context).push(
-                                            MaterialPageRoute<void>(
-                                              builder: (_) =>
-                                                  AnimalsCategoryScreen(
+                                          return _CategoryCard(
+                                            category: category,
+                                            wordCount: total,
+                                            progress: total == 0
+                                                ? 0
+                                                : learned / total,
+                                            onTap: () async {
+                                              await Navigator.of(context).push(
+                                                MaterialPageRoute<void>(
+                                                  builder: (_) => CategoryScreen(
+                                                    category: category,
                                                     streakService:
                                                         streakService,
                                                     wordProgressStore:
@@ -151,45 +164,21 @@ class _HomeScreenState extends State<HomeScreen> {
                                                     statisticsService: widget
                                                         .statisticsService,
                                                   ),
-                                            ),
+                                                ),
+                                              );
+                                              if (mounted) {
+                                                _reloadCategoryProgress();
+                                              }
+                                            },
                                           );
-                                          if (mounted) {
-                                            _reloadAnimalsProgress();
-                                          }
                                         },
-                                      );
-                                    },
-                                  ),
-                                  const _CategoryCard(
-                                    icon: '🍎',
-                                    name: 'Yiyecekler',
-                                    wordCount: 20,
-                                    progress: 0.45,
-                                  ),
-                                  const _CategoryCard(
-                                    icon: '🎨',
-                                    name: 'Renkler',
-                                    wordCount: 16,
-                                    progress: 0.60,
-                                  ),
-                                  const _CategoryCard(
-                                    icon: '🏠',
-                                    name: 'Ev',
-                                    wordCount: 22,
-                                    progress: 0.30,
-                                  ),
-                                  const _CategoryCard(
-                                    icon: '👨‍👩‍👧',
-                                    name: 'Aile',
-                                    wordCount: 18,
-                                    progress: 0.50,
-                                  ),
-                                  const _CategoryCard(
-                                    icon: '🚌',
-                                    name: 'Ulaşım',
-                                    wordCount: 20,
-                                    progress: 0.20,
-                                  ),
+                                      )
+                                    else
+                                      _CategoryCard(
+                                        category: category,
+                                        wordCount: 0,
+                                        progress: null,
+                                      ),
                                 ]),
                               ),
                             );
@@ -606,24 +595,22 @@ class _GeneralProgressCard extends StatelessWidget {
 
 class _CategoryCard extends StatelessWidget {
   const _CategoryCard({
-    required this.icon,
-    required this.name,
+    required this.category,
     required this.wordCount,
     required this.progress,
     this.onTap,
   });
 
-  final String icon;
-  final String name;
+  final LearningCategory category;
   final int wordCount;
-  final double progress;
+  final double? progress;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final percentage = (progress * 100).round();
+    final percentage = progress == null ? null : (progress! * 100).round();
 
     final content = Padding(
       padding: AppDimensions.cardPadding,
@@ -641,7 +628,10 @@ class _CategoryCard extends StatelessWidget {
                   color: colorScheme.primaryContainer,
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Text(icon, style: const TextStyle(fontSize: 24)),
+                child: Text(
+                  category.emoji,
+                  style: const TextStyle(fontSize: 24),
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -649,27 +639,28 @@ class _CategoryCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      name,
+                      category.title,
                       style: textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     const SizedBox(height: 2),
-                    Text('$wordCount kelime'),
+                    Text(progress == null ? 'Yakında' : '$wordCount kelime'),
                   ],
                 ),
               ),
-              Text(
-                '%$percentage',
-                style: textTheme.labelLarge?.copyWith(
-                  color: colorScheme.primary,
-                  fontWeight: FontWeight.bold,
+              if (percentage != null)
+                Text(
+                  '%$percentage',
+                  style: textTheme.labelLarge?.copyWith(
+                    color: colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ),
             ],
           ),
           const Spacer(),
-          LinearProgressIndicator(value: progress),
+          if (progress != null) LinearProgressIndicator(value: progress),
         ],
       ),
     );

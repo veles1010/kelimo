@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kelimo/data/animal_words.dart';
+import 'package:kelimo/data/category_catalog.dart';
 import 'package:kelimo/data/local/database_service.dart';
 import 'package:kelimo/main.dart';
 import 'package:kelimo/models/daily_progress.dart';
+import 'package:kelimo/models/learning_category.dart';
 import 'package:kelimo/models/progress_statistics.dart';
 import 'package:kelimo/models/quiz_attempt.dart';
 import 'package:kelimo/models/word.dart';
@@ -16,6 +18,8 @@ import 'package:kelimo/repositories/quiz_repository.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/repositories/xp_repository.dart';
 import 'package:kelimo/screens/quiz_result_screen.dart';
+import 'package:kelimo/screens/category_quiz_screen.dart';
+import 'package:kelimo/screens/category_screen.dart';
 import 'package:kelimo/screens/home_screen.dart';
 import 'package:kelimo/screens/word_card_screen.dart';
 import 'package:kelimo/services/english_tts_service.dart';
@@ -384,6 +388,7 @@ Future<void> pumpLearningSession(WidgetTester tester) async {
   await tester.pumpWidget(
     MaterialApp(
       home: WordCardScreen(
+        category: CategoryCatalog.animals,
         wordProgressStore: FakeWordProgressStore(),
         xpService: xpService,
         ttsService: service,
@@ -835,6 +840,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: WordCardScreen(
+          category: CategoryCatalog.animals,
           wordProgressStore: FakeWordProgressStore(),
           xpService: xpService,
           ttsService: service,
@@ -864,6 +870,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: WordCardScreen(
+          category: CategoryCatalog.animals,
           wordProgressStore: FakeWordProgressStore(),
           xpService: xpService,
           ttsService: service,
@@ -884,6 +891,7 @@ void main() {
 
     Widget wordCard() => MaterialApp(
       home: WordCardScreen(
+        category: CategoryCatalog.animals,
         wordProgressStore: repository,
         xpService: xpService,
         ttsService: EnglishTtsService(engine: FakeTtsEngine()),
@@ -941,6 +949,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: WordCardScreen(
+          category: CategoryCatalog.animals,
           wordProgressStore: FakeWordProgressStore(),
           xpService: xpService,
           ttsService: EnglishTtsService(engine: FakeTtsEngine()),
@@ -970,6 +979,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: WordCardScreen(
+          category: CategoryCatalog.animals,
           wordProgressStore: FakeWordProgressStore(),
           xpService: xpService,
           ttsService: EnglishTtsService(engine: FakeTtsEngine()),
@@ -1042,6 +1052,19 @@ void main() {
       expect(word.exampleSentence, isNotEmpty);
       expect(word.exampleTranslation, isNotEmpty);
     }
+  });
+
+  test('Kategori kataloğu Hayvanlar kimliğini ve kelime IDlerini korur', () {
+    final category = CategoryCatalog.findById('animals');
+
+    expect(category, same(CategoryCatalog.animals));
+    expect(category!.id, 'animals');
+    expect(category.title, 'Hayvanlar');
+    expect(category.words, animalWords);
+    expect(
+      category.words.map((word) => word.id).toList(),
+      animalWords.map((word) => word.english.toLowerCase()).toList(),
+    );
   });
 
   test('İstatistikler boş veride güvenli başlangıç değerleri üretir', () async {
@@ -1365,6 +1388,24 @@ void main() {
     }
   });
 
+  testWidgets('Yakında kategorileri mock yüzde göstermez ve ekran açmaz', (
+    tester,
+  ) async {
+    await pumpKelimoApp(tester);
+
+    for (final mockPercentage in ['%45', '%60', '%50', '%20']) {
+      expect(find.text(mockPercentage), findsNothing);
+    }
+
+    await tester.scrollUntilVisible(find.text('Yiyecekler'), 300);
+    expect(find.text('Yakında'), findsWidgets);
+    await tester.tap(find.text('Yiyecekler'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Kategori ilerlemesi'), findsNothing);
+    expect(find.byType(HomeScreen), findsOneWidget);
+  });
+
   testWidgets('uygulama Türkçe ve Material 3 kullanır', (tester) async {
     await pumpKelimoApp(tester);
 
@@ -1384,6 +1425,9 @@ void main() {
 
     await openAnimalsCategory(tester);
 
+    expect(find.byType(CategoryScreen), findsOneWidget);
+    expect(find.text('Hayvanlar'), findsOneWidget);
+    expect(find.text('24 kelime'), findsOneWidget);
     expect(find.text('Kategori ilerlemesi'), findsOneWidget);
     expect(find.text('0 / 24 kelime'), findsOneWidget);
     expect(find.text('%0 tamamlandı'), findsOneWidget);
@@ -1596,7 +1640,8 @@ void main() {
   testWidgets('Quiz tamamlanınca sonuç gösterilir ve tekrar başlatılır', (
     tester,
   ) async {
-    await pumpKelimoApp(tester);
+    final quizStorage = FakeQuizStorage();
+    await pumpKelimoApp(tester, quizStorage: quizStorage);
 
     await openAnimalsCategory(tester);
     await tester.tap(find.text('Quiz Çöz'));
@@ -1613,6 +1658,7 @@ void main() {
     expect(find.text('1 dk 42 sn'), findsOneWidget);
     expect(find.text('+25 XP'), findsOneWidget);
     expect(find.text('🏆 Kusursuz sonuç! +25 XP kazandın.'), findsOneWidget);
+    expect(quizStorage.attempts.single.categoryId, 'animals');
 
     await tester.ensureVisible(find.text('Tekrar Çöz'));
     await tester.pumpAndSettle();
@@ -1737,5 +1783,56 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Ana Sayfa'));
     expect(selectedAction, 'home');
+  });
+
+  testWidgets('Quiz sonuç başlığı verilen kategori adını kullanır', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: QuizResultScreen(
+          categoryName: 'Renkler',
+          correctAnswerCount: 8,
+          totalQuestionCount: 10,
+          successPercentage: 80,
+          xpAwarded: 0,
+          onRetry: () {},
+          onReturnToCategory: () {},
+          onReturnHome: () {},
+        ),
+      ),
+    );
+
+    expect(find.text('Renkler Quizi Tamamlandı'), findsOneWidget);
+    expect(find.text('Hayvanlar Quizi Tamamlandı'), findsNothing);
+  });
+
+  testWidgets('Ortak quiz verilen kategori kimliğiyle kayıt oluşturur', (
+    tester,
+  ) async {
+    final xpStorage = FakeXpStorage();
+    final quizStorage = FakeQuizStorage();
+    final xpService = await createXpService(repository: FakeXpStore(xpStorage));
+    addTearDown(xpService.dispose);
+    final category = LearningCategory(
+      id: 'test-category',
+      title: 'Test Kategorisi',
+      emoji: '🧪',
+      words: animalWords.take(10).toList(growable: false),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CategoryQuizScreen(
+          category: category,
+          quizStore: FakeQuizStore(quizStorage, xpStorage),
+          xpService: xpService,
+        ),
+      ),
+    );
+    await completeQuiz(tester);
+
+    expect(quizStorage.attempts.single.categoryId, 'test-category');
+    expect(find.text('Test Kategorisi Quizi Tamamlandı'), findsOneWidget);
   });
 }

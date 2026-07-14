@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:kelimo/models/learning_category.dart';
 import 'package:kelimo/models/progress_statistics.dart';
 import 'package:kelimo/repositories/quiz_repository.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
-import 'package:kelimo/screens/animals_quiz_screen.dart';
+import 'package:kelimo/screens/category_quiz_screen.dart';
 import 'package:kelimo/screens/category_statistics_screen.dart';
 import 'package:kelimo/screens/word_card_screen.dart';
 import 'package:kelimo/services/streak_service.dart';
@@ -10,8 +11,9 @@ import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 
-class AnimalsCategoryScreen extends StatefulWidget {
-  const AnimalsCategoryScreen({
+class CategoryScreen extends StatefulWidget {
+  const CategoryScreen({
+    required this.category,
     required this.streakService,
     required this.wordProgressStore,
     required this.xpService,
@@ -20,6 +22,7 @@ class AnimalsCategoryScreen extends StatefulWidget {
     super.key,
   });
 
+  final LearningCategory category;
   final StreakService streakService;
   final WordProgressStore wordProgressStore;
   final XpService xpService;
@@ -27,21 +30,25 @@ class AnimalsCategoryScreen extends StatefulWidget {
   final StatisticsService statisticsService;
 
   @override
-  State<AnimalsCategoryScreen> createState() => _AnimalsCategoryScreenState();
+  State<CategoryScreen> createState() => _CategoryScreenState();
 }
 
-class _AnimalsCategoryScreenState extends State<AnimalsCategoryScreen> {
+class _CategoryScreenState extends State<CategoryScreen> {
   late Future<CategoryProgressStatistics> _categoryProgress;
 
   @override
   void initState() {
     super.initState();
-    _categoryProgress = widget.statisticsService.loadCategory('animals');
+    _categoryProgress = widget.statisticsService.loadCategory(
+      widget.category.id,
+    );
   }
 
   void _reloadCategoryProgress() {
     setState(() {
-      _categoryProgress = widget.statisticsService.loadCategory('animals');
+      _categoryProgress = widget.statisticsService.loadCategory(
+        widget.category.id,
+      );
     });
   }
 
@@ -70,9 +77,12 @@ class _AnimalsCategoryScreenState extends State<AnimalsCategoryScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const _CategoryHeader(),
+                    _CategoryHeader(category: widget.category),
                     const SizedBox(height: 24),
-                    _CategoryProgressCard(statistics: _categoryProgress),
+                    _CategoryProgressCard(
+                      statistics: _categoryProgress,
+                      totalWordCount: widget.category.words.length,
+                    ),
                     const SizedBox(height: 24),
                     _ActionCard(
                       icon: Icons.school_rounded,
@@ -82,6 +92,7 @@ class _AnimalsCategoryScreenState extends State<AnimalsCategoryScreen> {
                         await Navigator.of(context).push(
                           MaterialPageRoute<void>(
                             builder: (_) => WordCardScreen(
+                              category: widget.category,
                               streakService: streakService,
                               wordProgressStore: wordProgressStore,
                               xpService: xpService,
@@ -101,7 +112,8 @@ class _AnimalsCategoryScreenState extends State<AnimalsCategoryScreen> {
                       onTap: () {
                         Navigator.of(context).push(
                           MaterialPageRoute<void>(
-                            builder: (_) => AnimalsQuizScreen(
+                            builder: (_) => CategoryQuizScreen(
+                              category: widget.category,
                               quizStore: quizStore,
                               xpService: xpService,
                             ),
@@ -118,7 +130,7 @@ class _AnimalsCategoryScreenState extends State<AnimalsCategoryScreen> {
                         Navigator.of(context).push(
                           MaterialPageRoute<void>(
                             builder: (_) => CategoryStatisticsScreen(
-                              categoryId: 'animals',
+                              category: widget.category,
                               statisticsService: statisticsService,
                             ),
                           ),
@@ -126,7 +138,7 @@ class _AnimalsCategoryScreenState extends State<AnimalsCategoryScreen> {
                       },
                     ),
                     const SizedBox(height: 32),
-                    const _RecentStudies(),
+                    _RecentStudies(category: widget.category),
                   ],
                 ),
               ),
@@ -139,7 +151,9 @@ class _AnimalsCategoryScreenState extends State<AnimalsCategoryScreen> {
 }
 
 class _CategoryHeader extends StatelessWidget {
-  const _CategoryHeader();
+  const _CategoryHeader({required this.category});
+
+  final LearningCategory category;
 
   @override
   Widget build(BuildContext context) {
@@ -156,7 +170,7 @@ class _CategoryHeader extends StatelessWidget {
             color: colorScheme.primaryContainer,
             borderRadius: BorderRadius.circular(AppDimensions.cardRadius),
           ),
-          child: const Text('🐶', style: TextStyle(fontSize: 36)),
+          child: Text(category.emoji, style: const TextStyle(fontSize: 36)),
         ),
         const SizedBox(width: 16),
         Expanded(
@@ -164,13 +178,16 @@ class _CategoryHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Hayvanlar',
+                category.title,
                 style: textTheme.headlineMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
               ),
               const SizedBox(height: 2),
-              Text('24 kelime', style: textTheme.titleMedium),
+              Text(
+                '${category.words.length} kelime',
+                style: textTheme.titleMedium,
+              ),
             ],
           ),
         ),
@@ -180,9 +197,13 @@ class _CategoryHeader extends StatelessWidget {
 }
 
 class _CategoryProgressCard extends StatelessWidget {
-  const _CategoryProgressCard({required this.statistics});
+  const _CategoryProgressCard({
+    required this.statistics,
+    required this.totalWordCount,
+  });
 
   final Future<CategoryProgressStatistics> statistics;
+  final int totalWordCount;
 
   @override
   Widget build(BuildContext context) {
@@ -190,7 +211,7 @@ class _CategoryProgressCard extends StatelessWidget {
       future: statistics,
       builder: (context, snapshot) {
         final category = snapshot.data;
-        final total = category?.totalWordCount ?? 24;
+        final total = category?.totalWordCount ?? totalWordCount;
         final learned = category?.learnedWordCount ?? 0;
         final progress = total == 0 ? 0.0 : learned / total;
         final percentage = (progress * 100).round();
@@ -310,7 +331,9 @@ class _ActionCard extends StatelessWidget {
 }
 
 class _RecentStudies extends StatelessWidget {
-  const _RecentStudies();
+  const _RecentStudies({required this.category});
+
+  final LearningCategory category;
 
   @override
   Widget build(BuildContext context) {
@@ -324,16 +347,15 @@ class _RecentStudies extends StatelessWidget {
           style: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
-        const Card(
+        Card(
           child: Padding(
             padding: AppDimensions.cardPadding,
             child: Column(
               children: [
-                _WordRow(english: 'Dog', turkish: 'Köpek'),
-                Divider(height: 24),
-                _WordRow(english: 'Cat', turkish: 'Kedi'),
-                Divider(height: 24),
-                _WordRow(english: 'Bird', turkish: 'Kuş'),
+                for (final (index, word) in category.words.take(3).indexed) ...[
+                  if (index > 0) const Divider(height: 24),
+                  _WordRow(english: word.english, turkish: word.turkish),
+                ],
               ],
             ),
           ),

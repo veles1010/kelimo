@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:kelimo/models/learning_category.dart';
 import 'package:kelimo/models/progress_statistics.dart';
 import 'package:kelimo/services/statistics_service.dart';
 
 class CategoryStatisticsScreen extends StatefulWidget {
   const CategoryStatisticsScreen({
-    required this.categoryId,
+    required this.category,
     required this.statisticsService,
     super.key,
   });
 
-  final String categoryId;
+  final LearningCategory category;
   final StatisticsService statisticsService;
 
   @override
@@ -23,12 +24,12 @@ class _CategoryStatisticsScreenState extends State<CategoryStatisticsScreen> {
   @override
   void initState() {
     super.initState();
-    _statistics = widget.statisticsService.loadCategory(widget.categoryId);
+    _statistics = widget.statisticsService.loadCategory(widget.category.id);
   }
 
   void _retry() {
     setState(() {
-      _statistics = widget.statisticsService.loadCategory(widget.categoryId);
+      _statistics = widget.statisticsService.loadCategory(widget.category.id);
     });
   }
 
@@ -36,7 +37,7 @@ class _CategoryStatisticsScreenState extends State<CategoryStatisticsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Hayvanlar İstatistikleri'),
+        title: Text('${widget.category.title} İstatistikleri'),
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
       ),
@@ -54,7 +55,10 @@ class _CategoryStatisticsScreenState extends State<CategoryStatisticsScreen> {
               ),
             );
           }
-          return _CategoryStatisticsContent(statistics: snapshot.data!);
+          return _CategoryStatisticsContent(
+            category: widget.category,
+            statistics: snapshot.data!,
+          );
         },
       ),
     );
@@ -62,8 +66,12 @@ class _CategoryStatisticsScreenState extends State<CategoryStatisticsScreen> {
 }
 
 class _CategoryStatisticsContent extends StatelessWidget {
-  const _CategoryStatisticsContent({required this.statistics});
+  const _CategoryStatisticsContent({
+    required this.category,
+    required this.statistics,
+  });
 
+  final LearningCategory category;
   final CategoryProgressStatistics statistics;
 
   @override
@@ -118,11 +126,14 @@ class _CategoryStatisticsContent extends StatelessWidget {
                     padding: const EdgeInsets.all(20),
                     child: Row(
                       children: [
-                        const Text('🐶', style: TextStyle(fontSize: 40)),
+                        Text(
+                          category.emoji,
+                          style: const TextStyle(fontSize: 40),
+                        ),
                         const SizedBox(width: 14),
                         Expanded(
                           child: Text(
-                            '${statistics.categoryName} performansı',
+                            '${category.title} performansı',
                             style: Theme.of(context).textTheme.titleLarge
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),

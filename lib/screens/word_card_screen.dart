@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:kelimo/data/animal_words.dart';
+import 'package:kelimo/models/learning_category.dart';
 import 'package:kelimo/models/word.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/services/english_tts_service.dart';
@@ -13,6 +13,7 @@ import 'package:kelimo/utils/turkish_case.dart';
 
 class WordCardScreen extends StatefulWidget {
   const WordCardScreen({
+    required this.category,
     required this.wordProgressStore,
     required this.xpService,
     super.key,
@@ -20,6 +21,7 @@ class WordCardScreen extends StatefulWidget {
     this.streakService,
   });
 
+  final LearningCategory category;
   final WordProgressStore wordProgressStore;
   final XpService xpService;
   final EnglishTtsService? ttsService;
@@ -55,7 +57,7 @@ class _WordCardScreenState extends State<WordCardScreen>
   void initState() {
     super.initState();
     _ttsService = widget.ttsService ?? EnglishTtsService();
-    _learningEngine = LearningEngine(animalWords);
+    _learningEngine = LearningEngine(widget.category.words);
     _ownsStreakService = widget.streakService == null;
     _streakService = widget.streakService ?? StreakService();
     _isFavorite = widget.wordProgressStore
@@ -211,8 +213,9 @@ class _WordCardScreenState extends State<WordCardScreen>
           color: Theme.of(context).colorScheme.primary,
         ),
         title: const Text('Kategori Tamamlandı'),
-        content: const Text(
-          'Hayvanlar kategorisindeki tüm kelimeleri tamamladın!',
+        content: Text(
+          '${widget.category.title} kategorisindeki tüm kelimeleri '
+          'tamamladın!',
           textAlign: TextAlign.center,
         ),
         actions: [
@@ -243,7 +246,7 @@ class _WordCardScreenState extends State<WordCardScreen>
     return Scaffold(
       appBar: AppBar(
         leading: const BackButton(),
-        title: const Text('Hayvanlar'),
+        title: Text(widget.category.title),
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
         actions: [

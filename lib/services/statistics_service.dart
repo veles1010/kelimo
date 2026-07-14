@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:kelimo/data/animal_words.dart';
+import 'package:kelimo/data/category_catalog.dart';
 import 'package:kelimo/models/progress_statistics.dart';
 import 'package:kelimo/models/word.dart';
 import 'package:kelimo/models/word_progress.dart';
@@ -57,10 +57,7 @@ WordLearningDistribution calculateWordDistribution(
 }
 
 String categoryNameForId(String categoryId) {
-  return switch (categoryId) {
-    'animals' => 'Hayvanlar',
-    _ => categoryId,
-  };
+  return CategoryCatalog.findById(categoryId)?.title ?? categoryId;
 }
 
 String formatTurkishDate(DateTime date) {
@@ -112,14 +109,15 @@ class StatisticsService extends ChangeNotifier {
       final quizStatistics = await quizStore.getStatistics();
       final attempts = await quizStore.getAllAttempts();
       final wordProgress = wordProgressStore.getAllProgress();
-      final knownWordIds = animalWords.map((word) => word.id).toSet();
+      final words = CategoryCatalog.categories
+          .where((category) => category.isAvailable)
+          .expand((category) => category.words)
+          .toList(growable: false);
+      final knownWordIds = words.map((word) => word.id).toSet();
       final relevantProgress = wordProgress
           .where((progress) => knownWordIds.contains(progress.wordId))
           .toList(growable: false);
-      final distribution = calculateWordDistribution(
-        animalWords,
-        relevantProgress,
-      );
+      final distribution = calculateWordDistribution(words, relevantProgress);
       final sortedAttempts = [...attempts]
         ..sort((a, b) => b.completedAt.compareTo(a.completedAt));
       final recentAttempts = sortedAttempts.take(5).toList(growable: false);
@@ -208,9 +206,6 @@ class StatisticsService extends ChangeNotifier {
   }
 
   List<Word> _wordsForCategory(String categoryId) {
-    return switch (categoryId) {
-      'animals' => animalWords,
-      _ => const [],
-    };
+    return CategoryCatalog.findById(categoryId)?.words ?? const [];
   }
 }

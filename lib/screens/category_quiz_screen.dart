@@ -1,42 +1,47 @@
 import 'package:flutter/material.dart';
-import 'package:kelimo/data/animal_words.dart';
+import 'package:kelimo/models/learning_category.dart';
 import 'package:kelimo/models/word.dart';
 import 'package:kelimo/repositories/quiz_repository.dart';
 import 'package:kelimo/screens/quiz_result_screen.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 
-class AnimalsQuizScreen extends StatefulWidget {
-  const AnimalsQuizScreen({
+class CategoryQuizScreen extends StatefulWidget {
+  CategoryQuizScreen({
+    required this.category,
     required this.quizStore,
     required this.xpService,
     super.key,
-  });
+  }) : assert(category.words.length >= 4);
 
+  final LearningCategory category;
   final QuizStore quizStore;
   final XpService xpService;
 
   @override
-  State<AnimalsQuizScreen> createState() => _AnimalsQuizScreenState();
+  State<CategoryQuizScreen> createState() => _CategoryQuizScreenState();
 }
 
-class _AnimalsQuizScreenState extends State<AnimalsQuizScreen> {
-  static const _questionCount = 10;
-
+class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
   int _questionIndex = 0;
   int _correctAnswerCount = 0;
   String? _selectedAnswer;
   bool _isCompleting = false;
 
-  Word get _currentWord => animalWords[_questionIndex];
+  int get _questionCount =>
+      widget.category.words.length < 10 ? widget.category.words.length : 10;
+
+  Word get _currentWord => widget.category.words[_questionIndex];
 
   List<String> _optionsFor(int index) {
-    final options = [
-      animalWords[index].turkish,
-      animalWords[(index + 1) % animalWords.length].turkish,
-      animalWords[(index + 8) % animalWords.length].turkish,
-      animalWords[(index + 15) % animalWords.length].turkish,
-    ];
+    final words = widget.category.words;
+    final distinctOptions = <String>{words[index].turkish};
+    var offset = 1;
+    while (distinctOptions.length < 4 && offset < words.length) {
+      distinctOptions.add(words[(index + offset) % words.length].turkish);
+      offset++;
+    }
+    final options = distinctOptions.toList(growable: false);
     final shift = (index + 1) % options.length;
 
     return [...options.skip(shift), ...options.take(shift)];
@@ -77,7 +82,7 @@ class _AnimalsQuizScreenState extends State<AnimalsQuizScreen> {
 
     try {
       final completion = await widget.quizStore.saveCompletedQuiz(
-        categoryId: 'animals',
+        categoryId: widget.category.id,
         correctCount: _correctAnswerCount,
         totalQuestions: _questionCount,
         scorePercent: successPercentage,
@@ -88,7 +93,7 @@ class _AnimalsQuizScreenState extends State<AnimalsQuizScreen> {
       navigator.pushReplacement(
         MaterialPageRoute<void>(
           builder: (_) => QuizResultScreen(
-            categoryName: 'Hayvanlar',
+            categoryName: widget.category.title,
             correctAnswerCount: _correctAnswerCount,
             totalQuestionCount: _questionCount,
             successPercentage: successPercentage,
@@ -96,7 +101,8 @@ class _AnimalsQuizScreenState extends State<AnimalsQuizScreen> {
             onRetry: () {
               navigator.pushReplacement(
                 MaterialPageRoute<void>(
-                  builder: (_) => AnimalsQuizScreen(
+                  builder: (_) => CategoryQuizScreen(
+                    category: widget.category,
                     quizStore: widget.quizStore,
                     xpService: widget.xpService,
                   ),
@@ -124,7 +130,7 @@ class _AnimalsQuizScreenState extends State<AnimalsQuizScreen> {
     return Scaffold(
       appBar: AppBar(
         leading: const BackButton(),
-        title: const Text('Hayvanlar Quiz'),
+        title: Text('${widget.category.title} Quiz'),
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
         actions: [
