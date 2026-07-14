@@ -6,9 +6,11 @@ import 'package:kelimo/data/animal_words.dart';
 import 'package:kelimo/main.dart';
 import 'package:kelimo/models/word.dart';
 import 'package:kelimo/screens/quiz_result_screen.dart';
+import 'package:kelimo/screens/home_screen.dart';
 import 'package:kelimo/screens/word_card_screen.dart';
 import 'package:kelimo/services/english_tts_service.dart';
 import 'package:kelimo/services/learning_engine.dart';
+import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 import 'package:kelimo/utils/turkish_case.dart';
 
@@ -132,6 +134,36 @@ void main() {
     expect(engine.canPrevious, isFalse);
   });
 
+  test('Günlük hedef beş değerlendirmede tamamlanır ve seri bir kez artar', () {
+    final service = StreakService();
+    addTearDown(service.dispose);
+
+    expect(service.todayCount, 0);
+    expect(service.dailyGoal, 5);
+    expect(service.currentStreak, 7);
+    expect(service.isTodayCompleted, isFalse);
+    expect(service.remainingForToday, 5);
+
+    for (var count = 1; count < service.dailyGoal; count++) {
+      expect(service.recordEvaluation(), isFalse);
+      expect(service.todayCount, count);
+      expect(service.remainingForToday, service.dailyGoal - count);
+      expect(service.currentStreak, 7);
+    }
+
+    expect(service.recordEvaluation(), isTrue);
+    expect(service.todayCount, 5);
+    expect(service.remainingForToday, 0);
+    expect(service.isTodayCompleted, isTrue);
+    expect(service.currentStreak, 8);
+
+    expect(service.recordEvaluation(), isFalse);
+    expect(service.recordEvaluation(), isFalse);
+    expect(service.todayCount, 7);
+    expect(service.remainingForToday, 0);
+    expect(service.currentStreak, 8);
+  });
+
   test('İngilizce TTS ayarlanır ve eşzamanlı konuşmayı engeller', () async {
     final engine = FakeTtsEngine()..speakCompleter = Completer<bool>();
     final service = EnglishTtsService(engine: engine);
@@ -219,6 +251,32 @@ void main() {
     expect(find.text('DOG'), findsOneWidget);
   });
 
+  testWidgets('Günlük hedef ilk kez tamamlanınca geri bildirim gösterilir', (
+    tester,
+  ) async {
+    final streakService = StreakService(dailyGoal: 1);
+    addTearDown(streakService.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WordCardScreen(
+          ttsService: EnglishTtsService(engine: FakeTtsEngine()),
+          streakService: streakService,
+        ),
+      ),
+    );
+    await tester.ensureVisible(find.text('Kolay'));
+    await tester.tap(find.text('Kolay'));
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(
+      find.text('🔥 Günlük hedef tamamlandı! Serin 8 güne çıktı.'),
+      findsOneWidget,
+    );
+    expect(streakService.todayCount, 1);
+    expect(streakService.currentStreak, 8);
+  });
+
   testWidgets('Tüm kelimeler Kolay seçilince kategori tamamlanır', (
     tester,
   ) async {
@@ -287,11 +345,34 @@ void main() {
     expect(find.text('Günlük Seri'), findsOneWidget);
     expect(find.text('7 gün'), findsOneWidget);
     expect(find.text('Günlük Görev'), findsOneWidget);
-    expect(find.text('Bugün 10 kelime öğren'), findsOneWidget);
+    expect(find.text('0 / 5'), findsOneWidget);
+    expect(find.text('Bugün 5 kelime değerlendir'), findsOneWidget);
     expect(find.byType(LinearProgressIndicator), findsNWidgets(3));
     await tester.scrollUntilVisible(find.text('Kategoriler'), 300);
     expect(find.text('Kategoriler'), findsOneWidget);
     expect(find.byType(NavigationBar), findsOneWidget);
+  });
+
+  testWidgets('Ana ekran tamamlanan günlük hedefi servisten gösterir', (
+    tester,
+  ) async {
+    final streakService = StreakService();
+    addTearDown(streakService.dispose);
+    for (var count = 0; count < streakService.dailyGoal; count++) {
+      streakService.recordEvaluation();
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: HomeScreen(streakService: streakService),
+      ),
+    );
+
+    expect(find.text('🔥 8 günlük seri'), findsOneWidget);
+    expect(find.text('8 gün'), findsOneWidget);
+    expect(find.text('5 / 5'), findsOneWidget);
+    expect(find.text('Günlük hedef tamamlandı'), findsOneWidget);
   });
 
   testWidgets('altı kategori kartı ve içerikleri bulunur', (tester) async {

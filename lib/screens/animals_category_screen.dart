@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:kelimo/screens/animals_quiz_screen.dart';
 import 'package:kelimo/screens/word_card_screen.dart';
+import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 
 class AnimalsCategoryScreen extends StatelessWidget {
-  const AnimalsCategoryScreen({super.key});
+  const AnimalsCategoryScreen({required this.streakService, super.key});
+
+  final StreakService streakService;
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +39,8 @@ class AnimalsCategoryScreen extends StatelessWidget {
                       onTap: () {
                         Navigator.of(context).push(
                           MaterialPageRoute<void>(
-                            builder: (_) => const WordCardScreen(),
+                            builder: (_) =>
+                                WordCardScreen(streakService: streakService),
                           ),
                         );
                       },

@@ -6,12 +6,14 @@ import 'package:kelimo/data/animal_words.dart';
 import 'package:kelimo/models/word.dart';
 import 'package:kelimo/services/english_tts_service.dart';
 import 'package:kelimo/services/learning_engine.dart';
+import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/utils/turkish_case.dart';
 
 class WordCardScreen extends StatefulWidget {
-  const WordCardScreen({super.key, this.ttsService});
+  const WordCardScreen({super.key, this.ttsService, this.streakService});
 
   final EnglishTtsService? ttsService;
+  final StreakService? streakService;
 
   @override
   State<WordCardScreen> createState() => _WordCardScreenState();
@@ -33,6 +35,8 @@ class _WordCardScreenState extends State<WordCardScreen>
   late final Animation<double> _flipAnimation;
   late final EnglishTtsService _ttsService;
   late final LearningEngine _learningEngine;
+  late final StreakService _streakService;
+  late final bool _ownsStreakService;
   _LearningRating? _selectedDifficulty;
   bool _isEvaluating = false;
 
@@ -41,6 +45,8 @@ class _WordCardScreenState extends State<WordCardScreen>
     super.initState();
     _ttsService = widget.ttsService ?? EnglishTtsService();
     _learningEngine = LearningEngine(animalWords);
+    _ownsStreakService = widget.streakService == null;
+    _streakService = widget.streakService ?? StreakService();
     _flipController = AnimationController(
       duration: const Duration(milliseconds: 450),
       vsync: this,
@@ -54,6 +60,7 @@ class _WordCardScreenState extends State<WordCardScreen>
   @override
   void dispose() {
     unawaited(_ttsService.dispose());
+    if (_ownsStreakService) _streakService.dispose();
     _flipController.dispose();
     super.dispose();
   }
@@ -90,6 +97,18 @@ class _WordCardScreenState extends State<WordCardScreen>
 
   Future<void> _evaluateWord(_LearningRating rating) async {
     if (_isEvaluating || _learningEngine.isComplete) return;
+
+    final completedDailyGoal = _streakService.recordEvaluation();
+    if (completedDailyGoal && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '🔥 Günlük hedef tamamlandı! Serin '
+            '${_streakService.currentStreak} güne çıktı.',
+          ),
+        ),
+      );
+    }
 
     setState(() {
       _selectedDifficulty = rating;

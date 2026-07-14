@@ -1,13 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:kelimo/screens/home_screen.dart';
+import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 
 void main() {
   runApp(const KelimoApp());
 }
 
-class KelimoApp extends StatelessWidget {
+class KelimoApp extends StatefulWidget {
   const KelimoApp({super.key});
+
+  @override
+  State<KelimoApp> createState() => _KelimoAppState();
+}
+
+class _KelimoAppState extends State<KelimoApp> {
+  final StreakService _streakService = StreakService();
+
+  @override
+  void dispose() {
+    _streakService.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +32,7 @@ class KelimoApp extends StatelessWidget {
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.system,
-      home: const HomeScreen(),
+      home: HomeScreen(streakService: _streakService),
     );
   }
 }

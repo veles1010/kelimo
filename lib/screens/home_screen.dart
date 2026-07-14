@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:kelimo/screens/animals_category_screen.dart';
+import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({required this.streakService, super.key});
+
+  final StreakService streakService;
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +25,7 @@ class HomeScreen extends StatelessWidget {
                     child: Center(
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 960),
-                        child: const _HeaderAndProgress(),
+                        child: _HeaderAndProgress(streakService: streakService),
                       ),
                     ),
                   ),
@@ -73,8 +76,9 @@ class HomeScreen extends StatelessWidget {
                               onTap: () {
                                 Navigator.of(context).push(
                                   MaterialPageRoute<void>(
-                                    builder: (_) =>
-                                        const AnimalsCategoryScreen(),
+                                    builder: (_) => AnimalsCategoryScreen(
+                                      streakService: streakService,
+                                    ),
                                   ),
                                 );
                               },
@@ -150,30 +154,35 @@ class HomeScreen extends StatelessWidget {
 }
 
 class _HeaderAndProgress extends StatelessWidget {
-  const _HeaderAndProgress();
+  const _HeaderAndProgress({required this.streakService});
+
+  final StreakService streakService;
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Merhaba!',
-          style: textTheme.headlineMedium?.copyWith(
-            fontWeight: FontWeight.bold,
+    return AnimatedBuilder(
+      animation: streakService,
+      builder: (context, child) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Merhaba!',
+            style: textTheme.headlineMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
           ),
-        ),
-        const SizedBox(height: 4),
-        Text('Bugün öğrenmeye hazır mısın?', style: textTheme.titleMedium),
-        const SizedBox(height: 24),
-        const _DailyProgressCard(),
-        const SizedBox(height: 16),
-        const _LevelCard(),
-        const SizedBox(height: 16),
-        const _DailyOverviewCards(),
-      ],
+          const SizedBox(height: 4),
+          Text('Bugün öğrenmeye hazır mısın?', style: textTheme.titleMedium),
+          const SizedBox(height: 24),
+          _DailyProgressCard(currentStreak: streakService.currentStreak),
+          const SizedBox(height: 16),
+          const _LevelCard(),
+          const SizedBox(height: 16),
+          _DailyOverviewCards(streakService: streakService),
+        ],
+      ),
     );
   }
 }
@@ -246,7 +255,9 @@ class _LevelCard extends StatelessWidget {
 }
 
 class _DailyOverviewCards extends StatelessWidget {
-  const _DailyOverviewCards();
+  const _DailyOverviewCards({required this.streakService});
+
+  final StreakService streakService;
 
   @override
   Widget build(BuildContext context) {
@@ -261,8 +272,20 @@ class _DailyOverviewCards extends StatelessWidget {
           spacing: 12,
           runSpacing: 12,
           children: [
-            SizedBox(width: cardWidth, child: const _DailyStreakCard()),
-            SizedBox(width: cardWidth, child: const _DailyTaskCard()),
+            SizedBox(
+              width: cardWidth,
+              child: _DailyStreakCard(
+                currentStreak: streakService.currentStreak,
+              ),
+            ),
+            SizedBox(
+              width: cardWidth,
+              child: _DailyTaskCard(
+                todayCount: streakService.todayCount,
+                dailyGoal: streakService.dailyGoal,
+                isCompleted: streakService.isTodayCompleted,
+              ),
+            ),
           ],
         );
       },
@@ -271,7 +294,9 @@ class _DailyOverviewCards extends StatelessWidget {
 }
 
 class _DailyStreakCard extends StatelessWidget {
-  const _DailyStreakCard();
+  const _DailyStreakCard({required this.currentStreak});
+
+  final int currentStreak;
 
   @override
   Widget build(BuildContext context) {
@@ -308,7 +333,7 @@ class _DailyStreakCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '7 gün',
+                    '$currentStreak gün',
                     style: textTheme.titleLarge?.copyWith(
                       color: colorScheme.secondary,
                       fontWeight: FontWeight.bold,
@@ -325,7 +350,15 @@ class _DailyStreakCard extends StatelessWidget {
 }
 
 class _DailyTaskCard extends StatelessWidget {
-  const _DailyTaskCard();
+  const _DailyTaskCard({
+    required this.todayCount,
+    required this.dailyGoal,
+    required this.isCompleted,
+  });
+
+  final int todayCount;
+  final int dailyGoal;
+  final bool isCompleted;
 
   @override
   Widget build(BuildContext context) {
@@ -351,7 +384,7 @@ class _DailyTaskCard extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '6 / 10',
+                  '$todayCount / $dailyGoal',
                   style: textTheme.labelLarge?.copyWith(
                     color: colorScheme.primary,
                     fontWeight: FontWeight.bold,
@@ -360,9 +393,15 @@ class _DailyTaskCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
-            const Text('Bugün 10 kelime öğren'),
+            Text(
+              isCompleted
+                  ? 'Günlük hedef tamamlandı'
+                  : 'Bugün $dailyGoal kelime değerlendir',
+            ),
             const SizedBox(height: 10),
-            const LinearProgressIndicator(value: 0.60),
+            LinearProgressIndicator(
+              value: (todayCount / dailyGoal).clamp(0.0, 1.0),
+            ),
           ],
         ),
       ),
@@ -371,7 +410,9 @@ class _DailyTaskCard extends StatelessWidget {
 }
 
 class _DailyProgressCard extends StatelessWidget {
-  const _DailyProgressCard();
+  const _DailyProgressCard({required this.currentStreak});
+
+  final int currentStreak;
 
   @override
   Widget build(BuildContext context) {
@@ -407,7 +448,7 @@ class _DailyProgressCard extends StatelessWidget {
             const LinearProgressIndicator(value: 0.60),
             const SizedBox(height: 16),
             Text(
-              '🔥 7 günlük seri',
+              '🔥 $currentStreak günlük seri',
               style: textTheme.titleMedium?.copyWith(
                 color: colorScheme.secondary,
                 fontWeight: FontWeight.w600,
