@@ -1,4 +1,5 @@
 import 'package:kelimo/data/animal_words.dart';
+import 'package:kelimo/data/food_words.dart';
 import 'package:kelimo/models/learning_category.dart';
 
 abstract final class CategoryCatalog {
@@ -9,9 +10,16 @@ abstract final class CategoryCatalog {
     words: animalWords,
   );
 
+  static const foods = LearningCategory(
+    id: 'foods',
+    title: 'Yiyecekler',
+    emoji: '🍎',
+    words: foodWords,
+  );
+
   static const categories = <LearningCategory>[
     animals,
-    LearningCategory(id: 'foods', title: 'Yiyecekler', emoji: '🍎', words: []),
+    foods,
     LearningCategory(id: 'colors', title: 'Renkler', emoji: '🎨', words: []),
     LearningCategory(id: 'home', title: 'Ev', emoji: '🏠', words: []),
     LearningCategory(id: 'family', title: 'Aile', emoji: '👨‍👩‍👧', words: []),

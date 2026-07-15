@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kelimo/data/animal_words.dart';
 import 'package:kelimo/data/category_catalog.dart';
+import 'package:kelimo/data/food_words.dart';
 import 'package:kelimo/data/local/database_service.dart';
 import 'package:kelimo/main.dart';
 import 'package:kelimo/models/daily_progress.dart';
@@ -29,6 +30,7 @@ import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 import 'package:kelimo/utils/turkish_case.dart';
+import 'package:kelimo/widgets/scale_down_single_line_text.dart';
 
 class FakeTtsEngine implements TtsEngine {
   String? language;
@@ -382,6 +384,12 @@ Future<void> openAnimalsCategory(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> openFoodsCategory(WidgetTester tester) async {
+  await tester.scrollUntilVisible(find.text('Yiyecekler'), 300);
+  await tester.tap(find.text('Yiyecekler'));
+  await tester.pumpAndSettle();
+}
+
 Future<void> pumpLearningSession(WidgetTester tester) async {
   final service = EnglishTtsService(engine: FakeTtsEngine());
   final xpService = await createXpService();
@@ -405,11 +413,15 @@ Future<void> selectLearningRating(WidgetTester tester, String rating) async {
   await tester.pumpAndSettle();
 }
 
-Future<void> completeQuiz(WidgetTester tester, {bool perfect = true}) async {
+Future<void> completeQuiz(
+  WidgetTester tester, {
+  bool perfect = true,
+  List<Word> words = animalWords,
+}) async {
   for (var index = 0; index < 10; index++) {
     final answer = !perfect && index == 0
-        ? animalWords[1].turkish
-        : animalWords[index].turkish;
+        ? words[1].turkish
+        : words[index].turkish;
     final option = find.byKey(ValueKey('quiz-option-$answer'));
     await tester.ensureVisible(option);
     await tester.pumpAndSettle();
@@ -1067,6 +1079,55 @@ void main() {
     );
   });
 
+  test('Yiyecekler kataloğu 20 kararlı ve benzersiz kelime içerir', () {
+    final category = CategoryCatalog.findById('foods');
+
+    expect(CategoryCatalog.categories, hasLength(6));
+    expect(category, same(CategoryCatalog.foods));
+    expect(category!.id, 'foods');
+    expect(category.title, 'Yiyecekler');
+    expect(category.isAvailable, isTrue);
+    expect(category.words, foodWords);
+    expect(foodWords, hasLength(20));
+    expect(foodWords.map((word) => word.id).toSet(), hasLength(20));
+    expect(foodWords.every((word) => word.id.startsWith('foods_')), isTrue);
+    expect(foodWords.map((word) => word.id).toList(), [
+      'foods_apple',
+      'foods_banana',
+      'foods_orange',
+      'foods_strawberry',
+      'foods_grape',
+      'foods_watermelon',
+      'foods_bread',
+      'foods_cheese',
+      'foods_milk',
+      'foods_water',
+      'foods_rice',
+      'foods_soup',
+      'foods_salad',
+      'foods_cake',
+      'foods_cookie',
+      'foods_chocolate',
+      'foods_ice_cream',
+      'foods_hamburger',
+      'foods_pizza',
+      'foods_sandwich',
+    ]);
+    for (final word in foodWords) {
+      expect(word.english, isNotEmpty);
+      expect(word.turkish, isNotEmpty);
+      expect(word.emoji, isNotEmpty);
+      expect(word.exampleSentence, isNotEmpty);
+      expect(word.exampleTranslation, isNotEmpty);
+    }
+
+    final upcoming = CategoryCatalog.categories
+        .where((item) => !item.isAvailable)
+        .map((item) => item.title)
+        .toSet();
+    expect(upcoming, {'Renkler', 'Ev', 'Aile', 'Ulaşım'});
+  });
+
   test('İstatistikler boş veride güvenli başlangıç değerleri üretir', () async {
     final streakService = StreakService(initialStreak: 0);
     final xpService = await createXpService();
@@ -1087,7 +1148,8 @@ void main() {
     expect(statistics.todayReviewCount, 0);
     expect(statistics.startedWordCount, 0);
     expect(statistics.favoriteWordCount, 0);
-    expect(statistics.distribution.newCount, 24);
+    expect(statistics.distribution.totalCount, 44);
+    expect(statistics.distribution.newCount, 44);
     expect(statistics.distribution.learningCount, 0);
     expect(statistics.distribution.learnedCount, 0);
     expect(statistics.quizStatistics.totalQuizCount, 0);
@@ -1178,7 +1240,8 @@ void main() {
 
       expect(statistics.startedWordCount, 4);
       expect(statistics.favoriteWordCount, 2);
-      expect(statistics.distribution.newCount, 20);
+      expect(statistics.distribution.totalCount, 44);
+      expect(statistics.distribution.newCount, 40);
       expect(statistics.distribution.learningCount, 2);
       expect(statistics.distribution.learnedCount, 2);
       expect(statistics.quizStatistics.totalQuizCount, 7);
@@ -1201,13 +1264,70 @@ void main() {
     },
   );
 
+  test(
+    'Yiyecekler istatistikleri yalnızca foods verilerini kullanır',
+    () async {
+      final wordStore = FakeWordProgressStore({
+        'foods_apple': testWordProgress(
+          wordId: 'foods_apple',
+          mastery: 'easy',
+          repetitionCount: 1,
+          isFavorite: true,
+        ),
+        'dog': testWordProgress(
+          wordId: 'dog',
+          mastery: 'easy',
+          repetitionCount: 1,
+          isFavorite: true,
+        ),
+      });
+      final xpStorage = FakeXpStorage();
+      final quizStorage = FakeQuizStorage();
+      final quizStore = FakeQuizStore(quizStorage, xpStorage);
+      await quizStore.saveCompletedQuiz(
+        categoryId: 'foods',
+        correctCount: 8,
+        totalQuestions: 10,
+        scorePercent: 80,
+      );
+      await quizStore.saveCompletedQuiz(
+        categoryId: 'animals',
+        correctCount: 10,
+        totalQuestions: 10,
+        scorePercent: 100,
+      );
+      final streakService = StreakService();
+      final xpService = await createXpService();
+      final statisticsService = createStatisticsService(
+        streakService: streakService,
+        xpService: xpService,
+        wordProgressStore: wordStore,
+        quizStore: quizStore,
+      );
+      addTearDown(streakService.dispose);
+      addTearDown(xpService.dispose);
+      addTearDown(statisticsService.dispose);
+
+      final statistics = await statisticsService.loadCategory('foods');
+
+      expect(statistics.categoryId, 'foods');
+      expect(statistics.totalWordCount, 20);
+      expect(statistics.reviewedWordCount, 1);
+      expect(statistics.learnedWordCount, 1);
+      expect(statistics.favoriteWordCount, 1);
+      expect(statistics.completedQuizCount, 1);
+      expect(statistics.highestQuizScore, 80);
+      expect(statistics.averageQuizPercentage, 80);
+    },
+  );
+
   testWidgets('ana ekran gerekli bölümleri gösterir', (tester) async {
     await pumpKelimoApp(tester);
 
     expect(find.text('Merhaba!'), findsOneWidget);
     expect(find.text('Bugün öğrenmeye hazır mısın?'), findsOneWidget);
     expect(find.text('Genel ilerleme'), findsOneWidget);
-    expect(find.text('0 / 24 kelime'), findsOneWidget);
+    expect(find.text('0 / 44 kelime'), findsOneWidget);
     expect(find.text('Henüz öğrenmeye başlamadın'), findsOneWidget);
     expect(find.text('Günlük ilerleme'), findsNothing);
     expect(find.text('18 / 30 kelime'), findsNothing);
@@ -1240,7 +1360,7 @@ void main() {
       expect(find.text('Tamamlanan quiz'), findsOneWidget);
       expect(find.text('Quiz başarısı'), findsOneWidget);
       expect(find.text('Yeni'), findsOneWidget);
-      expect(find.text('24 • %100'), findsOneWidget);
+      expect(find.text('44 • %100'), findsOneWidget);
       expect(find.text('Henüz tamamlanmış bir quiz yok.'), findsOneWidget);
     },
   );
@@ -1388,7 +1508,7 @@ void main() {
     }
   });
 
-  testWidgets('Yakında kategorileri mock yüzde göstermez ve ekran açmaz', (
+  testWidgets('Boş kategoriler mock yüzde göstermez ve ekran açmaz', (
     tester,
   ) async {
     await pumpKelimoApp(tester);
@@ -1397,9 +1517,9 @@ void main() {
       expect(find.text(mockPercentage), findsNothing);
     }
 
-    await tester.scrollUntilVisible(find.text('Yiyecekler'), 300);
+    await tester.scrollUntilVisible(find.text('Renkler'), 300);
     expect(find.text('Yakında'), findsWidgets);
-    await tester.tap(find.text('Yiyecekler'));
+    await tester.tap(find.text('Renkler'));
     await tester.pumpAndSettle();
 
     expect(find.text('Kategori ilerlemesi'), findsNothing);
@@ -1440,6 +1560,219 @@ void main() {
     expect(find.byType(BackButton), findsOneWidget);
   });
 
+  testWidgets('Yiyecekler ekranı ve ilk flashcard ortak akışı kullanır', (
+    tester,
+  ) async {
+    await pumpKelimoApp(tester);
+    await openFoodsCategory(tester);
+
+    expect(find.byType(CategoryScreen), findsOneWidget);
+    expect(find.text('Yiyecekler'), findsOneWidget);
+    expect(find.text('20 kelime'), findsOneWidget);
+    expect(find.text('0 / 20 kelime'), findsOneWidget);
+    expect(find.text('%0 tamamlandı'), findsOneWidget);
+    expect(find.text('Apple'), findsOneWidget);
+    expect(find.text('Elma'), findsOneWidget);
+
+    await tester.tap(find.text('Öğrenmeye Başla'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Yiyecekler'), findsOneWidget);
+    expect(find.text('1 / 20'), findsOneWidget);
+    expect(find.text('APPLE'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('word-card')));
+    await tester.pumpAndSettle();
+    expect(find.text('ELMA'), findsOneWidget);
+    expect(find.text('I eat an apple.'), findsOneWidget);
+    expect(find.text('Elma yerim.'), findsOneWidget);
+  });
+
+  testWidgets('Yiyecekler flashcard TTSye İngilizce kelimeyi gönderir', (
+    tester,
+  ) async {
+    final engine = FakeTtsEngine();
+    final xpService = await createXpService();
+    addTearDown(xpService.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WordCardScreen(
+          category: CategoryCatalog.foods,
+          wordProgressStore: FakeWordProgressStore(),
+          xpService: xpService,
+          ttsService: EnglishTtsService(engine: engine),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Dinle'));
+    await tester.pumpAndSettle();
+
+    expect(engine.spokenTexts, ['Apple']);
+  });
+
+  testWidgets('Uzun flashcard kelimeleri küçük ekranda tek satıra sığar', (
+    tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(280, 700));
+    final xpService = await createXpService();
+    addTearDown(xpService.dispose);
+
+    for (final english in ['Strawberry', 'Watermelon', 'Chocolate']) {
+      final word = foodWords.firstWhere((item) => item.english == english);
+      final category = LearningCategory(
+        id: 'layout-test',
+        title: 'Test',
+        emoji: word.emoji,
+        words: [word],
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: WordCardScreen(
+            key: ValueKey('word-card-$english'),
+            category: category,
+            wordProgressStore: FakeWordProgressStore(),
+            xpService: xpService,
+            ttsService: EnglishTtsService(engine: FakeTtsEngine()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final label = english.toUpperCase();
+      final scalableText = find.byType(ScaleDownSingleLineText);
+      expect(find.text(label), findsOneWidget);
+      expect(scalableText, findsOneWidget);
+      expect(
+        tester
+            .widget<FittedBox>(
+              find.descendant(
+                of: scalableText,
+                matching: find.byType(FittedBox),
+              ),
+            )
+            .fit,
+        BoxFit.scaleDown,
+      );
+      final text = tester.widget<Text>(find.text(label));
+      expect(text.maxLines, 1);
+      expect(text.softWrap, isFalse);
+      expect(text.overflow, TextOverflow.visible);
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets('Kısa flashcard kelimesi mevcut temel yazı stilini korur', (
+    tester,
+  ) async {
+    final xpService = await createXpService();
+    addTearDown(xpService.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: WordCardScreen(
+          category: CategoryCatalog.foods,
+          wordProgressStore: FakeWordProgressStore(),
+          xpService: xpService,
+          ttsService: EnglishTtsService(engine: FakeTtsEngine()),
+        ),
+      ),
+    );
+
+    final scalableText = tester.widget<ScaleDownSingleLineText>(
+      find.byType(ScaleDownSingleLineText),
+    );
+    final expectedFontSize = Theme.of(
+      tester.element(find.byType(WordCardScreen)),
+    ).textTheme.displayMedium?.fontSize;
+    expect(find.text('APPLE'), findsOneWidget);
+    expect(scalableText.style?.fontSize, expectedFontSize);
+    expect(scalableText.style?.fontWeight, FontWeight.bold);
+    expect(scalableText.style?.letterSpacing, 2);
+  });
+
+  testWidgets(
+    'Flashcard arka yüzü ve quiz sorusu tek satır ölçekleme kullanır',
+    (tester) async {
+      final xpStorage = FakeXpStorage();
+      final xpService = await createXpService(
+        repository: FakeXpStore(xpStorage),
+      );
+      addTearDown(xpService.dispose);
+      final chocolate = foodWords.firstWhere(
+        (word) => word.english == 'Chocolate',
+      );
+      final category = LearningCategory(
+        id: 'layout-test',
+        title: 'Test',
+        emoji: chocolate.emoji,
+        words: [chocolate],
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: WordCardScreen(
+            category: category,
+            wordProgressStore: FakeWordProgressStore(),
+            xpService: xpService,
+            ttsService: EnglishTtsService(engine: FakeTtsEngine()),
+          ),
+        ),
+      );
+      await tester.tap(find.byKey(const ValueKey('word-card')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('ÇİKOLATA'), findsOneWidget);
+      expect(find.byType(ScaleDownSingleLineText), findsOneWidget);
+      expect(tester.widget<Text>(find.text('ÇİKOLATA')).maxLines, 1);
+
+      final watermelon = foodWords.firstWhere(
+        (word) => word.english == 'Watermelon',
+      );
+      final quizCategory = LearningCategory(
+        id: 'layout-quiz',
+        title: 'Test',
+        emoji: watermelon.emoji,
+        words: [watermelon, ...foodWords.take(3)],
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CategoryQuizScreen(
+            category: quizCategory,
+            quizStore: FakeQuizStore(FakeQuizStorage(), xpStorage),
+            xpService: xpService,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('WATERMELON'), findsOneWidget);
+      expect(find.byType(ScaleDownSingleLineText), findsOneWidget);
+      expect(tester.widget<Text>(find.text('WATERMELON')).maxLines, 1);
+    },
+  );
+
+  testWidgets('Yiyecekler quizi foods kimliğiyle kaydedilir', (tester) async {
+    final xpStorage = FakeXpStorage();
+    final quizStorage = FakeQuizStorage();
+    await pumpKelimoApp(tester, xpStorage: xpStorage, quizStorage: quizStorage);
+    await openFoodsCategory(tester);
+    await tester.tap(find.text('Quiz Çöz'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Yiyecekler Quiz'), findsOneWidget);
+    expect(find.text('APPLE'), findsOneWidget);
+    expect(find.text('DOG'), findsNothing);
+    for (final translation in ['Elma', 'Muz', 'Portakal', 'Çilek']) {
+      expect(find.byKey(ValueKey('quiz-option-$translation')), findsOneWidget);
+    }
+
+    await completeQuiz(tester, words: foodWords);
+
+    expect(quizStorage.attempts.single.categoryId, 'foods');
+    expect(find.text('Yiyecekler Quizi Tamamlandı'), findsOneWidget);
+  });
+
   testWidgets(
     'Ana ekran, kategori ekranı ve istatistik ekranı aynı öğrenilen sayısını kullanır',
     (tester) async {
@@ -1458,12 +1791,12 @@ void main() {
         wordProgressStore: FakeWordProgressStore(records),
       );
 
-      expect(find.text('22 / 24 kelime'), findsOneWidget);
+      expect(find.text('22 / 44 kelime'), findsOneWidget);
       expect(find.text('2 kelime öğreniliyor'), findsOneWidget);
       final generalProgress = tester.widget<LinearProgressIndicator>(
         find.byKey(const ValueKey('general-progress')),
       );
-      expect(generalProgress.value, 22 / 24);
+      expect(generalProgress.value, 22 / 44);
 
       await tester.scrollUntilVisible(find.text('Hayvanlar'), 300);
       expect(find.text('%92'), findsOneWidget);
@@ -1484,7 +1817,7 @@ void main() {
     tester,
   ) async {
     final records = {
-      for (final word in animalWords)
+      for (final word in [...animalWords, ...foodWords])
         word.id: testWordProgress(
           wordId: word.id,
           mastery: 'easy',
@@ -1497,7 +1830,7 @@ void main() {
       wordProgressStore: FakeWordProgressStore(records),
     );
 
-    expect(find.text('24 / 24 kelime'), findsOneWidget);
+    expect(find.text('44 / 44 kelime'), findsOneWidget);
     expect(find.text('Tüm kelimeleri öğrendin!'), findsOneWidget);
     final generalProgress = tester.widget<LinearProgressIndicator>(
       find.byKey(const ValueKey('general-progress')),

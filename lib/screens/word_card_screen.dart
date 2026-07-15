@@ -10,6 +10,7 @@ import 'package:kelimo/services/learning_engine.dart';
 import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/utils/turkish_case.dart';
+import 'package:kelimo/widgets/scale_down_single_line_text.dart';
 
 class WordCardScreen extends StatefulWidget {
   const WordCardScreen({
@@ -379,7 +380,7 @@ class _CardFront extends StatelessWidget {
         children: [
           Text(word.emoji, style: const TextStyle(fontSize: 80)),
           const SizedBox(height: 20),
-          Text(
+          ScaleDownSingleLineText(
             word.english.toUpperCase(),
             style: textTheme.displayMedium?.copyWith(
               fontWeight: FontWeight.bold,
@@ -413,9 +414,8 @@ class _CardBack extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(
+          ScaleDownSingleLineText(
             toTurkishUpperCase(word.turkish),
-            textAlign: TextAlign.center,
             style: textTheme.displaySmall?.copyWith(
               color: colorScheme.primary,
               fontWeight: FontWeight.bold,

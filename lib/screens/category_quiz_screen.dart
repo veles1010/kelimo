@@ -5,6 +5,7 @@ import 'package:kelimo/repositories/quiz_repository.dart';
 import 'package:kelimo/screens/quiz_result_screen.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
+import 'package:kelimo/widgets/scale_down_single_line_text.dart';
 
 class CategoryQuizScreen extends StatefulWidget {
   CategoryQuizScreen({
@@ -209,9 +210,8 @@ class _QuestionCard extends StatelessWidget {
           children: [
             Text(word.emoji, style: const TextStyle(fontSize: 48)),
             const SizedBox(height: 12),
-            Text(
+            ScaleDownSingleLineText(
               word.english.toUpperCase(),
-              textAlign: TextAlign.center,
               style: textTheme.displaySmall?.copyWith(
                 fontWeight: FontWeight.bold,
                 letterSpacing: 1.5,
