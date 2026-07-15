@@ -7,7 +7,9 @@ import 'package:kelimo/models/progress_statistics.dart';
 import 'package:kelimo/repositories/quiz_repository.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/screens/category_screen.dart';
+import 'package:kelimo/screens/learning_center_screen.dart';
 import 'package:kelimo/screens/progress_screen.dart';
+import 'package:kelimo/services/learning_center_service.dart';
 import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/services/xp_service.dart';
@@ -36,10 +38,14 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
   late Map<String, Future<CategoryProgressStatistics>> _categoryProgress;
+  late final LearningCenterService _learningCenterService;
 
   @override
   void initState() {
     super.initState();
+    _learningCenterService = LearningCenterService(
+      wordProgressStore: widget.wordProgressStore,
+    );
     unawaited(widget.statisticsService.refresh());
     _categoryProgress = _loadCategoryProgress();
   }
@@ -67,133 +73,137 @@ class _HomeScreenState extends State<HomeScreen> {
     final quizStore = widget.quizStore;
 
     return Scaffold(
-      body: _selectedIndex == 2
-          ? ProgressScreen(statisticsService: widget.statisticsService)
-          : SafeArea(
-              bottom: false,
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final columnCount = constraints.maxWidth >= 700 ? 2 : 1;
+      body: switch (_selectedIndex) {
+        1 => LearningCenterScreen(
+          service: _learningCenterService,
+          wordProgressStore: wordProgressStore,
+          streakService: streakService,
+          xpService: xpService,
+        ),
+        2 => ProgressScreen(statisticsService: widget.statisticsService),
+        _ => SafeArea(
+          bottom: false,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final columnCount = constraints.maxWidth >= 700 ? 2 : 1;
 
-                  return CustomScrollView(
-                    slivers: [
-                      SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
-                        sliver: SliverToBoxAdapter(
-                          child: Center(
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 960),
-                              child: _HeaderAndProgress(
-                                streakService: streakService,
-                                xpService: xpService,
-                                statisticsService: widget.statisticsService,
-                              ),
-                            ),
+              return CustomScrollView(
+                slivers: [
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
+                    sliver: SliverToBoxAdapter(
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 960),
+                          child: _HeaderAndProgress(
+                            streakService: streakService,
+                            xpService: xpService,
+                            statisticsService: widget.statisticsService,
                           ),
                         ),
                       ),
-                      SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-                        sliver: SliverToBoxAdapter(
-                          child: Center(
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 960),
-                              child: Text(
-                                'Kategoriler',
-                                style: Theme.of(context).textTheme.headlineSmall
-                                    ?.copyWith(fontWeight: FontWeight.bold),
-                              ),
-                            ),
+                    ),
+                  ),
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+                    sliver: SliverToBoxAdapter(
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 960),
+                          child: Text(
+                            'Kategoriler',
+                            style: Theme.of(context).textTheme.headlineSmall
+                                ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                         ),
                       ),
-                      SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-                        sliver: SliverLayoutBuilder(
-                          builder: (context, constraints) {
-                            final gridWidth = constraints.crossAxisExtent.clamp(
-                              0.0,
-                              960.0,
-                            );
+                    ),
+                  ),
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+                    sliver: SliverLayoutBuilder(
+                      builder: (context, constraints) {
+                        final gridWidth = constraints.crossAxisExtent.clamp(
+                          0.0,
+                          960.0,
+                        );
 
-                            return SliverPadding(
-                              padding: EdgeInsets.symmetric(
-                                horizontal:
-                                    (constraints.crossAxisExtent - gridWidth) /
-                                    2,
-                              ),
-                              sliver: SliverGrid(
-                                gridDelegate:
-                                    SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: columnCount,
-                                      mainAxisExtent: 164,
-                                      crossAxisSpacing: 16,
-                                      mainAxisSpacing: 16,
-                                    ),
-                                delegate: SliverChildListDelegate.fixed([
-                                  for (final category
-                                      in CategoryCatalog.categories)
-                                    if (category.isAvailable)
-                                      FutureBuilder<CategoryProgressStatistics>(
-                                        future: _categoryProgress[category.id],
-                                        builder: (context, snapshot) {
-                                          final statistics = snapshot.data;
-                                          final total =
-                                              statistics?.totalWordCount ??
-                                              category.words.length;
-                                          final learned =
-                                              statistics?.learnedWordCount ?? 0;
+                        return SliverPadding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal:
+                                (constraints.crossAxisExtent - gridWidth) / 2,
+                          ),
+                          sliver: SliverGrid(
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: columnCount,
+                                  mainAxisExtent: 164,
+                                  crossAxisSpacing: 16,
+                                  mainAxisSpacing: 16,
+                                ),
+                            delegate: SliverChildListDelegate.fixed([
+                              for (final category in CategoryCatalog.categories)
+                                if (category.isAvailable)
+                                  FutureBuilder<CategoryProgressStatistics>(
+                                    future: _categoryProgress[category.id],
+                                    builder: (context, snapshot) {
+                                      final statistics = snapshot.data;
+                                      final total =
+                                          statistics?.totalWordCount ??
+                                          category.words.length;
+                                      final learned =
+                                          statistics?.learnedWordCount ?? 0;
 
-                                          return _CategoryCard(
-                                            category: category,
-                                            wordCount: total,
-                                            progress: total == 0
-                                                ? 0
-                                                : learned / total,
-                                            onTap: () async {
-                                              await Navigator.of(context).push(
-                                                MaterialPageRoute<void>(
-                                                  builder: (_) => CategoryScreen(
-                                                    category: category,
-                                                    streakService:
-                                                        streakService,
-                                                    wordProgressStore:
-                                                        wordProgressStore,
-                                                    xpService: xpService,
-                                                    quizStore: quizStore,
-                                                    statisticsService: widget
-                                                        .statisticsService,
-                                                  ),
-                                                ),
-                                              );
-                                              if (mounted) {
-                                                _reloadCategoryProgress();
-                                              }
-                                            },
-                                          );
-                                        },
-                                      )
-                                    else
-                                      _CategoryCard(
+                                      return _CategoryCard(
                                         category: category,
-                                        wordCount: 0,
-                                        progress: null,
-                                      ),
-                                ]),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ),
+                                        wordCount: total,
+                                        progress: total == 0
+                                            ? 0
+                                            : learned / total,
+                                        onTap: () async {
+                                          await Navigator.of(context).push(
+                                            MaterialPageRoute<void>(
+                                              builder: (_) => CategoryScreen(
+                                                category: category,
+                                                streakService: streakService,
+                                                wordProgressStore:
+                                                    wordProgressStore,
+                                                xpService: xpService,
+                                                quizStore: quizStore,
+                                                statisticsService:
+                                                    widget.statisticsService,
+                                              ),
+                                            ),
+                                          );
+                                          if (mounted) {
+                                            _reloadCategoryProgress();
+                                          }
+                                        },
+                                      );
+                                    },
+                                  )
+                                else
+                                  _CategoryCard(
+                                    category: category,
+                                    wordCount: 0,
+                                    progress: null,
+                                  ),
+                            ]),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      },
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (index) {
-          if (index == 0 || index == 2) {
+          if (index >= 0 && index <= 2) {
             setState(() => _selectedIndex = index);
           }
         },

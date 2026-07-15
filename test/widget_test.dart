@@ -13,6 +13,7 @@ import 'package:kelimo/data/local/database_service.dart';
 import 'package:kelimo/main.dart';
 import 'package:kelimo/models/daily_progress.dart';
 import 'package:kelimo/models/learning_category.dart';
+import 'package:kelimo/models/learning_center.dart';
 import 'package:kelimo/models/progress_statistics.dart';
 import 'package:kelimo/models/quiz_attempt.dart';
 import 'package:kelimo/models/word.dart';
@@ -26,9 +27,12 @@ import 'package:kelimo/screens/quiz_result_screen.dart';
 import 'package:kelimo/screens/category_quiz_screen.dart';
 import 'package:kelimo/screens/category_screen.dart';
 import 'package:kelimo/screens/home_screen.dart';
+import 'package:kelimo/screens/learning_center_screen.dart';
+import 'package:kelimo/screens/learning_word_list_screen.dart';
 import 'package:kelimo/screens/word_card_screen.dart';
 import 'package:kelimo/services/english_tts_service.dart';
 import 'package:kelimo/services/learning_engine.dart';
+import 'package:kelimo/services/learning_center_service.dart';
 import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/services/xp_service.dart';
@@ -418,6 +422,11 @@ Future<void> openTransportationCategory(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> openLearningCenter(WidgetTester tester) async {
+  await tester.tap(find.text('Öğren'));
+  await tester.pumpAndSettle();
+}
+
 Future<void> pumpLearningSession(WidgetTester tester) async {
   final service = EnglishTtsService(engine: FakeTtsEngine());
   final xpService = await createXpService();
@@ -477,6 +486,14 @@ void main() {
     expect(engine.nextWord().english, 'Cat');
     expect(engine.canPrevious, isTrue);
     expect(engine.previousWord().english, 'Dog');
+  });
+
+  test('LearningEngine seçilen kategori indeksinden başlar', () {
+    final engine = LearningEngine(animalWords, initialWordIndex: 4);
+
+    expect(engine.currentWord.english, 'Horse');
+    expect(engine.currentWordNumber, 5);
+    expect(engine.nextWord().english, 'Cow');
   });
 
   test('LearningEngine Kolay kelimeyi dokuz kart sonra getirir', () {
@@ -1385,6 +1402,88 @@ void main() {
     }
   });
 
+  test('Öğrenme Merkezi gerçek kayıtları ortak kurallarla sınıflandırır', () {
+    final store = FakeWordProgressStore({
+      'dog': testWordProgress(
+        wordId: 'dog',
+        mastery: 'again',
+        repetitionCount: 1,
+        isFavorite: true,
+      ),
+      'cat': testWordProgress(
+        wordId: 'cat',
+        mastery: 'hard',
+        repetitionCount: 1,
+      ),
+      'bird': testWordProgress(
+        wordId: 'bird',
+        mastery: 'easy',
+        repetitionCount: 1,
+      ),
+      'home_house': testWordProgress(
+        wordId: 'home_house',
+        mastery: 'easy',
+        repetitionCount: 1,
+      ),
+    });
+    final snapshot = LearningCenterService(wordProgressStore: store).load();
+
+    expect(snapshot.totalCount, 122);
+    expect(snapshot.favoriteCount, 1);
+    expect(snapshot.repeatPendingCount, 2);
+    expect(snapshot.learnedCount, 2);
+    expect(
+      snapshot
+          .wordsFor(LearningCenterFilter.repeatPending)
+          .map((entry) => entry.word.id),
+      ['dog', 'cat'],
+    );
+    expect(
+      snapshot
+          .wordsFor(LearningCenterFilter.learned)
+          .map((entry) => '${entry.category.id}:${entry.word.id}'),
+      ['animals:bird', 'home:home_house'],
+    );
+    expect(
+      snapshot.wordsFor(LearningCenterFilter.favorites).single.word.id,
+      'dog',
+    );
+
+    final mouse = snapshot.allWords.firstWhere(
+      (entry) => entry.word.english == 'Mouse',
+    );
+    expect(mouse.status, LearningCenterWordStatus.newWord);
+    for (final filter in [
+      LearningCenterFilter.repeatPending,
+      LearningCenterFilter.favorites,
+      LearningCenterFilter.learned,
+    ]) {
+      expect(
+        snapshot
+            .wordsFor(filter)
+            .any((entry) => entry.word.id == mouse.word.id),
+        isFalse,
+      );
+    }
+  });
+
+  test('Öğrenme Merkezi katalog ve kategori sırasını korur', () {
+    final snapshot = LearningCenterService(
+      wordProgressStore: FakeWordProgressStore(),
+    ).load();
+
+    expect(snapshot.allWords.first.word.english, 'Dog');
+    expect(snapshot.allWords.first.category.id, 'animals');
+    expect(snapshot.allWords[24].word.english, 'Apple');
+    expect(snapshot.allWords[24].category.id, 'foods');
+    expect(snapshot.allWords.last.word.english, 'Bridge');
+    expect(snapshot.allWords.last.category.id, 'transportation');
+    expect(
+      snapshot.allWords.map((entry) => entry.word.id).toSet(),
+      hasLength(122),
+    );
+  });
+
   test('İstatistikler boş veride güvenli başlangıç değerleri üretir', () async {
     final streakService = StreakService(initialStreak: 0);
     final xpService = await createXpService();
@@ -1819,6 +1918,277 @@ void main() {
     await tester.scrollUntilVisible(find.text('Kategoriler'), 300);
     expect(find.text('Kategoriler'), findsOneWidget);
     expect(find.byType(NavigationBar), findsOneWidget);
+  });
+
+  testWidgets('Öğrenme Merkezi dört gerçek çalışma kartını gösterir', (
+    tester,
+  ) async {
+    final store = FakeWordProgressStore({
+      'dog': testWordProgress(
+        wordId: 'dog',
+        mastery: 'again',
+        repetitionCount: 1,
+        isFavorite: true,
+      ),
+      'cat': testWordProgress(
+        wordId: 'cat',
+        mastery: 'hard',
+        repetitionCount: 1,
+      ),
+      'bird': testWordProgress(
+        wordId: 'bird',
+        mastery: 'easy',
+        repetitionCount: 1,
+      ),
+    });
+    await pumpKelimoApp(tester, wordProgressStore: store);
+    await openLearningCenter(tester);
+
+    expect(find.byType(LearningCenterScreen), findsOneWidget);
+    expect(find.text('Öğrenme Merkezi'), findsOneWidget);
+    expect(find.text('Toplam kelime'), findsOneWidget);
+    expect(find.text('Favoriler'), findsOneWidget);
+    expect(find.text('Tekrar bekleyenler'), findsOneWidget);
+    expect(find.text('Öğrenilenler'), findsNWidgets(2));
+    for (final title in [
+      'Tekrar Bekleyenler',
+      'Favorilerim',
+      'Öğrenilenler',
+      'Tüm Kelimeler',
+    ]) {
+      expect(find.text(title), findsWidgets);
+    }
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('learning-filter-repeat')),
+        matching: find.text('2'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('learning-filter-favorites')),
+        matching: find.text('1'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('learning-filter-learned')),
+        matching: find.text('1'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('learning-filter-all')),
+        matching: find.text('122'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('Öğrenme Merkezi filtreleri kullanıcı dostu durumları gösterir', (
+    tester,
+  ) async {
+    final store = FakeWordProgressStore({
+      'dog': testWordProgress(
+        wordId: 'dog',
+        mastery: 'hard',
+        repetitionCount: 1,
+      ),
+      'bird': testWordProgress(
+        wordId: 'bird',
+        mastery: 'easy',
+        repetitionCount: 1,
+      ),
+    });
+    await pumpKelimoApp(tester, wordProgressStore: store);
+    await openLearningCenter(tester);
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('learning-filter-all')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('learning-filter-all')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(LearningWordListScreen), findsOneWidget);
+    expect(find.text('Tüm Kelimeler'), findsOneWidget);
+    expect(find.text('Dog'), findsOneWidget);
+    expect(find.text('Köpek'), findsOneWidget);
+    expect(find.text('Hayvanlar'), findsWidgets);
+    expect(find.text('Öğreniliyor'), findsOneWidget);
+    expect(find.text('Yeni'), findsWidgets);
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('learning-word-bird')),
+      180,
+    );
+    expect(find.text('Öğrenildi'), findsOneWidget);
+    expect(find.text('hard'), findsNothing);
+    expect(find.text('easy'), findsNothing);
+  });
+
+  testWidgets('Öğrenme Merkezi boş filtre mesajlarını gösterir', (
+    tester,
+  ) async {
+    await pumpKelimoApp(tester);
+    await openLearningCenter(tester);
+
+    final emptyFilters = [
+      (
+        const ValueKey('learning-filter-repeat'),
+        'Tekrar bekleyen kelimen yok.',
+      ),
+      (
+        const ValueKey('learning-filter-favorites'),
+        'Henüz favori kelimen yok.',
+      ),
+      (
+        const ValueKey('learning-filter-learned'),
+        'Henüz öğrenilen kelimen yok.',
+      ),
+    ];
+    for (final entry in emptyFilters) {
+      await tester.ensureVisible(find.byKey(entry.$1));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(entry.$1));
+      await tester.pumpAndSettle();
+      expect(find.text(entry.$2), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+    }
+  });
+
+  testWidgets('Kelime listesi doğru kategori ve indeksten flashcard açar', (
+    tester,
+  ) async {
+    await pumpKelimoApp(tester);
+    await openLearningCenter(tester);
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('learning-filter-all')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('learning-filter-all')));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('learning-word-home_washing_machine')),
+      500,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('learning-word-home_washing_machine')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(WordCardScreen), findsOneWidget);
+    expect(find.text('Ev'), findsOneWidget);
+    expect(find.text('20 / 22'), findsOneWidget);
+    expect(find.text('WASHING MACHINE'), findsOneWidget);
+  });
+
+  testWidgets('Flashcard dönüşünde Öğrenme Merkezi sayaçları yenilenir', (
+    tester,
+  ) async {
+    final store = FakeWordProgressStore({
+      'dog': testWordProgress(
+        wordId: 'dog',
+        mastery: 'hard',
+        repetitionCount: 1,
+        isFavorite: true,
+      ),
+    });
+    await pumpKelimoApp(tester, wordProgressStore: store);
+    await openLearningCenter(tester);
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('learning-filter-favorites')),
+    );
+    await tester.tap(find.byKey(const ValueKey('learning-filter-favorites')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('learning-word-dog')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Favori'));
+    await tester.pumpAndSettle();
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.text('Henüz favori kelimen yok.'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('learning-filter-favorites')),
+        matching: find.text('0'),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('learning-filter-repeat')),
+    );
+    await tester.tap(find.byKey(const ValueKey('learning-filter-repeat')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('learning-word-dog')));
+    await tester.pumpAndSettle();
+    await selectLearningRating(tester, 'Kolay');
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.text('Tekrar bekleyen kelimen yok.'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('learning-filter-repeat')),
+        matching: find.text('0'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('learning-filter-learned')),
+        matching: find.text('1'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('Öğrenme Merkezi küçük ekranda uzun kelimelerde taşmaz', (
+    tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(280, 650));
+    final store = FakeWordProgressStore();
+    final streakService = StreakService(repository: FakeDailyProgressStore());
+    await streakService.initialize();
+    addTearDown(streakService.dispose);
+    final xpService = await createXpService();
+    addTearDown(xpService.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: LearningCenterScreen(
+          service: LearningCenterService(wordProgressStore: store),
+          wordProgressStore: store,
+          streakService: streakService,
+          xpService: xpService,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('learning-filter-all')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('learning-filter-all')));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('learning-word-home_washing_machine')),
+      500,
+    );
+
+    expect(find.text('Washing Machine'), findsOneWidget);
+    expect(find.text('Çamaşır Makinesi'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(

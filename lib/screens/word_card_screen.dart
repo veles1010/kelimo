@@ -13,20 +13,24 @@ import 'package:kelimo/utils/turkish_case.dart';
 import 'package:kelimo/widgets/scale_down_single_line_text.dart';
 
 class WordCardScreen extends StatefulWidget {
-  const WordCardScreen({
+  WordCardScreen({
     required this.category,
     required this.wordProgressStore,
     required this.xpService,
     super.key,
     this.ttsService,
     this.streakService,
-  });
+    this.initialWordIndex = 0,
+  }) : assert(
+         initialWordIndex >= 0 && initialWordIndex < category.words.length,
+       );
 
   final LearningCategory category;
   final WordProgressStore wordProgressStore;
   final XpService xpService;
   final EnglishTtsService? ttsService;
   final StreakService? streakService;
+  final int initialWordIndex;
 
   @override
   State<WordCardScreen> createState() => _WordCardScreenState();
@@ -58,7 +62,10 @@ class _WordCardScreenState extends State<WordCardScreen>
   void initState() {
     super.initState();
     _ttsService = widget.ttsService ?? EnglishTtsService();
-    _learningEngine = LearningEngine(widget.category.words);
+    _learningEngine = LearningEngine(
+      widget.category.words,
+      initialWordIndex: widget.initialWordIndex,
+    );
     _ownsStreakService = widget.streakService == null;
     _streakService = widget.streakService ?? StreakService();
     _isFavorite = widget.wordProgressStore

@@ -12,10 +12,14 @@ class LearningReviewResult {
 }
 
 class LearningEngine {
-  LearningEngine(List<Word> words)
+  LearningEngine(List<Word> words, {int initialWordIndex = 0})
     : assert(words.isNotEmpty),
+      assert(initialWordIndex >= 0 && initialWordIndex < words.length),
       _allWords = List.of(words),
-      _sessionQueue = List.of(words);
+      _sessionQueue = [
+        ...words.skip(initialWordIndex),
+        ...words.take(initialWordIndex),
+      ];
 
   final List<Word> _allWords;
   final List<Word> _sessionQueue;
