@@ -6,6 +6,7 @@ import 'package:kelimo/data/animal_words.dart';
 import 'package:kelimo/data/category_catalog.dart';
 import 'package:kelimo/data/color_words.dart';
 import 'package:kelimo/data/food_words.dart';
+import 'package:kelimo/data/home_words.dart';
 import 'package:kelimo/data/local/database_service.dart';
 import 'package:kelimo/main.dart';
 import 'package:kelimo/models/daily_progress.dart';
@@ -394,6 +395,12 @@ Future<void> openFoodsCategory(WidgetTester tester) async {
 Future<void> openColorsCategory(WidgetTester tester) async {
   await tester.scrollUntilVisible(find.text('Renkler'), 300);
   await tester.tap(find.text('Renkler'));
+  await tester.pumpAndSettle();
+}
+
+Future<void> openHomeCategory(WidgetTester tester) async {
+  await tester.scrollUntilVisible(find.text('Ev'), 300);
+  await tester.tap(find.text('Ev'));
   await tester.pumpAndSettle();
 }
 
@@ -1132,7 +1139,7 @@ void main() {
         .where((item) => !item.isAvailable)
         .map((item) => item.title)
         .toSet();
-    expect(upcoming, {'Ev', 'Aile', 'Ulaşım'});
+    expect(upcoming, {'Aile', 'Ulaşım'});
   });
 
   test('Renkler kataloğu 16 kararlı ve benzersiz kelime içerir', () {
@@ -1177,6 +1184,61 @@ void main() {
     );
   });
 
+  test('Ev kataloğu 22 kararlı ve benzersiz kelime içerir', () {
+    final category = CategoryCatalog.findById('home');
+
+    expect(category, same(CategoryCatalog.home));
+    expect(category!.id, 'home');
+    expect(category.title, 'Ev');
+    expect(category.isAvailable, isTrue);
+    expect(category.words, homeWords);
+    expect(homeWords, hasLength(22));
+    expect(homeWords.map((word) => word.id).toSet(), hasLength(22));
+    expect(homeWords.every((word) => word.id.startsWith('home_')), isTrue);
+    expect(homeWords.map((word) => word.id).toList(), [
+      'home_house',
+      'home_room',
+      'home_kitchen',
+      'home_bathroom',
+      'home_bedroom',
+      'home_living_room',
+      'home_door',
+      'home_window',
+      'home_wall',
+      'home_floor',
+      'home_roof',
+      'home_table',
+      'home_chair',
+      'home_bed',
+      'home_sofa',
+      'home_lamp',
+      'home_television',
+      'home_refrigerator',
+      'home_oven',
+      'home_washing_machine',
+      'home_garden',
+      'home_key',
+    ]);
+    for (final word in homeWords) {
+      expect(word.english, isNotEmpty);
+      expect(word.turkish, isNotEmpty);
+      expect(word.emoji, isNotEmpty);
+      expect(word.exampleSentence, isNotEmpty);
+      expect(word.exampleTranslation, isNotEmpty);
+    }
+    expect(
+      homeWords.map((word) => word.turkish),
+      containsAll([
+        'Çatı',
+        'Fırın',
+        'Çamaşır Makinesi',
+        'Buzdolabı',
+        'Yatak Odası',
+        'Oturma Odası',
+      ]),
+    );
+  });
+
   test('İstatistikler boş veride güvenli başlangıç değerleri üretir', () async {
     final streakService = StreakService(initialStreak: 0);
     final xpService = await createXpService();
@@ -1197,8 +1259,8 @@ void main() {
     expect(statistics.todayReviewCount, 0);
     expect(statistics.startedWordCount, 0);
     expect(statistics.favoriteWordCount, 0);
-    expect(statistics.distribution.totalCount, 60);
-    expect(statistics.distribution.newCount, 60);
+    expect(statistics.distribution.totalCount, 82);
+    expect(statistics.distribution.newCount, 82);
     expect(statistics.distribution.learningCount, 0);
     expect(statistics.distribution.learnedCount, 0);
     expect(statistics.quizStatistics.totalQuizCount, 0);
@@ -1289,8 +1351,8 @@ void main() {
 
       expect(statistics.startedWordCount, 4);
       expect(statistics.favoriteWordCount, 2);
-      expect(statistics.distribution.totalCount, 60);
-      expect(statistics.distribution.newCount, 56);
+      expect(statistics.distribution.totalCount, 82);
+      expect(statistics.distribution.newCount, 78);
       expect(statistics.distribution.learningCount, 2);
       expect(statistics.distribution.learnedCount, 2);
       expect(statistics.quizStatistics.totalQuizCount, 7);
@@ -1424,13 +1486,67 @@ void main() {
     expect(statistics.averageQuizPercentage, 90);
   });
 
+  test('Ev istatistikleri yalnızca home verilerini kullanır', () async {
+    final wordStore = FakeWordProgressStore({
+      'home_house': testWordProgress(
+        wordId: 'home_house',
+        mastery: 'easy',
+        repetitionCount: 1,
+        isFavorite: true,
+      ),
+      'colors_red': testWordProgress(
+        wordId: 'colors_red',
+        mastery: 'easy',
+        repetitionCount: 1,
+        isFavorite: true,
+      ),
+    });
+    final xpStorage = FakeXpStorage();
+    final quizStorage = FakeQuizStorage();
+    final quizStore = FakeQuizStore(quizStorage, xpStorage);
+    await quizStore.saveCompletedQuiz(
+      categoryId: 'home',
+      correctCount: 7,
+      totalQuestions: 10,
+      scorePercent: 70,
+    );
+    await quizStore.saveCompletedQuiz(
+      categoryId: 'colors',
+      correctCount: 10,
+      totalQuestions: 10,
+      scorePercent: 100,
+    );
+    final streakService = StreakService();
+    final xpService = await createXpService();
+    final statisticsService = createStatisticsService(
+      streakService: streakService,
+      xpService: xpService,
+      wordProgressStore: wordStore,
+      quizStore: quizStore,
+    );
+    addTearDown(streakService.dispose);
+    addTearDown(xpService.dispose);
+    addTearDown(statisticsService.dispose);
+
+    final statistics = await statisticsService.loadCategory('home');
+
+    expect(statistics.categoryId, 'home');
+    expect(statistics.totalWordCount, 22);
+    expect(statistics.reviewedWordCount, 1);
+    expect(statistics.learnedWordCount, 1);
+    expect(statistics.favoriteWordCount, 1);
+    expect(statistics.completedQuizCount, 1);
+    expect(statistics.highestQuizScore, 70);
+    expect(statistics.averageQuizPercentage, 70);
+  });
+
   testWidgets('ana ekran gerekli bölümleri gösterir', (tester) async {
     await pumpKelimoApp(tester);
 
     expect(find.text('Merhaba!'), findsOneWidget);
     expect(find.text('Bugün öğrenmeye hazır mısın?'), findsOneWidget);
     expect(find.text('Genel ilerleme'), findsOneWidget);
-    expect(find.text('0 / 60 kelime'), findsOneWidget);
+    expect(find.text('0 / 82 kelime'), findsOneWidget);
     expect(find.text('Henüz öğrenmeye başlamadın'), findsOneWidget);
     expect(find.text('Günlük ilerleme'), findsNothing);
     expect(find.text('18 / 30 kelime'), findsNothing);
@@ -1463,7 +1579,7 @@ void main() {
       expect(find.text('Tamamlanan quiz'), findsOneWidget);
       expect(find.text('Quiz başarısı'), findsOneWidget);
       expect(find.text('Yeni'), findsOneWidget);
-      expect(find.text('60 • %100'), findsOneWidget);
+      expect(find.text('82 • %100'), findsOneWidget);
       expect(find.text('Henüz tamamlanmış bir quiz yok.'), findsOneWidget);
     },
   );
@@ -1620,9 +1736,9 @@ void main() {
       expect(find.text(mockPercentage), findsNothing);
     }
 
-    await tester.scrollUntilVisible(find.text('Ev'), 300);
+    await tester.scrollUntilVisible(find.text('Aile'), 300);
     expect(find.text('Yakında'), findsWidgets);
-    await tester.tap(find.text('Ev'));
+    await tester.tap(find.text('Aile'));
     await tester.pumpAndSettle();
 
     expect(find.text('Kategori ilerlemesi'), findsNothing);
@@ -1734,6 +1850,13 @@ void main() {
           'Light Blue',
           'Dark Blue',
           'Colorful',
+        }.contains(word.english),
+      ),
+      ...homeWords.where(
+        (word) => const {
+          'Living Room',
+          'Refrigerator',
+          'Washing Machine',
         }.contains(word.english),
       ),
     ];
@@ -1871,6 +1994,73 @@ void main() {
     },
   );
 
+  testWidgets('Uzun Ev ifadeleri küçük ekranda tek satırda kalır', (
+    tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(280, 700));
+    final xpService = await createXpService();
+    addTearDown(xpService.dispose);
+    final expectations = {
+      'Bedroom': 'YATAK ODASI',
+      'Living Room': 'OTURMA ODASI',
+      'Washing Machine': 'ÇAMAŞIR MAKİNESİ',
+    };
+
+    for (final entry in expectations.entries) {
+      final word = homeWords.firstWhere((item) => item.english == entry.key);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: WordCardScreen(
+            key: ValueKey('home-layout-${word.id}'),
+            category: LearningCategory(
+              id: 'home-layout',
+              title: 'Ev',
+              emoji: word.emoji,
+              words: [word],
+            ),
+            wordProgressStore: FakeWordProgressStore(),
+            xpService: xpService,
+            ttsService: EnglishTtsService(engine: FakeTtsEngine()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text(entry.key.toUpperCase()), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.byKey(const ValueKey('word-card')));
+      await tester.pumpAndSettle();
+      final backText = tester.widget<Text>(find.text(entry.value));
+      expect(backText.maxLines, 1);
+      expect(backText.softWrap, isFalse);
+      expect(tester.takeException(), isNull);
+    }
+
+    final washingMachine = homeWords.firstWhere(
+      (word) => word.english == 'Washing Machine',
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CategoryQuizScreen(
+          category: LearningCategory(
+            id: 'home-layout-quiz',
+            title: 'Ev',
+            emoji: washingMachine.emoji,
+            words: [washingMachine, ...homeWords.take(3)],
+          ),
+          quizStore: FakeQuizStore(FakeQuizStorage(), FakeXpStorage()),
+          xpService: xpService,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('WASHING MACHINE'), findsOneWidget);
+    expect(tester.widget<Text>(find.text('WASHING MACHINE')).maxLines, 1);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Yiyecekler quizi foods kimliğiyle kaydedilir', (tester) async {
     final xpStorage = FakeXpStorage();
     final quizStorage = FakeQuizStorage();
@@ -1962,6 +2152,73 @@ void main() {
     expect(find.text('Renkler Quizi Tamamlandı'), findsOneWidget);
   });
 
+  testWidgets('Ev ekranı ve ilk flashcard ortak akışı kullanır', (
+    tester,
+  ) async {
+    await pumpKelimoApp(tester);
+    await openHomeCategory(tester);
+
+    expect(find.byType(CategoryScreen), findsOneWidget);
+    expect(find.text('Ev'), findsWidgets);
+    expect(find.text('22 kelime'), findsOneWidget);
+    expect(find.text('0 / 22 kelime'), findsOneWidget);
+    expect(find.text('%0 tamamlandı'), findsOneWidget);
+    expect(find.text('House'), findsOneWidget);
+
+    await tester.tap(find.text('Öğrenmeye Başla'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ev'), findsOneWidget);
+    expect(find.text('1 / 22'), findsOneWidget);
+    expect(find.text('HOUSE'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('word-card')));
+    await tester.pumpAndSettle();
+    expect(find.text('EV'), findsOneWidget);
+    expect(find.text('This is my house.'), findsOneWidget);
+    expect(find.text('Bu benim evim.'), findsOneWidget);
+  });
+
+  testWidgets('Ev flashcard TTSye İngilizce kelimeyi gönderir', (tester) async {
+    final engine = FakeTtsEngine();
+    final xpService = await createXpService();
+    addTearDown(xpService.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WordCardScreen(
+          category: CategoryCatalog.home,
+          wordProgressStore: FakeWordProgressStore(),
+          xpService: xpService,
+          ttsService: EnglishTtsService(engine: engine),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Dinle'));
+    await tester.pumpAndSettle();
+
+    expect(engine.spokenTexts, ['House']);
+  });
+
+  testWidgets('Ev quizi home kimliğiyle kaydedilir', (tester) async {
+    final xpStorage = FakeXpStorage();
+    final quizStorage = FakeQuizStorage();
+    await pumpKelimoApp(tester, xpStorage: xpStorage, quizStorage: quizStorage);
+    await openHomeCategory(tester);
+    await tester.tap(find.text('Quiz Çöz'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ev Quiz'), findsOneWidget);
+    expect(find.text('HOUSE'), findsOneWidget);
+    expect(find.text('RED'), findsNothing);
+    for (final translation in ['Ev', 'Oda', 'Mutfak', 'Banyo']) {
+      expect(find.byKey(ValueKey('quiz-option-$translation')), findsOneWidget);
+    }
+
+    await completeQuiz(tester, words: homeWords);
+
+    expect(quizStorage.attempts.single.categoryId, 'home');
+    expect(find.text('Ev Quizi Tamamlandı'), findsOneWidget);
+  });
+
   testWidgets(
     'Ana ekran, kategori ekranı ve istatistik ekranı aynı öğrenilen sayısını kullanır',
     (tester) async {
@@ -1980,12 +2237,12 @@ void main() {
         wordProgressStore: FakeWordProgressStore(records),
       );
 
-      expect(find.text('22 / 60 kelime'), findsOneWidget);
+      expect(find.text('22 / 82 kelime'), findsOneWidget);
       expect(find.text('2 kelime öğreniliyor'), findsOneWidget);
       final generalProgress = tester.widget<LinearProgressIndicator>(
         find.byKey(const ValueKey('general-progress')),
       );
-      expect(generalProgress.value, 22 / 60);
+      expect(generalProgress.value, 22 / 82);
 
       await tester.scrollUntilVisible(find.text('Hayvanlar'), 300);
       expect(find.text('%92'), findsOneWidget);
@@ -2006,7 +2263,12 @@ void main() {
     tester,
   ) async {
     final records = {
-      for (final word in [...animalWords, ...foodWords, ...colorWords])
+      for (final word in [
+        ...animalWords,
+        ...foodWords,
+        ...colorWords,
+        ...homeWords,
+      ])
         word.id: testWordProgress(
           wordId: word.id,
           mastery: 'easy',
@@ -2019,7 +2281,7 @@ void main() {
       wordProgressStore: FakeWordProgressStore(records),
     );
 
-    expect(find.text('60 / 60 kelime'), findsOneWidget);
+    expect(find.text('82 / 82 kelime'), findsOneWidget);
     expect(find.text('Tüm kelimeleri öğrendin!'), findsOneWidget);
     final generalProgress = tester.widget<LinearProgressIndicator>(
       find.byKey(const ValueKey('general-progress')),
