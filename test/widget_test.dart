@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kelimo/data/animal_words.dart';
 import 'package:kelimo/data/category_catalog.dart';
 import 'package:kelimo/data/color_words.dart';
+import 'package:kelimo/data/family_words.dart';
 import 'package:kelimo/data/food_words.dart';
 import 'package:kelimo/data/home_words.dart';
 import 'package:kelimo/data/local/database_service.dart';
@@ -401,6 +402,12 @@ Future<void> openColorsCategory(WidgetTester tester) async {
 Future<void> openHomeCategory(WidgetTester tester) async {
   await tester.scrollUntilVisible(find.text('Ev'), 300);
   await tester.tap(find.text('Ev'));
+  await tester.pumpAndSettle();
+}
+
+Future<void> openFamilyCategory(WidgetTester tester) async {
+  await tester.scrollUntilVisible(find.text('Aile'), 300);
+  await tester.tap(find.text('Aile'));
   await tester.pumpAndSettle();
 }
 
@@ -1139,7 +1146,7 @@ void main() {
         .where((item) => !item.isAvailable)
         .map((item) => item.title)
         .toSet();
-    expect(upcoming, {'Aile', 'Ulaşım'});
+    expect(upcoming, {'Ulaşım'});
   });
 
   test('Renkler kataloğu 16 kararlı ve benzersiz kelime içerir', () {
@@ -1239,6 +1246,58 @@ void main() {
     );
   });
 
+  test('Aile kataloğu 20 kararlı ve benzersiz kelime içerir', () {
+    final category = CategoryCatalog.findById('family');
+
+    expect(category, same(CategoryCatalog.family));
+    expect(category!.id, 'family');
+    expect(category.title, 'Aile');
+    expect(category.emoji, '👨‍👩‍👧‍👦');
+    expect(category.isAvailable, isTrue);
+    expect(category.words, familyWords);
+    expect(familyWords, hasLength(20));
+    expect(familyWords.map((word) => word.id).toSet(), hasLength(20));
+    expect(familyWords.every((word) => word.id.startsWith('family_')), isTrue);
+    expect(familyWords.map((word) => word.id).toList(), [
+      'family_family',
+      'family_mother',
+      'family_father',
+      'family_parents',
+      'family_sister',
+      'family_brother',
+      'family_grandmother',
+      'family_grandfather',
+      'family_grandparents',
+      'family_daughter',
+      'family_son',
+      'family_child',
+      'family_children',
+      'family_baby',
+      'family_aunt',
+      'family_uncle',
+      'family_cousin',
+      'family_wife',
+      'family_husband',
+      'family_relative',
+    ]);
+    expect(familyWords.first.english, 'Family');
+    expect(familyWords.first.turkish, 'Aile');
+    expect(familyWords.last.english, 'Relative');
+    expect(familyWords.last.turkish, 'Akraba');
+    for (final word in familyWords) {
+      expect(word.english, isNotEmpty);
+      expect(word.turkish, isNotEmpty);
+      expect(word.emoji, isNotEmpty);
+      expect(word.exampleSentence, isNotEmpty);
+      expect(word.exampleTranslation, isNotEmpty);
+    }
+    final availableCategories = CategoryCatalog.categories.where(
+      (item) => item.isAvailable,
+    );
+    expect(availableCategories, hasLength(5));
+    expect(availableCategories.expand((item) => item.words), hasLength(102));
+  });
+
   test('İstatistikler boş veride güvenli başlangıç değerleri üretir', () async {
     final streakService = StreakService(initialStreak: 0);
     final xpService = await createXpService();
@@ -1259,8 +1318,8 @@ void main() {
     expect(statistics.todayReviewCount, 0);
     expect(statistics.startedWordCount, 0);
     expect(statistics.favoriteWordCount, 0);
-    expect(statistics.distribution.totalCount, 82);
-    expect(statistics.distribution.newCount, 82);
+    expect(statistics.distribution.totalCount, 102);
+    expect(statistics.distribution.newCount, 102);
     expect(statistics.distribution.learningCount, 0);
     expect(statistics.distribution.learnedCount, 0);
     expect(statistics.quizStatistics.totalQuizCount, 0);
@@ -1351,8 +1410,8 @@ void main() {
 
       expect(statistics.startedWordCount, 4);
       expect(statistics.favoriteWordCount, 2);
-      expect(statistics.distribution.totalCount, 82);
-      expect(statistics.distribution.newCount, 78);
+      expect(statistics.distribution.totalCount, 102);
+      expect(statistics.distribution.newCount, 98);
       expect(statistics.distribution.learningCount, 2);
       expect(statistics.distribution.learnedCount, 2);
       expect(statistics.quizStatistics.totalQuizCount, 7);
@@ -1540,13 +1599,67 @@ void main() {
     expect(statistics.averageQuizPercentage, 70);
   });
 
+  test('Aile istatistikleri yalnızca family verilerini kullanır', () async {
+    final wordStore = FakeWordProgressStore({
+      'family_family': testWordProgress(
+        wordId: 'family_family',
+        mastery: 'easy',
+        repetitionCount: 1,
+        isFavorite: true,
+      ),
+      'home_house': testWordProgress(
+        wordId: 'home_house',
+        mastery: 'easy',
+        repetitionCount: 1,
+        isFavorite: true,
+      ),
+    });
+    final xpStorage = FakeXpStorage();
+    final quizStorage = FakeQuizStorage();
+    final quizStore = FakeQuizStore(quizStorage, xpStorage);
+    await quizStore.saveCompletedQuiz(
+      categoryId: 'family',
+      correctCount: 8,
+      totalQuestions: 10,
+      scorePercent: 80,
+    );
+    await quizStore.saveCompletedQuiz(
+      categoryId: 'home',
+      correctCount: 10,
+      totalQuestions: 10,
+      scorePercent: 100,
+    );
+    final streakService = StreakService();
+    final xpService = await createXpService();
+    final statisticsService = createStatisticsService(
+      streakService: streakService,
+      xpService: xpService,
+      wordProgressStore: wordStore,
+      quizStore: quizStore,
+    );
+    addTearDown(streakService.dispose);
+    addTearDown(xpService.dispose);
+    addTearDown(statisticsService.dispose);
+
+    final statistics = await statisticsService.loadCategory('family');
+
+    expect(statistics.categoryId, 'family');
+    expect(statistics.totalWordCount, 20);
+    expect(statistics.reviewedWordCount, 1);
+    expect(statistics.learnedWordCount, 1);
+    expect(statistics.favoriteWordCount, 1);
+    expect(statistics.completedQuizCount, 1);
+    expect(statistics.highestQuizScore, 80);
+    expect(statistics.averageQuizPercentage, 80);
+  });
+
   testWidgets('ana ekran gerekli bölümleri gösterir', (tester) async {
     await pumpKelimoApp(tester);
 
     expect(find.text('Merhaba!'), findsOneWidget);
     expect(find.text('Bugün öğrenmeye hazır mısın?'), findsOneWidget);
     expect(find.text('Genel ilerleme'), findsOneWidget);
-    expect(find.text('0 / 82 kelime'), findsOneWidget);
+    expect(find.text('0 / 102 kelime'), findsOneWidget);
     expect(find.text('Henüz öğrenmeye başlamadın'), findsOneWidget);
     expect(find.text('Günlük ilerleme'), findsNothing);
     expect(find.text('18 / 30 kelime'), findsNothing);
@@ -1579,7 +1692,7 @@ void main() {
       expect(find.text('Tamamlanan quiz'), findsOneWidget);
       expect(find.text('Quiz başarısı'), findsOneWidget);
       expect(find.text('Yeni'), findsOneWidget);
-      expect(find.text('82 • %100'), findsOneWidget);
+      expect(find.text('102 • %100'), findsOneWidget);
       expect(find.text('Henüz tamamlanmış bir quiz yok.'), findsOneWidget);
     },
   );
@@ -1727,7 +1840,7 @@ void main() {
     }
   });
 
-  testWidgets('Boş kategoriler mock yüzde göstermez ve ekran açmaz', (
+  testWidgets('Yakındaki kategori mock yüzde göstermez ve ekran açmaz', (
     tester,
   ) async {
     await pumpKelimoApp(tester);
@@ -1736,9 +1849,9 @@ void main() {
       expect(find.text(mockPercentage), findsNothing);
     }
 
-    await tester.scrollUntilVisible(find.text('Aile'), 300);
+    await tester.scrollUntilVisible(find.text('Ulaşım'), 300);
     expect(find.text('Yakında'), findsWidgets);
-    await tester.tap(find.text('Aile'));
+    await tester.tap(find.text('Ulaşım'));
     await tester.pumpAndSettle();
 
     expect(find.text('Kategori ilerlemesi'), findsNothing);
@@ -2061,6 +2174,79 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('Önemli Aile ifadeleri küçük ekranda tek satırda kalır', (
+    tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(280, 700));
+    final xpService = await createXpService();
+    addTearDown(xpService.dispose);
+    final expectations = {
+      'Grandmother': 'BÜYÜKANNE',
+      'Grandfather': 'BÜYÜKBABA',
+      'Grandparents': 'BÜYÜKANNE VE BÜYÜKBABA',
+      'Brother': 'ERKEK KARDEŞ',
+      'Aunt': 'TEYZE / HALA',
+    };
+
+    for (final entry in expectations.entries) {
+      final word = familyWords.firstWhere((item) => item.english == entry.key);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: WordCardScreen(
+            key: ValueKey('family-layout-${word.id}'),
+            category: LearningCategory(
+              id: 'family-layout',
+              title: 'Aile',
+              emoji: word.emoji,
+              words: [word],
+            ),
+            wordProgressStore: FakeWordProgressStore(),
+            xpService: xpService,
+            ttsService: EnglishTtsService(engine: FakeTtsEngine()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final frontLabel = entry.key.toUpperCase();
+      final frontText = tester.widget<Text>(find.text(frontLabel));
+      expect(frontText.maxLines, 1);
+      expect(frontText.softWrap, isFalse);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.byKey(const ValueKey('word-card')));
+      await tester.pumpAndSettle();
+      final backText = tester.widget<Text>(find.text(entry.value));
+      expect(backText.maxLines, 1);
+      expect(backText.softWrap, isFalse);
+      expect(tester.takeException(), isNull);
+    }
+
+    final grandparents = familyWords.firstWhere(
+      (word) => word.english == 'Grandparents',
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CategoryQuizScreen(
+          category: LearningCategory(
+            id: 'family-layout-quiz',
+            title: 'Aile',
+            emoji: grandparents.emoji,
+            words: [grandparents, ...familyWords.take(3)],
+          ),
+          quizStore: FakeQuizStore(FakeQuizStorage(), FakeXpStorage()),
+          xpService: xpService,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('GRANDPARENTS'), findsOneWidget);
+    expect(tester.widget<Text>(find.text('GRANDPARENTS')).maxLines, 1);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Yiyecekler quizi foods kimliğiyle kaydedilir', (tester) async {
     final xpStorage = FakeXpStorage();
     final quizStorage = FakeQuizStorage();
@@ -2219,6 +2405,104 @@ void main() {
     expect(find.text('Ev Quizi Tamamlandı'), findsOneWidget);
   });
 
+  testWidgets('Aile kartı ve ilk flashcard ortak akışı kullanır', (
+    tester,
+  ) async {
+    await pumpKelimoApp(tester);
+    await tester.scrollUntilVisible(find.text('Aile'), 300);
+
+    final familyCard = find.ancestor(
+      of: find.text('Aile'),
+      matching: find.byType(Card),
+    );
+    expect(familyCard, findsOneWidget);
+    expect(
+      find.descendant(of: familyCard, matching: find.text('20 kelime')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: familyCard, matching: find.text('Yakında')),
+      findsNothing,
+    );
+
+    await openFamilyCategory(tester);
+    expect(find.byType(CategoryScreen), findsOneWidget);
+    expect(find.text('Aile'), findsWidgets);
+    expect(find.text('20 kelime'), findsOneWidget);
+    expect(find.text('0 / 20 kelime'), findsOneWidget);
+    expect(find.text('%0 tamamlandı'), findsOneWidget);
+    expect(find.text('Family'), findsOneWidget);
+
+    await tester.tap(find.text('Öğrenmeye Başla'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Aile'), findsOneWidget);
+    expect(find.text('1 / 20'), findsOneWidget);
+    expect(find.text('FAMILY'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('word-card')));
+    await tester.pumpAndSettle();
+    expect(find.text('AİLE'), findsOneWidget);
+    expect(find.text('This is my family.'), findsOneWidget);
+    expect(find.text('Bu benim ailem.'), findsOneWidget);
+  });
+
+  testWidgets('Aile flashcard TTSye İngilizce kelimeyi gönderir', (
+    tester,
+  ) async {
+    final engine = FakeTtsEngine();
+    final xpService = await createXpService();
+    addTearDown(xpService.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WordCardScreen(
+          category: CategoryCatalog.family,
+          wordProgressStore: FakeWordProgressStore(),
+          xpService: xpService,
+          ttsService: EnglishTtsService(engine: engine),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Dinle'));
+    await tester.pumpAndSettle();
+
+    expect(engine.spokenTexts, ['Family']);
+  });
+
+  testWidgets('Aile quizi family kimliğiyle kaydedilir', (tester) async {
+    final xpStorage = FakeXpStorage();
+    final quizStorage = FakeQuizStorage();
+    await pumpKelimoApp(tester, xpStorage: xpStorage, quizStorage: quizStorage);
+    await openFamilyCategory(tester);
+    await tester.tap(find.text('Quiz Çöz'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Aile Quiz'), findsOneWidget);
+    expect(find.text('FAMILY'), findsOneWidget);
+    expect(find.text('HOUSE'), findsNothing);
+    for (final translation in ['Aile', 'Anne', 'Baba', 'Ebeveynler']) {
+      expect(find.byKey(ValueKey('quiz-option-$translation')), findsOneWidget);
+    }
+
+    await completeQuiz(tester, words: familyWords);
+
+    expect(quizStorage.attempts.single.categoryId, 'family');
+    expect(find.text('Aile Quizi Tamamlandı'), findsOneWidget);
+  });
+
+  testWidgets('Aile istatistik ekranı family kategorisiyle açılır', (
+    tester,
+  ) async {
+    await pumpKelimoApp(tester);
+    await openFamilyCategory(tester);
+    await tester.tap(find.text('İstatistik'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Aile İstatistikleri'), findsOneWidget);
+    expect(find.text('Aile performansı'), findsOneWidget);
+    expect(find.text('20'), findsOneWidget);
+    expect(find.text('Ev performansı'), findsNothing);
+  });
+
   testWidgets(
     'Ana ekran, kategori ekranı ve istatistik ekranı aynı öğrenilen sayısını kullanır',
     (tester) async {
@@ -2237,12 +2521,12 @@ void main() {
         wordProgressStore: FakeWordProgressStore(records),
       );
 
-      expect(find.text('22 / 82 kelime'), findsOneWidget);
+      expect(find.text('22 / 102 kelime'), findsOneWidget);
       expect(find.text('2 kelime öğreniliyor'), findsOneWidget);
       final generalProgress = tester.widget<LinearProgressIndicator>(
         find.byKey(const ValueKey('general-progress')),
       );
-      expect(generalProgress.value, 22 / 82);
+      expect(generalProgress.value, 22 / 102);
 
       await tester.scrollUntilVisible(find.text('Hayvanlar'), 300);
       expect(find.text('%92'), findsOneWidget);
@@ -2268,6 +2552,7 @@ void main() {
         ...foodWords,
         ...colorWords,
         ...homeWords,
+        ...familyWords,
       ])
         word.id: testWordProgress(
           wordId: word.id,
@@ -2281,7 +2566,7 @@ void main() {
       wordProgressStore: FakeWordProgressStore(records),
     );
 
-    expect(find.text('82 / 82 kelime'), findsOneWidget);
+    expect(find.text('102 / 102 kelime'), findsOneWidget);
     expect(find.text('Tüm kelimeleri öğrendin!'), findsOneWidget);
     final generalProgress = tester.widget<LinearProgressIndicator>(
       find.byKey(const ValueKey('general-progress')),
