@@ -12,15 +12,38 @@ class CategoryQuizScreen extends StatefulWidget {
     required this.category,
     required this.quizStore,
     required this.xpService,
+    DateTime Function()? now,
     super.key,
-  }) : assert(category.words.length >= 4);
+  }) : now = now ?? DateTime.now,
+       assert(category.words.length >= 4);
 
   final LearningCategory category;
   final QuizStore quizStore;
   final XpService xpService;
+  final DateTime Function() now;
 
   @override
   State<CategoryQuizScreen> createState() => _CategoryQuizScreenState();
+}
+
+class QuizCorrectStreakCounter {
+  int _current = 0;
+  int _longest = 0;
+
+  int get current => _current;
+  int get longest => _longest;
+
+  void recordAnswer({required bool isCorrect}) {
+    if (!isCorrect) {
+      _current = 0;
+      return;
+    }
+
+    _current++;
+    if (_current > _longest) {
+      _longest = _current;
+    }
+  }
 }
 
 class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
@@ -28,6 +51,15 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
   int _correctAnswerCount = 0;
   String? _selectedAnswer;
   bool _isCompleting = false;
+  final QuizCorrectStreakCounter _correctStreak = QuizCorrectStreakCounter();
+  late final DateTime _startedAt;
+  Duration? _elapsedDuration;
+
+  @override
+  void initState() {
+    super.initState();
+    _startedAt = widget.now();
+  }
 
   int get _questionCount =>
       widget.category.words.length < 10 ? widget.category.words.length : 10;
@@ -52,10 +84,20 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
     if (_selectedAnswer != null) return;
     setState(() {
       _selectedAnswer = answer;
-      if (answer == _currentWord.turkish) {
+      final isCorrect = answer == _currentWord.turkish;
+      _correctStreak.recordAnswer(isCorrect: isCorrect);
+      if (isCorrect) {
         _correctAnswerCount++;
       }
+      if (_questionIndex == _questionCount - 1) {
+        _elapsedDuration = _durationSinceStart();
+      }
     });
+  }
+
+  Duration _durationSinceStart() {
+    final duration = widget.now().difference(_startedAt);
+    return duration.isNegative ? Duration.zero : duration;
   }
 
   void _continueQuiz() {
@@ -75,6 +117,7 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
   Future<void> _showResult() async {
     if (_isCompleting) return;
     final navigator = Navigator.of(context);
+    final elapsedDuration = _elapsedDuration ?? _durationSinceStart();
     final successPercentage = calculateQuizPercentage(
       correct: _correctAnswerCount,
       total: _questionCount,
@@ -99,6 +142,8 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
             totalQuestionCount: _questionCount,
             successPercentage: successPercentage,
             xpAwarded: completion.attempt.xpAwarded,
+            longestCorrectStreak: _correctStreak.longest,
+            elapsedDuration: elapsedDuration,
             onRetry: () {
               navigator.pushReplacement(
                 MaterialPageRoute<void>(
@@ -106,6 +151,7 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
                     category: widget.category,
                     quizStore: widget.quizStore,
                     xpService: widget.xpService,
+                    now: widget.now,
                   ),
                 ),
               );

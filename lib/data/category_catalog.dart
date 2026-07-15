@@ -3,6 +3,7 @@ import 'package:kelimo/data/color_words.dart';
 import 'package:kelimo/data/family_words.dart';
 import 'package:kelimo/data/food_words.dart';
 import 'package:kelimo/data/home_words.dart';
+import 'package:kelimo/data/transportation_words.dart';
 import 'package:kelimo/models/learning_category.dart';
 
 abstract final class CategoryCatalog {
@@ -41,18 +42,20 @@ abstract final class CategoryCatalog {
     words: familyWords,
   );
 
+  static const transportation = LearningCategory(
+    id: 'transportation',
+    title: 'Ulaşım',
+    emoji: '🚍',
+    words: transportationWords,
+  );
+
   static const categories = <LearningCategory>[
     animals,
     foods,
     colors,
     home,
     family,
-    LearningCategory(
-      id: 'transportation',
-      title: 'Ulaşım',
-      emoji: '🚌',
-      words: [],
-    ),
+    transportation,
   ];
 
   static LearningCategory? findById(String id) {

@@ -8,6 +8,7 @@ import 'package:kelimo/data/color_words.dart';
 import 'package:kelimo/data/family_words.dart';
 import 'package:kelimo/data/food_words.dart';
 import 'package:kelimo/data/home_words.dart';
+import 'package:kelimo/data/transportation_words.dart';
 import 'package:kelimo/data/local/database_service.dart';
 import 'package:kelimo/main.dart';
 import 'package:kelimo/models/daily_progress.dart';
@@ -411,6 +412,12 @@ Future<void> openFamilyCategory(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> openTransportationCategory(WidgetTester tester) async {
+  await tester.scrollUntilVisible(find.text('Ulaşım'), 300);
+  await tester.tap(find.text('Ulaşım'));
+  await tester.pumpAndSettle();
+}
+
 Future<void> pumpLearningSession(WidgetTester tester) async {
   final service = EnglishTtsService(engine: FakeTtsEngine());
   final xpService = await createXpService();
@@ -438,11 +445,15 @@ Future<void> completeQuiz(
   WidgetTester tester, {
   bool perfect = true,
   List<Word> words = animalWords,
+  List<bool>? answerPattern,
+  void Function(int questionIndex)? beforeAnswer,
 }) async {
   for (var index = 0; index < 10; index++) {
-    final answer = !perfect && index == 0
-        ? words[1].turkish
-        : words[index].turkish;
+    beforeAnswer?.call(index);
+    final isCorrect = answerPattern?[index] ?? (perfect || index != 0);
+    final answer = isCorrect
+        ? words[index].turkish
+        : words[(index + 1) % words.length].turkish;
     final option = find.byKey(ValueKey('quiz-option-$answer'));
     await tester.ensureVisible(option);
     await tester.pumpAndSettle();
@@ -1067,6 +1078,30 @@ void main() {
     expect(quizMotivation(30), 'Pes etme, tekrar deneyelim!');
   });
 
+  test('Quiz doğru cevap serisi oturumun en yüksek serisini korur', () {
+    int longestFor(List<bool> answers) {
+      final counter = QuizCorrectStreakCounter();
+      for (final answer in answers) {
+        counter.recordAnswer(isCorrect: answer);
+      }
+      return counter.longest;
+    }
+
+    expect(longestFor(List.filled(10, true)), 10);
+    expect(
+      longestFor([true, true, true, true, false, true, true, true, true, true]),
+      5,
+    );
+    expect(longestFor([true, true, false, true, true, true]), 3);
+    expect(longestFor([false, true, true, true]), 3);
+    expect(longestFor([true, true, true, false]), 3);
+  });
+
+  test('Quiz süresi saniye ve dakika biçiminde gösterilir', () {
+    expect(formatQuizDuration(const Duration(seconds: 42)), '42 sn');
+    expect(formatQuizDuration(const Duration(seconds: 72)), '1 dk 12 sn');
+  });
+
   test('Türkçe metni dil kurallarına uygun büyük harfe dönüştürür', () {
     expect(toTurkishUpperCase('kedi'), 'KEDİ');
     expect(toTurkishUpperCase('tilki'), 'TİLKİ');
@@ -1146,7 +1181,7 @@ void main() {
         .where((item) => !item.isAvailable)
         .map((item) => item.title)
         .toSet();
-    expect(upcoming, {'Ulaşım'});
+    expect(upcoming, isEmpty);
   });
 
   test('Renkler kataloğu 16 kararlı ve benzersiz kelime içerir', () {
@@ -1294,8 +1329,60 @@ void main() {
     final availableCategories = CategoryCatalog.categories.where(
       (item) => item.isAvailable,
     );
-    expect(availableCategories, hasLength(5));
-    expect(availableCategories.expand((item) => item.words), hasLength(102));
+    expect(availableCategories, hasLength(6));
+    expect(availableCategories.expand((item) => item.words), hasLength(122));
+  });
+
+  test('Ulaşım kataloğu 20 kararlı ve benzersiz kelime içerir', () {
+    final category = CategoryCatalog.findById('transportation');
+
+    expect(category, same(CategoryCatalog.transportation));
+    expect(category!.id, 'transportation');
+    expect(category.title, 'Ulaşım');
+    expect(category.emoji, '🚍');
+    expect(category.isAvailable, isTrue);
+    expect(category.words, transportationWords);
+    expect(transportationWords, hasLength(20));
+    expect(transportationWords.map((word) => word.id).toSet(), hasLength(20));
+    expect(
+      transportationWords.every(
+        (word) => word.id.startsWith('transportation_'),
+      ),
+      isTrue,
+    );
+    expect(transportationWords.map((word) => word.id).toList(), [
+      'transportation_car',
+      'transportation_bus',
+      'transportation_train',
+      'transportation_bicycle',
+      'transportation_motorcycle',
+      'transportation_airplane',
+      'transportation_ship',
+      'transportation_boat',
+      'transportation_taxi',
+      'transportation_truck',
+      'transportation_subway',
+      'transportation_tram',
+      'transportation_helicopter',
+      'transportation_ambulance',
+      'transportation_fire_truck',
+      'transportation_police_car',
+      'transportation_station',
+      'transportation_airport',
+      'transportation_road',
+      'transportation_bridge',
+    ]);
+    expect(transportationWords.first.english, 'Car');
+    expect(transportationWords.first.turkish, 'Araba');
+    expect(transportationWords.last.english, 'Bridge');
+    expect(transportationWords.last.turkish, 'Köprü');
+    for (final word in transportationWords) {
+      expect(word.english, isNotEmpty);
+      expect(word.turkish, isNotEmpty);
+      expect(word.emoji, isNotEmpty);
+      expect(word.exampleSentence, isNotEmpty);
+      expect(word.exampleTranslation, isNotEmpty);
+    }
   });
 
   test('İstatistikler boş veride güvenli başlangıç değerleri üretir', () async {
@@ -1318,8 +1405,8 @@ void main() {
     expect(statistics.todayReviewCount, 0);
     expect(statistics.startedWordCount, 0);
     expect(statistics.favoriteWordCount, 0);
-    expect(statistics.distribution.totalCount, 102);
-    expect(statistics.distribution.newCount, 102);
+    expect(statistics.distribution.totalCount, 122);
+    expect(statistics.distribution.newCount, 122);
     expect(statistics.distribution.learningCount, 0);
     expect(statistics.distribution.learnedCount, 0);
     expect(statistics.quizStatistics.totalQuizCount, 0);
@@ -1410,8 +1497,8 @@ void main() {
 
       expect(statistics.startedWordCount, 4);
       expect(statistics.favoriteWordCount, 2);
-      expect(statistics.distribution.totalCount, 102);
-      expect(statistics.distribution.newCount, 98);
+      expect(statistics.distribution.totalCount, 122);
+      expect(statistics.distribution.newCount, 118);
       expect(statistics.distribution.learningCount, 2);
       expect(statistics.distribution.learnedCount, 2);
       expect(statistics.quizStatistics.totalQuizCount, 7);
@@ -1653,13 +1740,70 @@ void main() {
     expect(statistics.averageQuizPercentage, 80);
   });
 
+  test(
+    'Ulaşım istatistikleri yalnızca transportation verilerini kullanır',
+    () async {
+      final wordStore = FakeWordProgressStore({
+        'transportation_car': testWordProgress(
+          wordId: 'transportation_car',
+          mastery: 'easy',
+          repetitionCount: 1,
+          isFavorite: true,
+        ),
+        'family_family': testWordProgress(
+          wordId: 'family_family',
+          mastery: 'easy',
+          repetitionCount: 1,
+          isFavorite: true,
+        ),
+      });
+      final xpStorage = FakeXpStorage();
+      final quizStorage = FakeQuizStorage();
+      final quizStore = FakeQuizStore(quizStorage, xpStorage);
+      await quizStore.saveCompletedQuiz(
+        categoryId: 'transportation',
+        correctCount: 9,
+        totalQuestions: 10,
+        scorePercent: 90,
+      );
+      await quizStore.saveCompletedQuiz(
+        categoryId: 'family',
+        correctCount: 10,
+        totalQuestions: 10,
+        scorePercent: 100,
+      );
+      final streakService = StreakService();
+      final xpService = await createXpService();
+      final statisticsService = createStatisticsService(
+        streakService: streakService,
+        xpService: xpService,
+        wordProgressStore: wordStore,
+        quizStore: quizStore,
+      );
+      addTearDown(streakService.dispose);
+      addTearDown(xpService.dispose);
+      addTearDown(statisticsService.dispose);
+
+      final statistics = await statisticsService.loadCategory('transportation');
+
+      expect(statistics.categoryId, 'transportation');
+      expect(statistics.totalWordCount, 20);
+      expect(statistics.reviewedWordCount, 1);
+      expect(statistics.learnedWordCount, 1);
+      expect(statistics.favoriteWordCount, 1);
+      expect(statistics.completedQuizCount, 1);
+      expect(statistics.highestQuizScore, 90);
+      expect(statistics.averageQuizPercentage, 90);
+    },
+  );
+
   testWidgets('ana ekran gerekli bölümleri gösterir', (tester) async {
     await pumpKelimoApp(tester);
 
     expect(find.text('Merhaba!'), findsOneWidget);
     expect(find.text('Bugün öğrenmeye hazır mısın?'), findsOneWidget);
     expect(find.text('Genel ilerleme'), findsOneWidget);
-    expect(find.text('0 / 102 kelime'), findsOneWidget);
+    expect(find.text('0 / 122 kelime'), findsOneWidget);
     expect(find.text('Henüz öğrenmeye başlamadın'), findsOneWidget);
     expect(find.text('Günlük ilerleme'), findsNothing);
     expect(find.text('18 / 30 kelime'), findsNothing);
@@ -1692,7 +1836,7 @@ void main() {
       expect(find.text('Tamamlanan quiz'), findsOneWidget);
       expect(find.text('Quiz başarısı'), findsOneWidget);
       expect(find.text('Yeni'), findsOneWidget);
-      expect(find.text('102 • %100'), findsOneWidget);
+      expect(find.text('122 • %100'), findsOneWidget);
       expect(find.text('Henüz tamamlanmış bir quiz yok.'), findsOneWidget);
     },
   );
@@ -1840,7 +1984,7 @@ void main() {
     }
   });
 
-  testWidgets('Yakındaki kategori mock yüzde göstermez ve ekran açmaz', (
+  testWidgets('Gerçek kategoriler mock yüzde veya Yakında göstermez', (
     tester,
   ) async {
     await pumpKelimoApp(tester);
@@ -1850,12 +1994,7 @@ void main() {
     }
 
     await tester.scrollUntilVisible(find.text('Ulaşım'), 300);
-    expect(find.text('Yakında'), findsWidgets);
-    await tester.tap(find.text('Ulaşım'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Kategori ilerlemesi'), findsNothing);
-    expect(find.byType(HomeScreen), findsOneWidget);
+    expect(find.text('Yakında'), findsNothing);
   });
 
   testWidgets('uygulama Türkçe ve Material 3 kullanır', (tester) async {
@@ -2247,6 +2386,81 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('Önemli Ulaşım ifadeleri küçük ekranda tek satırda kalır', (
+    tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(280, 700));
+    final xpService = await createXpService();
+    addTearDown(xpService.dispose);
+    final expectations = {
+      'Motorcycle': 'MOTOSİKLET',
+      'Helicopter': 'HELİKOPTER',
+      'Ambulance': 'AMBULANS',
+      'Fire Truck': 'İTFAİYE ARACI',
+      'Police Car': 'POLİS ARABASI',
+    };
+
+    for (final entry in expectations.entries) {
+      final word = transportationWords.firstWhere(
+        (item) => item.english == entry.key,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: WordCardScreen(
+            key: ValueKey('transportation-layout-${word.id}'),
+            category: LearningCategory(
+              id: 'transportation-layout',
+              title: 'Ulaşım',
+              emoji: word.emoji,
+              words: [word],
+            ),
+            wordProgressStore: FakeWordProgressStore(),
+            xpService: xpService,
+            ttsService: EnglishTtsService(engine: FakeTtsEngine()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final frontLabel = entry.key.toUpperCase();
+      final frontText = tester.widget<Text>(find.text(frontLabel));
+      expect(frontText.maxLines, 1);
+      expect(frontText.softWrap, isFalse);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.byKey(const ValueKey('word-card')));
+      await tester.pumpAndSettle();
+      final backText = tester.widget<Text>(find.text(entry.value));
+      expect(backText.maxLines, 1);
+      expect(backText.softWrap, isFalse);
+      expect(tester.takeException(), isNull);
+    }
+
+    final fireTruck = transportationWords.firstWhere(
+      (word) => word.english == 'Fire Truck',
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CategoryQuizScreen(
+          category: LearningCategory(
+            id: 'transportation-layout-quiz',
+            title: 'Ulaşım',
+            emoji: fireTruck.emoji,
+            words: [fireTruck, ...transportationWords.take(3)],
+          ),
+          quizStore: FakeQuizStore(FakeQuizStorage(), FakeXpStorage()),
+          xpService: xpService,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('FIRE TRUCK'), findsOneWidget);
+    expect(tester.widget<Text>(find.text('FIRE TRUCK')).maxLines, 1);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Yiyecekler quizi foods kimliğiyle kaydedilir', (tester) async {
     final xpStorage = FakeXpStorage();
     final quizStorage = FakeQuizStorage();
@@ -2503,6 +2717,106 @@ void main() {
     expect(find.text('Ev performansı'), findsNothing);
   });
 
+  testWidgets('Ulaşım kartı ve ilk flashcard ortak akışı kullanır', (
+    tester,
+  ) async {
+    await pumpKelimoApp(tester);
+    await tester.scrollUntilVisible(find.text('Ulaşım'), 300);
+
+    final transportationCard = find.ancestor(
+      of: find.text('Ulaşım'),
+      matching: find.byType(Card),
+    );
+    expect(transportationCard, findsOneWidget);
+    expect(
+      find.descendant(of: transportationCard, matching: find.text('20 kelime')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: transportationCard, matching: find.text('Yakında')),
+      findsNothing,
+    );
+
+    await openTransportationCategory(tester);
+    expect(find.byType(CategoryScreen), findsOneWidget);
+    expect(find.text('Ulaşım'), findsOneWidget);
+    expect(find.text('20 kelime'), findsOneWidget);
+    expect(find.text('0 / 20 kelime'), findsOneWidget);
+    expect(find.text('%0 tamamlandı'), findsOneWidget);
+    expect(find.text('Car'), findsOneWidget);
+
+    await tester.tap(find.text('Öğrenmeye Başla'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ulaşım'), findsOneWidget);
+    expect(find.text('1 / 20'), findsOneWidget);
+    expect(find.text('CAR'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('word-card')));
+    await tester.pumpAndSettle();
+    expect(find.text('ARABA'), findsOneWidget);
+    expect(find.text('The car is red.'), findsOneWidget);
+    expect(find.text('Araba kırmızı.'), findsOneWidget);
+  });
+
+  testWidgets('Ulaşım flashcard TTSye İngilizce kelimeyi gönderir', (
+    tester,
+  ) async {
+    final engine = FakeTtsEngine();
+    final xpService = await createXpService();
+    addTearDown(xpService.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WordCardScreen(
+          category: CategoryCatalog.transportation,
+          wordProgressStore: FakeWordProgressStore(),
+          xpService: xpService,
+          ttsService: EnglishTtsService(engine: engine),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Dinle'));
+    await tester.pumpAndSettle();
+
+    expect(engine.spokenTexts, ['Car']);
+  });
+
+  testWidgets('Ulaşım quizi transportation kimliğiyle kaydedilir', (
+    tester,
+  ) async {
+    final xpStorage = FakeXpStorage();
+    final quizStorage = FakeQuizStorage();
+    await pumpKelimoApp(tester, xpStorage: xpStorage, quizStorage: quizStorage);
+    await openTransportationCategory(tester);
+    await tester.tap(find.text('Quiz Çöz'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ulaşım Quiz'), findsOneWidget);
+    expect(find.text('CAR'), findsOneWidget);
+    expect(find.text('FAMILY'), findsNothing);
+    for (final translation in ['Araba', 'Otobüs', 'Tren', 'Bisiklet']) {
+      expect(find.byKey(ValueKey('quiz-option-$translation')), findsOneWidget);
+    }
+
+    await completeQuiz(tester, words: transportationWords);
+
+    expect(quizStorage.attempts.single.categoryId, 'transportation');
+    expect(find.text('Ulaşım Quizi Tamamlandı'), findsOneWidget);
+  });
+
+  testWidgets('Ulaşım istatistik ekranı transportation kategorisiyle açılır', (
+    tester,
+  ) async {
+    await pumpKelimoApp(tester);
+    await openTransportationCategory(tester);
+    await tester.tap(find.text('İstatistik'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ulaşım İstatistikleri'), findsOneWidget);
+    expect(find.text('Ulaşım performansı'), findsOneWidget);
+    expect(find.text('20'), findsOneWidget);
+    expect(find.text('Aile performansı'), findsNothing);
+  });
+
   testWidgets(
     'Ana ekran, kategori ekranı ve istatistik ekranı aynı öğrenilen sayısını kullanır',
     (tester) async {
@@ -2521,12 +2835,12 @@ void main() {
         wordProgressStore: FakeWordProgressStore(records),
       );
 
-      expect(find.text('22 / 102 kelime'), findsOneWidget);
+      expect(find.text('22 / 122 kelime'), findsOneWidget);
       expect(find.text('2 kelime öğreniliyor'), findsOneWidget);
       final generalProgress = tester.widget<LinearProgressIndicator>(
         find.byKey(const ValueKey('general-progress')),
       );
-      expect(generalProgress.value, 22 / 102);
+      expect(generalProgress.value, 22 / 122);
 
       await tester.scrollUntilVisible(find.text('Hayvanlar'), 300);
       expect(find.text('%92'), findsOneWidget);
@@ -2553,6 +2867,7 @@ void main() {
         ...colorWords,
         ...homeWords,
         ...familyWords,
+        ...transportationWords,
       ])
         word.id: testWordProgress(
           wordId: word.id,
@@ -2566,7 +2881,7 @@ void main() {
       wordProgressStore: FakeWordProgressStore(records),
     );
 
-    expect(find.text('102 / 102 kelime'), findsOneWidget);
+    expect(find.text('122 / 122 kelime'), findsOneWidget);
     expect(find.text('Tüm kelimeleri öğrendin!'), findsOneWidget);
     final generalProgress = tester.widget<LinearProgressIndicator>(
       find.byKey(const ValueKey('general-progress')),
@@ -2723,8 +3038,9 @@ void main() {
     expect(find.text('%100 başarı'), findsOneWidget);
     expect(find.text('Mükemmel!'), findsOneWidget);
     expect(find.byIcon(Icons.star_rounded), findsNWidgets(5));
-    expect(find.text('7 doğru'), findsOneWidget);
-    expect(find.text('1 dk 42 sn'), findsOneWidget);
+    expect(find.text('10 doğru'), findsOneWidget);
+    expect(find.text('7 doğru'), findsNothing);
+    expect(find.text('1 dk 42 sn'), findsNothing);
     expect(find.text('+25 XP'), findsOneWidget);
     expect(find.text('🏆 Kusursuz sonuç! +25 XP kazandın.'), findsOneWidget);
     expect(quizStorage.attempts.single.categoryId, 'animals');
@@ -2740,6 +3056,75 @@ void main() {
       find.widgetWithText(FilledButton, 'Sonraki Soru'),
     );
     expect(nextButton.onPressed, isNull);
+  });
+
+  testWidgets('Quiz gerçek süreyi gösterir ve tekrar çöz sayaçları sıfırlar', (
+    tester,
+  ) async {
+    final xpStorage = FakeXpStorage();
+    final quizStorage = FakeQuizStorage();
+    final xpService = await createXpService(repository: FakeXpStore(xpStorage));
+    addTearDown(xpService.dispose);
+    final quizStore = FakeQuizStore(quizStorage, xpStorage);
+    final startedAt = DateTime(2026, 7, 16, 12);
+    var currentTime = startedAt;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CategoryQuizScreen(
+          category: CategoryCatalog.animals,
+          quizStore: quizStore,
+          xpService: xpService,
+          now: () => currentTime,
+        ),
+      ),
+    );
+    await completeQuiz(
+      tester,
+      beforeAnswer: (index) {
+        if (index == 9) {
+          currentTime = startedAt.add(const Duration(seconds: 42));
+        }
+      },
+    );
+
+    expect(find.text('10 doğru'), findsOneWidget);
+    expect(find.text('42 sn'), findsOneWidget);
+    expect(xpStorage.state.totalXp, 25);
+
+    await tester.ensureVisible(find.text('Tekrar Çöz'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Tekrar Çöz'));
+    await tester.pumpAndSettle();
+    final retryStartedAt = currentTime;
+
+    await completeQuiz(
+      tester,
+      answerPattern: [
+        false,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+      ],
+      beforeAnswer: (index) {
+        if (index == 9) {
+          currentTime = retryStartedAt.add(const Duration(seconds: 6));
+        }
+      },
+    );
+
+    expect(find.text('9 / 10'), findsOneWidget);
+    expect(find.text('9 doğru'), findsOneWidget);
+    expect(find.text('6 sn'), findsOneWidget);
+    expect(find.text('10 doğru'), findsNothing);
+    expect(quizStorage.attempts, hasLength(2));
+    expect(xpStorage.state.totalXp, 25);
   });
 
   testWidgets('Sonuç ekranı rebuild olduğunda quiz ve XP ikinci kez eklenmez', (
@@ -2832,6 +3217,8 @@ void main() {
         totalQuestionCount: 10,
         successPercentage: 80,
         xpAwarded: 0,
+        longestCorrectStreak: 3,
+        elapsedDuration: const Duration(seconds: 72),
         onRetry: () => selectedAction = 'retry',
         onReturnToCategory: () => selectedAction = 'category',
         onReturnHome: () => selectedAction = 'home',
@@ -2840,6 +3227,8 @@ void main() {
 
     await tester.pumpWidget(resultScreen());
     expect(find.text('0 XP'), findsOneWidget);
+    expect(find.text('3 doğru'), findsOneWidget);
+    expect(find.text('1 dk 12 sn'), findsOneWidget);
     expect(find.text('🏆 Kusursuz sonuç! +25 XP kazandın.'), findsNothing);
     await tester.ensureVisible(find.text('Kategoriye Dön'));
     await tester.pumpAndSettle();
@@ -2865,6 +3254,8 @@ void main() {
           totalQuestionCount: 10,
           successPercentage: 80,
           xpAwarded: 0,
+          longestCorrectStreak: 4,
+          elapsedDuration: const Duration(seconds: 42),
           onRetry: () {},
           onReturnToCategory: () {},
           onReturnHome: () {},

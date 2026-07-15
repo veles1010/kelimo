@@ -26,14 +26,25 @@ String quizMotivation(int percentage) {
   return 'Pes etme, tekrar deneyelim!';
 }
 
+String formatQuizDuration(Duration duration) {
+  final totalSeconds = duration.isNegative ? 0 : duration.inSeconds;
+  if (totalSeconds < 60) return '$totalSeconds sn';
+
+  final minutes = totalSeconds ~/ 60;
+  final seconds = totalSeconds % 60;
+  return '$minutes dk $seconds sn';
+}
+
 class QuizResultScreen extends StatelessWidget {
-  const QuizResultScreen({
+  QuizResultScreen({
     super.key,
     required this.categoryName,
     required this.correctAnswerCount,
     required this.totalQuestionCount,
     required this.successPercentage,
     required this.xpAwarded,
+    required this.longestCorrectStreak,
+    required this.elapsedDuration,
     required this.onRetry,
     required this.onReturnToCategory,
     required this.onReturnHome,
@@ -41,13 +52,18 @@ class QuizResultScreen extends StatelessWidget {
        assert(correctAnswerCount >= 0),
        assert(correctAnswerCount <= totalQuestionCount),
        assert(successPercentage >= 0 && successPercentage <= 100),
-       assert(xpAwarded >= 0);
+       assert(xpAwarded >= 0),
+       assert(longestCorrectStreak >= 0),
+       assert(longestCorrectStreak <= correctAnswerCount),
+       assert(!elapsedDuration.isNegative);
 
   final String categoryName;
   final int correctAnswerCount;
   final int totalQuestionCount;
   final int successPercentage;
   final int xpAwarded;
+  final int longestCorrectStreak;
+  final Duration elapsedDuration;
   final VoidCallback onRetry;
   final VoidCallback onReturnToCategory;
   final VoidCallback onReturnHome;
@@ -118,7 +134,11 @@ class QuizResultScreen extends StatelessWidget {
                       ),
                     ],
                     const SizedBox(height: 24),
-                    _SummaryCards(xpAwarded: xpAwarded),
+                    _SummaryCards(
+                      xpAwarded: xpAwarded,
+                      longestCorrectStreak: longestCorrectStreak,
+                      elapsedDuration: elapsedDuration,
+                    ),
                     const SizedBox(height: 28),
                     FilledButton(
                       onPressed: onRetry,
@@ -213,22 +233,28 @@ class _ScoreCard extends StatelessWidget {
 }
 
 class _SummaryCards extends StatelessWidget {
-  const _SummaryCards({required this.xpAwarded});
+  const _SummaryCards({
+    required this.xpAwarded,
+    required this.longestCorrectStreak,
+    required this.elapsedDuration,
+  });
 
   final int xpAwarded;
+  final int longestCorrectStreak;
+  final Duration elapsedDuration;
 
   @override
   Widget build(BuildContext context) {
     final cards = [
-      const _SummaryCard(
+      _SummaryCard(
         icon: Icons.local_fire_department_rounded,
         label: 'Seri',
-        value: '7 doğru',
+        value: '$longestCorrectStreak doğru',
       ),
-      const _SummaryCard(
+      _SummaryCard(
         icon: Icons.timer_outlined,
         label: 'Süre',
-        value: '1 dk 42 sn',
+        value: formatQuizDuration(elapsedDuration),
       ),
       _SummaryCard(
         icon: Icons.bolt_rounded,
