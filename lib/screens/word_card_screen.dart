@@ -1,17 +1,14 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:kelimo/models/learning_category.dart';
-import 'package:kelimo/models/word.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/services/english_tts_service.dart';
 import 'package:kelimo/services/learning_engine.dart';
 import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/services/xp_service.dart';
-import 'package:kelimo/utils/turkish_case.dart';
-import 'package:kelimo/widgets/scale_down_single_line_text.dart';
+import 'package:kelimo/widgets/learning_flashcard.dart';
 
 class WordCardScreen extends StatefulWidget {
   WordCardScreen({
@@ -39,16 +36,6 @@ class WordCardScreen extends StatefulWidget {
   State<WordCardScreen> createState() => _WordCardScreenState();
 }
 
-enum _LearningRating {
-  easy('Kolay'),
-  repeat('Tekrar Et'),
-  hard('Zor');
-
-  const _LearningRating(this.label);
-
-  final String label;
-}
-
 class _WordCardScreenState extends State<WordCardScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _flipController;
@@ -57,7 +44,7 @@ class _WordCardScreenState extends State<WordCardScreen>
   late final LearningEngine _learningEngine;
   late final StreakService _streakService;
   late final bool _ownsStreakService;
-  _LearningRating? _selectedDifficulty;
+  LearningRating? _selectedDifficulty;
   bool _isEvaluating = false;
   bool _isFavorite = false;
 
@@ -126,7 +113,7 @@ class _WordCardScreenState extends State<WordCardScreen>
     });
   }
 
-  Future<void> _evaluateWord(_LearningRating rating) async {
+  Future<void> _evaluateWord(LearningRating rating) async {
     if (_isEvaluating || _learningEngine.isComplete) return;
 
     setState(() {
@@ -144,13 +131,13 @@ class _WordCardScreenState extends State<WordCardScreen>
     late final LearningReviewResult learningResult;
     setState(() {
       switch (rating) {
-        case _LearningRating.easy:
+        case LearningRating.easy:
           _learningEngine.rateEasy();
           break;
-        case _LearningRating.repeat:
+        case LearningRating.again:
           _learningEngine.rateAgain();
           break;
-        case _LearningRating.hard:
+        case LearningRating.hard:
           _learningEngine.rateHard();
           break;
       }
@@ -285,7 +272,7 @@ class _WordCardScreenState extends State<WordCardScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _FlippableWordCard(
+                    LearningFlashcard(
                       animation: _flipAnimation,
                       onTap: _flipCard,
                       word: word,
@@ -294,7 +281,7 @@ class _WordCardScreenState extends State<WordCardScreen>
                     ValueListenableBuilder<bool>(
                       valueListenable: _ttsService.isSpeaking,
                       builder: (context, isSpeaking, child) {
-                        return _VisualActions(
+                        return LearningWordActions(
                           isSpeaking: isSpeaking,
                           isFavorite: _isFavorite,
                           onListen: () => unawaited(_speakWord()),
@@ -303,8 +290,8 @@ class _WordCardScreenState extends State<WordCardScreen>
                       },
                     ),
                     const SizedBox(height: 28),
-                    _DifficultySection(
-                      selectedDifficulty: _selectedDifficulty,
+                    LearningRatingSection(
+                      selectedRating: _selectedDifficulty,
                       enabled: !_isEvaluating && !_learningEngine.isComplete,
                       onSelected: (rating) => unawaited(_evaluateWord(rating)),
                     ),
@@ -324,216 +311,6 @@ class _WordCardScreenState extends State<WordCardScreen>
           ],
         ),
       ),
-    );
-  }
-}
-
-class _FlippableWordCard extends StatelessWidget {
-  const _FlippableWordCard({
-    required this.animation,
-    required this.onTap,
-    required this.word,
-  });
-
-  final Animation<double> animation;
-  final VoidCallback onTap;
-  final Word word;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: animation,
-      builder: (context, child) {
-        final angle = animation.value * math.pi;
-        final showBack = angle >= math.pi / 2;
-
-        return Transform(
-          alignment: Alignment.center,
-          transform: Matrix4.identity()
-            ..setEntry(3, 2, 0.001)
-            ..rotateY(angle),
-          child: Card(
-            key: const ValueKey('word-card'),
-            clipBehavior: Clip.antiAlias,
-            color: Theme.of(context).colorScheme.primaryContainer,
-            child: InkWell(
-              onTap: onTap,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 360),
-                child: showBack
-                    ? Transform(
-                        alignment: Alignment.center,
-                        transform: Matrix4.rotationY(math.pi),
-                        child: _CardBack(word: word),
-                      )
-                    : _CardFront(word: word),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _CardFront extends StatelessWidget {
-  const _CardFront({required this.word});
-
-  final Word word;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-
-    return Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(word.emoji, style: const TextStyle(fontSize: 80)),
-          const SizedBox(height: 20),
-          ScaleDownSingleLineText(
-            word.english.toUpperCase(),
-            style: textTheme.displayMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              letterSpacing: 2,
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            'Kartı çevirmek için dokun',
-            textAlign: TextAlign.center,
-            style: textTheme.bodyLarge,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CardBack extends StatelessWidget {
-  const _CardBack({required this.word});
-
-  final Word word;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    return Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          ScaleDownSingleLineText(
-            toTurkishUpperCase(word.turkish),
-            style: textTheme.displaySmall?.copyWith(
-              color: colorScheme.primary,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.5,
-            ),
-          ),
-          const SizedBox(height: 28),
-          Text(
-            word.exampleSentence,
-            textAlign: TextAlign.center,
-            style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            word.exampleTranslation,
-            textAlign: TextAlign.center,
-            style: textTheme.titleMedium,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _VisualActions extends StatelessWidget {
-  const _VisualActions({
-    required this.isSpeaking,
-    required this.isFavorite,
-    required this.onListen,
-    required this.onFavorite,
-  });
-
-  final bool isSpeaking;
-  final bool isFavorite;
-  final VoidCallback onListen;
-  final VoidCallback onFavorite;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: isSpeaking ? null : onListen,
-            icon: isSpeaking
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.volume_up_rounded),
-            label: Text(isSpeaking ? 'Dinleniyor' : 'Dinle'),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: onFavorite,
-            icon: Icon(
-              isFavorite
-                  ? Icons.favorite_rounded
-                  : Icons.favorite_border_rounded,
-            ),
-            label: const Text('Favori'),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _DifficultySection extends StatelessWidget {
-  const _DifficultySection({
-    required this.selectedDifficulty,
-    required this.enabled,
-    required this.onSelected,
-  });
-
-  final _LearningRating? selectedDifficulty;
-  final bool enabled;
-  final ValueChanged<_LearningRating> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Bu kelime nasıldı?',
-          style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            for (final rating in _LearningRating.values)
-              ChoiceChip(
-                label: Text(rating.label),
-                selected: selectedDifficulty == rating,
-                onSelected: enabled ? (_) => onSelected(rating) : null,
-              ),
-          ],
-        ),
-      ],
     );
   }
 }

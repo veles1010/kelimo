@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:kelimo/models/learning_center.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/screens/word_card_screen.dart';
+import 'package:kelimo/screens/review_session_screen.dart';
 import 'package:kelimo/services/learning_center_service.dart';
+import 'package:kelimo/services/review_session_builder.dart';
 import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/services/xp_service.dart';
@@ -16,6 +20,7 @@ class LearningWordListScreen extends StatefulWidget {
     required this.xpService,
     required this.settingsService,
     super.key,
+    this.sessionBuilder,
   });
 
   final LearningCenterFilter filter;
@@ -24,6 +29,7 @@ class LearningWordListScreen extends StatefulWidget {
   final StreakService streakService;
   final XpService xpService;
   final SettingsService settingsService;
+  final ReviewSessionBuilder? sessionBuilder;
 
   @override
   State<LearningWordListScreen> createState() => _LearningWordListScreenState();
@@ -31,10 +37,15 @@ class LearningWordListScreen extends StatefulWidget {
 
 class _LearningWordListScreenState extends State<LearningWordListScreen> {
   late List<LearningCenterWord> _words;
+  late final ReviewSessionBuilder _sessionBuilder;
+  bool _isStartingSession = false;
 
   @override
   void initState() {
     super.initState();
+    _sessionBuilder =
+        widget.sessionBuilder ??
+        ReviewSessionBuilder(wordProgressStore: widget.wordProgressStore);
     _reload();
   }
 
@@ -63,6 +74,45 @@ class _LearningWordListScreenState extends State<LearningWordListScreen> {
     if (mounted) setState(_reload);
   }
 
+  Future<void> _startReviewSession() async {
+    if (_isStartingSession) return;
+    setState(() => _isStartingSession = true);
+    try {
+      final items = await _sessionBuilder.build();
+      if (!mounted) return;
+      if (items.isEmpty) {
+        setState(_reload);
+        return;
+      }
+      final result = await Navigator.of(context).push<ReviewSessionExit>(
+        MaterialPageRoute<ReviewSessionExit>(
+          builder: (_) => ReviewSessionScreen(
+            initialItems: items,
+            sessionBuilder: _sessionBuilder,
+            wordProgressStore: widget.wordProgressStore,
+            streakService: widget.streakService,
+            xpService: widget.xpService,
+            settingsService: widget.settingsService,
+          ),
+        ),
+      );
+      if (!mounted) return;
+      if (result == ReviewSessionExit.learningCenter) {
+        Navigator.of(context).pop();
+        return;
+      }
+      setState(_reload);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Tekrar oturumu başlatılamadı')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isStartingSession = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -75,10 +125,33 @@ class _LearningWordListScreenState extends State<LearningWordListScreen> {
           ? _EmptyState(message: _emptyMessageFor(widget.filter))
           : ListView.separated(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-              itemCount: _words.length,
+              itemCount:
+                  _words.length +
+                  (widget.filter == LearningCenterFilter.repeatPending ? 1 : 0),
               separatorBuilder: (_, _) => const SizedBox(height: 10),
               itemBuilder: (context, index) {
-                final entry = _words[index];
+                if (widget.filter == LearningCenterFilter.repeatPending &&
+                    index == 0) {
+                  return FilledButton.icon(
+                    key: const ValueKey('start-review-session'),
+                    onPressed: _isStartingSession
+                        ? null
+                        : () => unawaited(_startReviewSession()),
+                    icon: _isStartingSession
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.play_arrow_rounded),
+                    label: Text('${_words.length} kelimeyi çalış'),
+                  );
+                }
+                final wordIndex =
+                    index -
+                    (widget.filter == LearningCenterFilter.repeatPending
+                        ? 1
+                        : 0);
+                final entry = _words[wordIndex];
                 return _WordRow(
                   key: ValueKey('learning-word-${entry.word.id}'),
                   entry: entry,
