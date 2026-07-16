@@ -4,7 +4,14 @@ import 'package:sqflite/sqflite.dart';
 
 class DatabaseService {
   static const databaseName = 'kelimo.db';
-  static const databaseVersion = 3;
+  static const databaseVersion = 4;
+  static const createAppSettingsTableSql = '''
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  ''';
 
   static Database? _database;
   static Future<Database>? _openingDatabase;
@@ -44,6 +51,7 @@ class DatabaseService {
     await _createVersion1(database);
     if (version >= 2) await _migrateVersion1To2(database);
     if (version >= 3) await _migrateVersion2To3(database);
+    if (version >= 4) await _migrateVersion3To4(database);
   }
 
   Future<void> _createVersion1(Database database) async {
@@ -88,6 +96,9 @@ class DatabaseService {
     if (oldVersion < 3 && newVersion >= 3) {
       await _migrateVersion2To3(database);
     }
+    if (oldVersion < 4 && newVersion >= 4) {
+      await _migrateVersion3To4(database);
+    }
   }
 
   Future<void> _migrateVersion1To2(Database database) async {
@@ -117,5 +128,9 @@ class DatabaseService {
         xp_awarded INTEGER NOT NULL DEFAULT 0
       )
     ''');
+  }
+
+  Future<void> _migrateVersion3To4(Database database) async {
+    await database.execute(createAppSettingsTableSql);
   }
 }

@@ -9,9 +9,12 @@ import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/screens/category_screen.dart';
 import 'package:kelimo/screens/learning_center_screen.dart';
 import 'package:kelimo/screens/progress_screen.dart';
+import 'package:kelimo/screens/settings_screen.dart';
+import 'package:kelimo/services/data_management_service.dart';
 import 'package:kelimo/services/learning_center_service.dart';
 import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/services/streak_service.dart';
+import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 
@@ -22,6 +25,8 @@ class HomeScreen extends StatefulWidget {
     required this.xpService,
     required this.quizStore,
     required this.statisticsService,
+    required this.settingsService,
+    required this.dataManagementService,
     super.key,
   });
 
@@ -30,6 +35,8 @@ class HomeScreen extends StatefulWidget {
   final XpService xpService;
   final QuizStore quizStore;
   final StatisticsService statisticsService;
+  final SettingsService settingsService;
+  final DataManagementService dataManagementService;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -46,8 +53,19 @@ class _HomeScreenState extends State<HomeScreen> {
     _learningCenterService = LearningCenterService(
       wordProgressStore: widget.wordProgressStore,
     );
+    widget.dataManagementService.addListener(_handleDataReset);
     unawaited(widget.statisticsService.refresh());
     _categoryProgress = _loadCategoryProgress();
+  }
+
+  void _handleDataReset() {
+    if (mounted) _reloadCategoryProgress();
+  }
+
+  @override
+  void dispose() {
+    widget.dataManagementService.removeListener(_handleDataReset);
+    super.dispose();
   }
 
   Map<String, Future<CategoryProgressStatistics>> _loadCategoryProgress() {
@@ -79,8 +97,13 @@ class _HomeScreenState extends State<HomeScreen> {
           wordProgressStore: wordProgressStore,
           streakService: streakService,
           xpService: xpService,
+          settingsService: widget.settingsService,
         ),
         2 => ProgressScreen(statisticsService: widget.statisticsService),
+        3 => SettingsScreen(
+          settingsService: widget.settingsService,
+          dataManagementService: widget.dataManagementService,
+        ),
         _ => SafeArea(
           bottom: false,
           child: LayoutBuilder(
@@ -172,6 +195,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                                 quizStore: quizStore,
                                                 statisticsService:
                                                     widget.statisticsService,
+                                                settingsService:
+                                                    widget.settingsService,
                                               ),
                                             ),
                                           );
@@ -203,7 +228,7 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (index) {
-          if (index >= 0 && index <= 2) {
+          if (index >= 0 && index <= 3) {
             setState(() => _selectedIndex = index);
           }
         },

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:kelimo/services/settings_service.dart';
 
 abstract interface class TtsEngine {
   Future<void> configure({
@@ -44,7 +45,7 @@ class FlutterTtsEngine implements TtsEngine {
 }
 
 class EnglishTtsService {
-  EnglishTtsService({TtsEngine? engine})
+  EnglishTtsService({TtsEngine? engine, this.settingsService})
     : _engine = engine ?? FlutterTtsEngine();
 
   static const language = 'en-US';
@@ -53,9 +54,10 @@ class EnglishTtsService {
   static const pitch = 1.0;
 
   final TtsEngine _engine;
+  final SettingsService? settingsService;
   final ValueNotifier<bool> isSpeaking = ValueNotifier(false);
 
-  bool _isConfigured = false;
+  double? _configuredSpeechRate;
   bool _isDisposed = false;
   int _operationId = 0;
 
@@ -67,14 +69,15 @@ class EnglishTtsService {
     isSpeaking.value = true;
 
     try {
-      if (!_isConfigured) {
+      final selectedSpeechRate = settingsService?.ttsSpeechRate ?? speechRate;
+      if (_configuredSpeechRate != selectedSpeechRate) {
         await _engine.configure(
           language: language,
-          speechRate: speechRate,
+          speechRate: selectedSpeechRate,
           volume: volume,
           pitch: pitch,
         );
-        _isConfigured = true;
+        _configuredSpeechRate = selectedSpeechRate;
       }
 
       await _engine.stop();

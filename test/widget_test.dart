@@ -12,6 +12,7 @@ import 'package:kelimo/data/transportation_words.dart';
 import 'package:kelimo/data/local/database_service.dart';
 import 'package:kelimo/main.dart';
 import 'package:kelimo/models/daily_progress.dart';
+import 'package:kelimo/models/app_settings.dart';
 import 'package:kelimo/models/learning_category.dart';
 import 'package:kelimo/models/learning_center.dart';
 import 'package:kelimo/models/progress_statistics.dart';
@@ -20,7 +21,9 @@ import 'package:kelimo/models/word.dart';
 import 'package:kelimo/models/word_progress.dart';
 import 'package:kelimo/models/xp_state.dart';
 import 'package:kelimo/repositories/daily_progress_repository.dart';
+import 'package:kelimo/repositories/data_reset_repository.dart';
 import 'package:kelimo/repositories/quiz_repository.dart';
+import 'package:kelimo/repositories/settings_repository.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/repositories/xp_repository.dart';
 import 'package:kelimo/screens/quiz_result_screen.dart';
@@ -29,11 +32,14 @@ import 'package:kelimo/screens/category_screen.dart';
 import 'package:kelimo/screens/home_screen.dart';
 import 'package:kelimo/screens/learning_center_screen.dart';
 import 'package:kelimo/screens/learning_word_list_screen.dart';
+import 'package:kelimo/screens/settings_screen.dart';
 import 'package:kelimo/screens/word_card_screen.dart';
 import 'package:kelimo/services/english_tts_service.dart';
+import 'package:kelimo/services/data_management_service.dart';
 import 'package:kelimo/services/learning_engine.dart';
 import 'package:kelimo/services/learning_center_service.dart';
 import 'package:kelimo/services/streak_service.dart';
+import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
@@ -126,6 +132,9 @@ class FakeWordProgressStore implements WordProgressStore {
   Future<void> resetProgress(String wordId) async {
     records.remove(wordId);
   }
+
+  @override
+  void clearCachedData() => records.clear();
 }
 
 WordProgress testWordProgress({
@@ -338,6 +347,82 @@ class FakeQuizStore implements QuizStore {
       },
     );
   }
+
+  @override
+  void clearCachedData() => storage.attempts.clear();
+}
+
+class FakeSettingsStorage {
+  final Map<String, String> values = {};
+}
+
+class FakeSettingsStore implements SettingsStore {
+  FakeSettingsStore([FakeSettingsStorage? storage])
+    : storage = storage ?? FakeSettingsStorage();
+
+  final FakeSettingsStorage storage;
+
+  @override
+  Future<AppSettings> load() async {
+    return AppSettings(
+      dailyGoal: AppSettings.safeDailyGoal(
+        storage.values[SettingsRepository.dailyGoalKey],
+      ),
+      speechRate: SpeechRatePreference.fromStorage(
+        storage.values[SettingsRepository.speechRateKey],
+      ),
+    );
+  }
+
+  @override
+  Future<int> resolveDailyGoalForDate({
+    required String dateKey,
+    required int selectedDailyGoal,
+  }) async {
+    if (storage.values[SettingsRepository.activeDailyGoalDateKey] == dateKey) {
+      return AppSettings.safeDailyGoal(
+        storage.values[SettingsRepository.activeDailyGoalKey],
+      );
+    }
+    storage.values[SettingsRepository.activeDailyGoalDateKey] = dateKey;
+    storage.values[SettingsRepository.activeDailyGoalKey] =
+        '$selectedDailyGoal';
+    return selectedDailyGoal;
+  }
+
+  @override
+  Future<void> resetToDefaults() async {
+    storage.values[SettingsRepository.dailyGoalKey] =
+        '${AppSettings.defaults.dailyGoal}';
+    storage.values[SettingsRepository.speechRateKey] =
+        AppSettings.defaults.speechRate.storageValue;
+  }
+
+  @override
+  Future<void> setDailyGoal(int dailyGoal) async {
+    if (!AppSettings.allowedDailyGoals.contains(dailyGoal)) {
+      throw ArgumentError.value(dailyGoal, 'dailyGoal');
+    }
+    storage.values[SettingsRepository.dailyGoalKey] = '$dailyGoal';
+  }
+
+  @override
+  Future<void> setSpeechRate(SpeechRatePreference speechRate) async {
+    storage.values[SettingsRepository.speechRateKey] = speechRate.storageValue;
+  }
+}
+
+class FakeDataResetStore implements DataResetStore {
+  FakeDataResetStore({this.onReset});
+
+  final void Function(bool resetSettings)? onReset;
+  final calls = <bool>[];
+
+  @override
+  Future<void> resetLearningData({required bool resetSettings}) async {
+    calls.add(resetSettings);
+    onReset?.call(resetSettings);
+  }
 }
 
 Future<XpService> createXpService({
@@ -349,6 +434,72 @@ Future<XpService> createXpService({
   );
   await service.initialize();
   return service;
+}
+
+Future<SettingsService> createSettingsService({
+  SettingsStore? repository,
+  DateTime Function()? now,
+}) async {
+  final service = SettingsService(
+    repository: repository ?? FakeSettingsStore(),
+    now: now,
+  );
+  await service.initialize();
+  return service;
+}
+
+DataManagementService createDataManagementService({
+  required WordProgressStore wordProgressStore,
+  required QuizStore quizStore,
+  required StreakService streakService,
+  required XpService xpService,
+  required SettingsService settingsService,
+  required StatisticsService statisticsService,
+  DataResetStore? repository,
+}) {
+  return DataManagementService(
+    repository: repository ?? FakeDataResetStore(),
+    wordProgressStore: wordProgressStore,
+    quizStore: quizStore,
+    streakService: streakService,
+    xpService: xpService,
+    settingsService: settingsService,
+    statisticsService: statisticsService,
+  );
+}
+
+Future<({HomeScreen screen, SettingsService settingsService})>
+createTestHomeScreen({
+  required StreakService streakService,
+  required XpService xpService,
+  required StatisticsService statisticsService,
+  WordProgressStore? wordProgressStore,
+  QuizStore? quizStore,
+}) async {
+  final settingsService = await createSettingsService();
+  final words = wordProgressStore ?? FakeWordProgressStore();
+  final quizzes =
+      quizStore ?? FakeQuizStore(FakeQuizStorage(), FakeXpStorage());
+  final dataManagementService = createDataManagementService(
+    wordProgressStore: words,
+    quizStore: quizzes,
+    streakService: streakService,
+    xpService: xpService,
+    settingsService: settingsService,
+    statisticsService: statisticsService,
+  );
+  return (
+    screen: HomeScreen(
+      streakService: streakService,
+      wordProgressStore: words,
+      xpService: xpService,
+      quizStore: quizzes,
+      statisticsService: statisticsService,
+      settingsService: settingsService,
+      dataManagementService: dataManagementService,
+    ),
+    settingsService: settingsService,
+  );
 }
 
 StatisticsService createStatisticsService({
@@ -370,6 +521,8 @@ Future<void> pumpKelimoApp(
   FakeXpStorage? xpStorage,
   FakeQuizStorage? quizStorage,
   WordProgressStore? wordProgressStore,
+  FakeSettingsStorage? settingsStorage,
+  DataResetStore? dataResetStore,
 }) async {
   final sharedXpStorage = xpStorage ?? FakeXpStorage();
   await tester.pumpWidget(
@@ -381,6 +534,8 @@ Future<void> pumpKelimoApp(
         quizStorage ?? FakeQuizStorage(),
         sharedXpStorage,
       ),
+      settingsStore: FakeSettingsStore(settingsStorage),
+      dataResetStore: dataResetStore ?? FakeDataResetStore(),
     ),
   );
   await tester.pumpAndSettle();
@@ -607,8 +762,234 @@ void main() {
     expect(restored.updatedAt, updatedAt);
   });
 
-  test('Veritabanı şema sürümü quiz migration ile 3 olur', () {
-    expect(DatabaseService.databaseVersion, 3);
+  test('Veritabanı şema sürümü ayar migration ile 4 olur', () {
+    expect(DatabaseService.databaseVersion, 4);
+    expect(
+      DatabaseService.createAppSettingsTableSql,
+      contains('CREATE TABLE IF NOT EXISTS app_settings'),
+    );
+    expect(
+      DatabaseService.createAppSettingsTableSql,
+      contains('key TEXT PRIMARY KEY'),
+    );
+    expect(
+      DatabaseService.createAppSettingsTableSql,
+      contains('value TEXT NOT NULL'),
+    );
+    expect(
+      DatabaseService.createAppSettingsTableSql,
+      contains('updated_at TEXT NOT NULL'),
+    );
+    expect(DatabaseService.createAppSettingsTableSql, isNot(contains('DROP')));
+    expect(
+      DatabaseService.createAppSettingsTableSql,
+      isNot(contains('DELETE')),
+    );
+    expect(DataResetRepository.learningDataTables, [
+      'word_progress',
+      'daily_progress',
+      'quiz_attempts',
+      'streak_state',
+      'xp_state',
+    ]);
+  });
+
+  test(
+    'Ayarlar güvenli varsayılanları ve izin verilen hedefleri kullanır',
+    () async {
+      final service = await createSettingsService();
+      addTearDown(service.dispose);
+
+      expect(service.dailyGoal, 5);
+      expect(service.activeDailyGoal, 5);
+      expect(service.speechRate, SpeechRatePreference.normal);
+      expect(service.ttsSpeechRate, 0.42);
+      expect(AppSettings.safeDailyGoal('10'), 10);
+      expect(AppSettings.safeDailyGoal('7'), 5);
+      expect(AppSettings.safeDailyGoal('bozuk'), 5);
+      expect(() => service.setDailyGoal(7), throwsA(isA<ArgumentError>()));
+    },
+  );
+
+  test(
+    'Ayarlar yeniden oluşturulunca yüklenir ve bozuk değerler düzeltilir',
+    () async {
+      final storage = FakeSettingsStorage();
+      final first = await createSettingsService(
+        repository: FakeSettingsStore(storage),
+      );
+      await first.setDailyGoal(15);
+      await first.setSpeechRate(SpeechRatePreference.fast);
+      first.dispose();
+
+      final recreated = await createSettingsService(
+        repository: FakeSettingsStore(storage),
+      );
+      expect(recreated.dailyGoal, 15);
+      expect(recreated.speechRate, SpeechRatePreference.fast);
+      recreated.dispose();
+
+      storage.values[SettingsRepository.dailyGoalKey] = '999';
+      storage.values[SettingsRepository.speechRateKey] = 'çok_hızlı';
+      final safe = await createSettingsService(
+        repository: FakeSettingsStore(storage),
+      );
+      addTearDown(safe.dispose);
+      expect(safe.dailyGoal, 5);
+      expect(safe.speechRate, SpeechRatePreference.normal);
+    },
+  );
+
+  test(
+    'Yeni günlük hedef sonraki günde uygulanır ve seri iki kez artmaz',
+    () async {
+      var now = DateTime(2026, 7, 16, 10);
+      final settings = await createSettingsService(
+        repository: FakeSettingsStore(),
+        now: () => now,
+      );
+      final dailyStorage = FakeDailyStorage();
+      final streak = StreakService(
+        repository: FakeDailyProgressStore(dailyStorage),
+        settingsService: settings,
+        now: () => now,
+      );
+      addTearDown(settings.dispose);
+      addTearDown(streak.dispose);
+      await streak.initialize();
+
+      await settings.setDailyGoal(10);
+      expect(settings.dailyGoal, 10);
+      expect(streak.dailyGoal, 5);
+      for (var index = 0; index < 5; index++) {
+        await streak.recordEvaluation();
+      }
+      expect(streak.isTodayCompleted, isTrue);
+      expect(streak.currentStreak, 8);
+      expect(await streak.recordEvaluation(), isFalse);
+      expect(streak.currentStreak, 8);
+
+      now = DateTime(2026, 7, 17, 10);
+      expect(await streak.recordEvaluation(), isFalse);
+      expect(streak.dailyGoal, 10);
+      expect(streak.todayCount, 1);
+      expect(streak.remainingForToday, 9);
+      expect(streak.currentStreak, 8);
+    },
+  );
+
+  test('TTS hız tercihleri gerçek konuşma hızına uygulanır', () async {
+    expect(SpeechRatePreference.slow.ttsRate, 0.35);
+    expect(SpeechRatePreference.normal.ttsRate, 0.42);
+    expect(SpeechRatePreference.fast.ttsRate, 0.65);
+
+    final settings = await createSettingsService();
+    addTearDown(settings.dispose);
+    final engine = FakeTtsEngine();
+    final tts = EnglishTtsService(engine: engine, settingsService: settings);
+    addTearDown(tts.dispose);
+
+    expect(await tts.speak('Hello'), isTrue);
+    expect(engine.speechRate, 0.42);
+    await settings.setSpeechRate(SpeechRatePreference.fast);
+    expect(await tts.speak('Hello again'), isTrue);
+    expect(engine.speechRate, 0.65);
+  });
+
+  test('Veri yönetimi tercih ve öğrenme sıfırlama sınırlarını korur', () async {
+    final wordStore = FakeWordProgressStore({
+      'dog': testWordProgress(
+        wordId: 'dog',
+        mastery: 'hard',
+        repetitionCount: 1,
+        isFavorite: true,
+      ),
+    });
+    final xpStorage = FakeXpStorage();
+    final xpService = await createXpService(repository: FakeXpStore(xpStorage));
+    await xpService.addXp(5);
+    final quizStorage = FakeQuizStorage();
+    final quizStore = FakeQuizStore(quizStorage, xpStorage);
+    await quizStore.saveCompletedQuiz(
+      categoryId: 'animals',
+      correctCount: 8,
+      totalQuestions: 10,
+      scorePercent: 80,
+    );
+    final dailyStorage = FakeDailyStorage();
+    final streak = StreakService(
+      repository: FakeDailyProgressStore(dailyStorage),
+    );
+    await streak.initialize();
+    await streak.recordEvaluation();
+    final settingsStorage = FakeSettingsStorage();
+    final settings = await createSettingsService(
+      repository: FakeSettingsStore(settingsStorage),
+    );
+    await settings.setDailyGoal(10);
+    await settings.setSpeechRate(SpeechRatePreference.fast);
+    final statistics = createStatisticsService(
+      streakService: streak,
+      xpService: xpService,
+      wordProgressStore: wordStore,
+      quizStore: quizStore,
+    );
+    final resetStore = FakeDataResetStore(
+      onReset: (resetSettings) {
+        dailyStorage.dailyProgress.clear();
+        dailyStorage.streak = const StreakState(currentStreak: 0);
+        if (resetSettings) settingsStorage.values.clear();
+      },
+    );
+    final dataManagement = createDataManagementService(
+      repository: resetStore,
+      wordProgressStore: wordStore,
+      quizStore: quizStore,
+      streakService: streak,
+      xpService: xpService,
+      settingsService: settings,
+      statisticsService: statistics,
+    );
+    addTearDown(wordStore.clearCachedData);
+    addTearDown(streak.dispose);
+    addTearDown(xpService.dispose);
+    addTearDown(settings.dispose);
+    addTearDown(statistics.dispose);
+    addTearDown(dataManagement.dispose);
+
+    await settings.resetToDefaults();
+    expect(settings.dailyGoal, 5);
+    expect(settings.speechRate, SpeechRatePreference.normal);
+    expect(wordStore.progressFor('dog').isFavorite, isTrue);
+    expect(await quizStore.getTotalQuizCount(), 1);
+    expect(xpService.totalXp, 5);
+
+    await settings.setDailyGoal(10);
+    await dataManagement.resetLearningData();
+    expect(resetStore.calls, [false]);
+    expect(settings.dailyGoal, 10);
+    expect(wordStore.getAllProgress(), isEmpty);
+    expect(await quizStore.getAllAttempts(), isEmpty);
+    expect(xpService.totalXp, 0);
+    expect(streak.todayCount, 0);
+    expect(streak.currentStreak, 0);
+    final learning = LearningCenterService(wordProgressStore: wordStore).load();
+    expect(learning.totalCount, 122);
+    expect(learning.favoriteCount, 0);
+    expect(learning.repeatPendingCount, 0);
+    expect(learning.learnedCount, 0);
+
+    await settings.setDailyGoal(20);
+    await settings.setSpeechRate(SpeechRatePreference.slow);
+    await dataManagement.resetAllData();
+    expect(resetStore.calls, [false, true]);
+    expect(settings.dailyGoal, 5);
+    expect(settings.speechRate, SpeechRatePreference.normal);
+    expect(CategoryCatalog.categories, hasLength(6));
+    expect(
+      CategoryCatalog.categories.expand((category) => category.words),
+      hasLength(122),
+    );
   });
 
   test('QuizAttempt SQLite map dönüşümünde sonuç ve tarihi korur', () {
@@ -2161,6 +2542,8 @@ void main() {
     addTearDown(streakService.dispose);
     final xpService = await createXpService();
     addTearDown(xpService.dispose);
+    final settingsService = await createSettingsService();
+    addTearDown(settingsService.dispose);
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.light,
@@ -2169,6 +2552,7 @@ void main() {
           wordProgressStore: store,
           streakService: streakService,
           xpService: xpService,
+          settingsService: settingsService,
         ),
       ),
     );
@@ -2190,6 +2574,106 @@ void main() {
     expect(find.text('Çamaşır Makinesi'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('Ayarlar sekmesi gerçek tercih ve veri bölümlerini gösterir', (
+    tester,
+  ) async {
+    final resetStore = FakeDataResetStore();
+    await pumpKelimoApp(tester, dataResetStore: resetStore);
+
+    await tester.tap(find.text('Ayarlar'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SettingsScreen), findsOneWidget);
+    expect(find.text('Ayarlar'), findsWidgets);
+    expect(find.text('Öğrenme'), findsOneWidget);
+    expect(find.text('Günlük kelime hedefi'), findsOneWidget);
+    expect(
+      find.text('Yeni hedef bir sonraki günlük çalışmada uygulanır.'),
+      findsOneWidget,
+    );
+    expect(find.text('Ses'), findsOneWidget);
+    expect(find.text('Telaffuz hızı'), findsOneWidget);
+    expect(find.text('Sesi dene'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Veri Yönetimi'), 250);
+    expect(find.text('Tercihleri varsayılana döndür'), findsOneWidget);
+    expect(find.text('Öğrenme verilerini sıfırla'), findsOneWidget);
+    expect(find.text('Tüm verileri sıfırla'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Öğrenme verilerini sıfırla'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Öğrenme verilerini sıfırla'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'Favoriler, kelime ilerlemesi, quiz geçmişi, XP ve seri bilgileri '
+        'kalıcı olarak silinecek. Ayarların korunacak.',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('İptal'));
+    await tester.pumpAndSettle();
+    expect(resetStore.calls, isEmpty);
+  });
+
+  testWidgets(
+    'Sesi dene seçili telaffuz hızını kullanır ve küçük ekranda taşmaz',
+    (tester) async {
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.binding.setSurfaceSize(const Size(320, 568));
+      final settings = await createSettingsService();
+      await settings.setSpeechRate(SpeechRatePreference.fast);
+      final engine = FakeTtsEngine();
+      final previewTts = EnglishTtsService(
+        engine: engine,
+        settingsService: settings,
+      );
+      final wordStore = FakeWordProgressStore();
+      final quizStore = FakeQuizStore(FakeQuizStorage(), FakeXpStorage());
+      final streak = StreakService(repository: FakeDailyProgressStore());
+      await streak.initialize();
+      final xp = await createXpService();
+      final statistics = createStatisticsService(
+        streakService: streak,
+        xpService: xp,
+        wordProgressStore: wordStore,
+        quizStore: quizStore,
+      );
+      final dataManagement = createDataManagementService(
+        wordProgressStore: wordStore,
+        quizStore: quizStore,
+        streakService: streak,
+        xpService: xp,
+        settingsService: settings,
+        statisticsService: statistics,
+      );
+      addTearDown(settings.dispose);
+      addTearDown(previewTts.dispose);
+      addTearDown(streak.dispose);
+      addTearDown(xp.dispose);
+      addTearDown(statistics.dispose);
+      addTearDown(dataManagement.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: SettingsScreen(
+            settingsService: settings,
+            dataManagementService: dataManagement,
+            previewTtsService: previewTts,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Sesi dene'));
+      await tester.pumpAndSettle();
+
+      expect(engine.spokenTexts, ['Hello, welcome to Kelimo.']);
+      expect(engine.speechRate, 0.65);
+      await tester.scrollUntilVisible(find.text('Tüm verileri sıfırla'), 250);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'İlerleme ekranı boş veride güvenli değerleri ve boş quiz durumunu gösterir',
@@ -2240,18 +2724,15 @@ void main() {
       xpService: xpService,
     );
     addTearDown(statisticsService.dispose);
+    final home = await createTestHomeScreen(
+      streakService: streakService,
+      xpService: xpService,
+      statisticsService: statisticsService,
+    );
+    addTearDown(home.settingsService.dispose);
 
     await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.light,
-        home: HomeScreen(
-          streakService: streakService,
-          wordProgressStore: FakeWordProgressStore(),
-          xpService: xpService,
-          quizStore: FakeQuizStore(FakeQuizStorage(), FakeXpStorage()),
-          statisticsService: statisticsService,
-        ),
-      ),
+      MaterialApp(theme: AppTheme.light, home: home.screen),
     );
 
     expect(find.text('🔥 8 günlük seri'), findsNothing);
@@ -2273,18 +2754,15 @@ void main() {
       xpService: xpService,
     );
     addTearDown(statisticsService.dispose);
+    final home = await createTestHomeScreen(
+      streakService: streakService,
+      xpService: xpService,
+      statisticsService: statisticsService,
+    );
+    addTearDown(home.settingsService.dispose);
 
     await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.light,
-        home: HomeScreen(
-          streakService: streakService,
-          wordProgressStore: FakeWordProgressStore(),
-          xpService: xpService,
-          quizStore: FakeQuizStore(FakeQuizStorage(), FakeXpStorage()),
-          statisticsService: statisticsService,
-        ),
-      ),
+      MaterialApp(theme: AppTheme.light, home: home.screen),
     );
 
     expect(find.text('Seviye 2'), findsOneWidget);
@@ -2310,18 +2788,15 @@ void main() {
         xpService: xpService,
       );
       addTearDown(statisticsService.dispose);
+      final home = await createTestHomeScreen(
+        streakService: streakService,
+        xpService: xpService,
+        statisticsService: statisticsService,
+      );
+      addTearDown(home.settingsService.dispose);
 
       await tester.pumpWidget(
-        MaterialApp(
-          theme: AppTheme.light,
-          home: HomeScreen(
-            streakService: streakService,
-            wordProgressStore: FakeWordProgressStore(),
-            xpService: xpService,
-            quizStore: FakeQuizStore(FakeQuizStorage(), FakeXpStorage()),
-            statisticsService: statisticsService,
-          ),
-        ),
+        MaterialApp(theme: AppTheme.light, home: home.screen),
       );
 
       expect(streakService.todayCount, 52);

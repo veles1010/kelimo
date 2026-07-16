@@ -59,6 +59,10 @@ class XpService extends ChangeNotifier {
     notifyListeners();
   }
 
+  void resetAfterDataClear() {
+    applyPersistedState(XpState.initial());
+  }
+
   void _applyState(XpState state) {
     _totalXp = state.totalXp < 0 ? 0 : state.totalXp;
   }

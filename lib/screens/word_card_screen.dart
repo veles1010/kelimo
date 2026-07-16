@@ -7,6 +7,7 @@ import 'package:kelimo/models/word.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/services/english_tts_service.dart';
 import 'package:kelimo/services/learning_engine.dart';
+import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/utils/turkish_case.dart';
@@ -21,6 +22,7 @@ class WordCardScreen extends StatefulWidget {
     this.ttsService,
     this.streakService,
     this.initialWordIndex = 0,
+    this.settingsService,
   }) : assert(
          initialWordIndex >= 0 && initialWordIndex < category.words.length,
        );
@@ -31,6 +33,7 @@ class WordCardScreen extends StatefulWidget {
   final EnglishTtsService? ttsService;
   final StreakService? streakService;
   final int initialWordIndex;
+  final SettingsService? settingsService;
 
   @override
   State<WordCardScreen> createState() => _WordCardScreenState();
@@ -61,7 +64,9 @@ class _WordCardScreenState extends State<WordCardScreen>
   @override
   void initState() {
     super.initState();
-    _ttsService = widget.ttsService ?? EnglishTtsService();
+    _ttsService =
+        widget.ttsService ??
+        EnglishTtsService(settingsService: widget.settingsService);
     _learningEngine = LearningEngine(
       widget.category.words,
       initialWordIndex: widget.initialWordIndex,

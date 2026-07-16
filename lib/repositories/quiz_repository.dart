@@ -26,6 +26,7 @@ abstract interface class QuizStore {
   Future<int> getHighestScore(String categoryId);
   Future<int> getTotalQuizCount();
   Future<QuizStatistics> getStatistics();
+  void clearCachedData();
 }
 
 class QuizRepository implements QuizStore {
@@ -181,5 +182,10 @@ class QuizRepository implements QuizStore {
       debugPrint('Quiz istatistikleri yüklenemedi: $error\n$stackTrace');
       rethrow;
     }
+  }
+
+  @override
+  void clearCachedData() {
+    // QuizRepository reads attempts directly from SQLite and has no cache.
   }
 }

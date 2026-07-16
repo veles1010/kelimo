@@ -32,6 +32,7 @@ abstract interface class WordProgressStore {
     DateTime? reviewedAt,
   });
   Future<void> resetProgress(String wordId);
+  void clearCachedData();
 }
 
 class WordProgressRepository implements WordProgressStore {
@@ -131,4 +132,7 @@ class WordProgressRepository implements WordProgressStore {
       rethrow;
     }
   }
+
+  @override
+  void clearCachedData() => _progressByWordId.clear();
 }
