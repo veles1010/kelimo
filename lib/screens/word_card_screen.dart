@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:kelimo/models/learning_category.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/services/english_tts_service.dart';
+import 'package:kelimo/services/achievement_service.dart';
 import 'package:kelimo/services/learning_engine.dart';
 import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/widgets/learning_flashcard.dart';
+import 'package:kelimo/widgets/achievement_notification.dart';
 
 class WordCardScreen extends StatefulWidget {
   WordCardScreen({
@@ -20,6 +22,7 @@ class WordCardScreen extends StatefulWidget {
     this.streakService,
     this.initialWordIndex = 0,
     this.settingsService,
+    this.achievementService,
   }) : assert(
          initialWordIndex >= 0 && initialWordIndex < category.words.length,
        );
@@ -31,6 +34,7 @@ class WordCardScreen extends StatefulWidget {
   final StreakService? streakService;
   final int initialWordIndex;
   final SettingsService? settingsService;
+  final AchievementService? achievementService;
 
   @override
   State<WordCardScreen> createState() => _WordCardScreenState();
@@ -147,8 +151,10 @@ class _WordCardScreenState extends State<WordCardScreen>
       _syncFavoriteState();
     });
 
+    var progressSaved = false;
     try {
       await widget.wordProgressStore.saveLearningResult(learningResult);
+      progressSaved = true;
       final xpSaved = await widget.xpService.addXp(
         xpRewardForRating(learningResult.rating),
       );
@@ -177,6 +183,8 @@ class _WordCardScreenState extends State<WordCardScreen>
       );
     }
 
+    if (progressSaved) await _evaluateAchievements();
+
     if (_learningEngine.isComplete) await _showCompletionDialog();
   }
 
@@ -193,6 +201,7 @@ class _WordCardScreenState extends State<WordCardScreen>
 
     try {
       await widget.wordProgressStore.saveFavorite(wordId, isFavorite);
+      if (isFavorite) await _evaluateAchievements();
     } catch (_) {
       if (!mounted) return;
       if (_learningEngine.currentWord.id == wordId) {
@@ -201,6 +210,17 @@ class _WordCardScreenState extends State<WordCardScreen>
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Favori kaydedilemedi')));
+    }
+  }
+
+  Future<void> _evaluateAchievements() async {
+    final service = widget.achievementService;
+    if (service == null) return;
+    try {
+      final unlocked = await service.evaluate();
+      if (mounted) await showAchievementNotifications(context, unlocked);
+    } catch (_) {
+      // Başarım kontrolü temel öğrenme akışını engellememeli.
     }
   }
 

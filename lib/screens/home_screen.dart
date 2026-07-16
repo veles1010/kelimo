@@ -11,6 +11,7 @@ import 'package:kelimo/screens/learning_center_screen.dart';
 import 'package:kelimo/screens/progress_screen.dart';
 import 'package:kelimo/screens/settings_screen.dart';
 import 'package:kelimo/services/data_management_service.dart';
+import 'package:kelimo/services/achievement_service.dart';
 import 'package:kelimo/services/learning_center_service.dart';
 import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/services/streak_service.dart';
@@ -27,6 +28,7 @@ class HomeScreen extends StatefulWidget {
     required this.statisticsService,
     required this.settingsService,
     required this.dataManagementService,
+    this.achievementService,
     super.key,
   });
 
@@ -37,6 +39,7 @@ class HomeScreen extends StatefulWidget {
   final StatisticsService statisticsService;
   final SettingsService settingsService;
   final DataManagementService dataManagementService;
+  final AchievementService? achievementService;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -98,8 +101,12 @@ class _HomeScreenState extends State<HomeScreen> {
           streakService: streakService,
           xpService: xpService,
           settingsService: widget.settingsService,
+          achievementService: widget.achievementService,
         ),
-        2 => ProgressScreen(statisticsService: widget.statisticsService),
+        2 => ProgressScreen(
+          statisticsService: widget.statisticsService,
+          achievementService: widget.achievementService,
+        ),
         3 => SettingsScreen(
           settingsService: widget.settingsService,
           dataManagementService: widget.dataManagementService,
@@ -197,6 +204,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                                     widget.statisticsService,
                                                 settingsService:
                                                     widget.settingsService,
+                                                achievementService:
+                                                    widget.achievementService,
                                               ),
                                             ),
                                           );

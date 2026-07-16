@@ -5,12 +5,14 @@ import 'package:flutter/material.dart';
 import 'package:kelimo/models/review_session.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/services/english_tts_service.dart';
+import 'package:kelimo/services/achievement_service.dart';
 import 'package:kelimo/services/learning_engine.dart';
 import 'package:kelimo/services/review_session_builder.dart';
 import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/widgets/learning_flashcard.dart';
+import 'package:kelimo/widgets/achievement_notification.dart';
 
 enum ReviewSessionExit { learningCenter }
 
@@ -24,6 +26,7 @@ class ReviewSessionScreen extends StatefulWidget {
     required this.settingsService,
     super.key,
     this.ttsService,
+    this.achievementService,
   }) : assert(initialItems.length > 0);
 
   final List<ReviewSessionItem> initialItems;
@@ -33,6 +36,7 @@ class ReviewSessionScreen extends StatefulWidget {
   final XpService xpService;
   final SettingsService settingsService;
   final EnglishTtsService? ttsService;
+  final AchievementService? achievementService;
 
   @override
   State<ReviewSessionScreen> createState() => _ReviewSessionScreenState();
@@ -114,6 +118,7 @@ class _ReviewSessionScreenState extends State<ReviewSessionScreen>
     });
     try {
       await widget.wordProgressStore.saveFavorite(wordId, nextValue);
+      if (nextValue) await _evaluateAchievements();
     } catch (_) {
       if (mounted && _currentItem.word.id == wordId) {
         setState(() => _isFavorite = !nextValue);
@@ -177,6 +182,7 @@ class _ReviewSessionScreenState extends State<ReviewSessionScreen>
         ),
       );
     }
+    await _evaluateAchievements();
 
     _counter.record(rating);
     unawaited(_ttsService.stop());
@@ -210,6 +216,17 @@ class _ReviewSessionScreenState extends State<ReviewSessionScreen>
       _isEvaluating = false;
       _isCompleted = true;
     });
+  }
+
+  Future<void> _evaluateAchievements() async {
+    final service = widget.achievementService;
+    if (service == null) return;
+    try {
+      final unlocked = await service.evaluate();
+      if (mounted) await showAchievementNotifications(context, unlocked);
+    } catch (_) {
+      // Başarım kontrolü tekrar oturumunu engellememeli.
+    }
   }
 
   void _unlockEvaluationAfterFrame() {

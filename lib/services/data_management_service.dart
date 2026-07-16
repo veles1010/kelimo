@@ -3,6 +3,7 @@ import 'package:kelimo/repositories/data_reset_repository.dart';
 import 'package:kelimo/repositories/quiz_repository.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/services/settings_service.dart';
+import 'package:kelimo/services/achievement_service.dart';
 import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/services/xp_service.dart';
@@ -16,6 +17,7 @@ class DataManagementService extends ChangeNotifier {
     required this.xpService,
     required this.settingsService,
     required this.statisticsService,
+    this.achievementService,
   });
 
   final DataResetStore repository;
@@ -25,6 +27,7 @@ class DataManagementService extends ChangeNotifier {
   final XpService xpService;
   final SettingsService settingsService;
   final StatisticsService statisticsService;
+  final AchievementService? achievementService;
 
   Future<void> resetLearningData() => _reset(resetSettings: false);
 
@@ -36,6 +39,7 @@ class DataManagementService extends ChangeNotifier {
     quizStore.clearCachedData();
     streakService.resetAfterDataClear();
     xpService.resetAfterDataClear();
+    achievementService?.resetAfterDataClear();
     if (resetSettings) await settingsService.reload();
     await statisticsService.refresh();
     notifyListeners();

@@ -5,7 +5,13 @@ import 'package:sqflite/sqflite.dart';
 
 class DatabaseService {
   static const databaseName = 'kelimo.db';
-  static const databaseVersion = 5;
+  static const databaseVersion = 6;
+  static const createAchievementUnlocksTableSql = '''
+    CREATE TABLE IF NOT EXISTS achievement_unlocks (
+      achievement_id TEXT PRIMARY KEY,
+      unlocked_at TEXT NOT NULL
+    )
+  ''';
   static const addReviewStageColumnSql =
       'ALTER TABLE word_progress ADD COLUMN review_stage '
       'INTEGER NOT NULL DEFAULT 0';
@@ -57,6 +63,7 @@ class DatabaseService {
     if (version >= 3) await _migrateVersion2To3(database);
     if (version >= 4) await _migrateVersion3To4(database);
     if (version >= 5) await _migrateVersion4To5(database);
+    if (version >= 6) await _migrateVersion5To6(database);
   }
 
   Future<void> _createVersion1(Database database) async {
@@ -106,6 +113,9 @@ class DatabaseService {
     }
     if (oldVersion < 5 && newVersion >= 5) {
       await _migrateVersion4To5(database);
+    }
+    if (oldVersion < 6 && newVersion >= 6) {
+      await _migrateVersion5To6(database);
     }
   }
 
@@ -177,6 +187,10 @@ class DatabaseService {
       );
     }
     await batch.commit(noResult: true);
+  }
+
+  Future<void> _migrateVersion5To6(Database database) async {
+    await database.execute(createAchievementUnlocksTableSql);
   }
 }
 

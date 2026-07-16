@@ -6,6 +6,7 @@ import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/screens/word_card_screen.dart';
 import 'package:kelimo/screens/review_session_screen.dart';
 import 'package:kelimo/services/learning_center_service.dart';
+import 'package:kelimo/services/achievement_service.dart';
 import 'package:kelimo/services/review_session_builder.dart';
 import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/services/streak_service.dart';
@@ -21,6 +22,7 @@ class LearningWordListScreen extends StatefulWidget {
     required this.settingsService,
     super.key,
     this.sessionBuilder,
+    this.achievementService,
   });
 
   final LearningCenterFilter filter;
@@ -30,6 +32,7 @@ class LearningWordListScreen extends StatefulWidget {
   final XpService xpService;
   final SettingsService settingsService;
   final ReviewSessionBuilder? sessionBuilder;
+  final AchievementService? achievementService;
 
   @override
   State<LearningWordListScreen> createState() => _LearningWordListScreenState();
@@ -68,6 +71,7 @@ class _LearningWordListScreenState extends State<LearningWordListScreen> {
           streakService: widget.streakService,
           xpService: widget.xpService,
           settingsService: widget.settingsService,
+          achievementService: widget.achievementService,
         ),
       ),
     );
@@ -93,6 +97,7 @@ class _LearningWordListScreenState extends State<LearningWordListScreen> {
             streakService: widget.streakService,
             xpService: widget.xpService,
             settingsService: widget.settingsService,
+            achievementService: widget.achievementService,
           ),
         ),
       );

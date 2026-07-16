@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kelimo/data/animal_words.dart';
+import 'package:kelimo/data/achievement_catalog.dart';
 import 'package:kelimo/data/category_catalog.dart';
 import 'package:kelimo/data/color_words.dart';
 import 'package:kelimo/data/family_words.dart';
@@ -12,6 +13,7 @@ import 'package:kelimo/data/transportation_words.dart';
 import 'package:kelimo/data/local/database_service.dart';
 import 'package:kelimo/main.dart';
 import 'package:kelimo/models/daily_progress.dart';
+import 'package:kelimo/models/achievement.dart';
 import 'package:kelimo/models/app_settings.dart';
 import 'package:kelimo/models/learning_category.dart';
 import 'package:kelimo/models/learning_center.dart';
@@ -21,6 +23,7 @@ import 'package:kelimo/models/word.dart';
 import 'package:kelimo/models/word_progress.dart';
 import 'package:kelimo/models/xp_state.dart';
 import 'package:kelimo/repositories/daily_progress_repository.dart';
+import 'package:kelimo/repositories/achievement_repository.dart';
 import 'package:kelimo/repositories/data_reset_repository.dart';
 import 'package:kelimo/repositories/quiz_repository.dart';
 import 'package:kelimo/repositories/settings_repository.dart';
@@ -36,6 +39,7 @@ import 'package:kelimo/screens/settings_screen.dart';
 import 'package:kelimo/screens/word_card_screen.dart';
 import 'package:kelimo/services/english_tts_service.dart';
 import 'package:kelimo/services/data_management_service.dart';
+import 'package:kelimo/services/achievement_service.dart';
 import 'package:kelimo/services/learning_engine.dart';
 import 'package:kelimo/services/learning_center_service.dart';
 import 'package:kelimo/services/streak_service.dart';
@@ -430,6 +434,39 @@ class FakeDataResetStore implements DataResetStore {
   }
 }
 
+class FakeAchievementStore implements AchievementStore {
+  FakeAchievementStore([Iterable<AchievementUnlock> initial = const []]) {
+    for (final unlock in initial) {
+      records[unlock.achievementId] = unlock;
+    }
+  }
+
+  final Map<String, AchievementUnlock> records = {};
+
+  @override
+  Future<void> clearAll() async => records.clear();
+
+  @override
+  void clearCachedData() => records.clear();
+
+  @override
+  bool isUnlocked(String id) => records.containsKey(id);
+
+  @override
+  Future<List<AchievementUnlock>> loadUnlocked() async =>
+      List.unmodifiable(records.values);
+
+  @override
+  Future<bool> unlock(String id, DateTime unlockedAt) async {
+    if (records.containsKey(id)) return false;
+    records[id] = AchievementUnlock(
+      achievementId: id,
+      unlockedAt: unlockedAt.toUtc(),
+    );
+    return true;
+  }
+}
+
 Future<XpService> createXpService({
   int totalXp = 0,
   XpStore? repository,
@@ -460,6 +497,7 @@ DataManagementService createDataManagementService({
   required XpService xpService,
   required SettingsService settingsService,
   required StatisticsService statisticsService,
+  AchievementService? achievementService,
   DataResetStore? repository,
 }) {
   return DataManagementService(
@@ -470,6 +508,7 @@ DataManagementService createDataManagementService({
     xpService: xpService,
     settingsService: settingsService,
     statisticsService: statisticsService,
+    achievementService: achievementService,
   );
 }
 
@@ -528,6 +567,7 @@ Future<void> pumpKelimoApp(
   WordProgressStore? wordProgressStore,
   FakeSettingsStorage? settingsStorage,
   DataResetStore? dataResetStore,
+  AchievementStore? achievementStore,
 }) async {
   final sharedXpStorage = xpStorage ?? FakeXpStorage();
   await tester.pumpWidget(
@@ -541,6 +581,16 @@ Future<void> pumpKelimoApp(
       ),
       settingsStore: FakeSettingsStore(settingsStorage),
       dataResetStore: dataResetStore ?? FakeDataResetStore(),
+      achievementStore:
+          achievementStore ??
+          FakeAchievementStore(
+            AchievementCatalog.achievements.map(
+              (achievement) => AchievementUnlock(
+                achievementId: achievement.id,
+                unlockedAt: DateTime.utc(2026, 7, 16),
+              ),
+            ),
+          ),
     ),
   );
   await tester.pumpAndSettle();
@@ -771,8 +821,8 @@ void main() {
     expect(restored.updatedAt, updatedAt);
   });
 
-  test('Veritabanı şema sürümü tekrar planı migration ile 5 olur', () {
-    expect(DatabaseService.databaseVersion, 5);
+  test('Veritabanı şema sürümü başarımlar migration ile 6 olur', () {
+    expect(DatabaseService.databaseVersion, 6);
     expect(
       DatabaseService.createAppSettingsTableSql,
       contains('CREATE TABLE IF NOT EXISTS app_settings'),
@@ -802,14 +852,83 @@ void main() {
       DatabaseService.addReviewStageColumnSql,
       contains('INTEGER NOT NULL DEFAULT 0'),
     );
+    expect(
+      DatabaseService.createAchievementUnlocksTableSql,
+      contains('CREATE TABLE IF NOT EXISTS achievement_unlocks'),
+    );
+    expect(
+      DatabaseService.createAchievementUnlocksTableSql,
+      contains('achievement_id TEXT PRIMARY KEY'),
+    );
+    expect(
+      DatabaseService.createAchievementUnlocksTableSql,
+      contains('unlocked_at TEXT NOT NULL'),
+    );
     expect(DataResetRepository.learningDataTables, [
       'word_progress',
       'daily_progress',
       'quiz_attempts',
       'streak_state',
       'xp_state',
+      'achievement_unlocks',
     ]);
   });
+
+  test(
+    'Başarım metrikleri mevcut ilerleme, quiz ve seri verisini kullanır',
+    () async {
+      final wordStore = FakeWordProgressStore({
+        animalWords[0].id: testWordProgress(
+          wordId: animalWords[0].id,
+          mastery: 'easy',
+          repetitionCount: 3,
+          isFavorite: true,
+        ),
+        foodWords[0].id: testWordProgress(
+          wordId: foodWords[0].id,
+          mastery: 'hard',
+          repetitionCount: 2,
+          isFavorite: true,
+        ),
+        'bilinmeyen_kelime': testWordProgress(
+          wordId: 'bilinmeyen_kelime',
+          mastery: 'easy',
+          repetitionCount: 50,
+          isFavorite: true,
+        ),
+      });
+      final xpStorage = FakeXpStorage();
+      final quizStorage = FakeQuizStorage();
+      final quizStore = FakeQuizStore(quizStorage, xpStorage);
+      await quizStore.saveCompletedQuiz(
+        categoryId: 'animals',
+        correctCount: 10,
+        totalQuestions: 10,
+        scorePercent: 100,
+      );
+      await quizStore.saveCompletedQuiz(
+        categoryId: 'foods',
+        correctCount: 9,
+        totalQuestions: 10,
+        scorePercent: 90,
+      );
+      final streak = StreakService(initialStreak: 7);
+      addTearDown(streak.dispose);
+
+      final metrics = await AchievementMetricsLoader(
+        wordProgressStore: wordStore,
+        quizStore: quizStore,
+        streakService: streak,
+      ).load();
+
+      expect(metrics.totalReviewCount, 5);
+      expect(metrics.learnedWordCount, 1);
+      expect(metrics.favoriteWordCount, 2);
+      expect(metrics.completedQuizCount, 2);
+      expect(metrics.hasPerfectQuiz, isTrue);
+      expect(metrics.currentStreak, 7);
+    },
+  );
 
   test(
     'Ayarlar güvenli varsayılanları ve izin verilen hedefleri kullanır',
@@ -958,6 +1077,21 @@ void main() {
         if (resetSettings) settingsStorage.values.clear();
       },
     );
+    final achievementStore = FakeAchievementStore([
+      AchievementUnlock(
+        achievementId: 'first_step',
+        unlockedAt: DateTime.utc(2026, 7, 16),
+      ),
+    ]);
+    final achievementService = AchievementService(
+      repository: achievementStore,
+      metricsLoader: AchievementMetricsLoader(
+        wordProgressStore: wordStore,
+        quizStore: quizStore,
+        streakService: streak,
+      ),
+    );
+    await achievementService.initialize();
     final dataManagement = createDataManagementService(
       repository: resetStore,
       wordProgressStore: wordStore,
@@ -966,6 +1100,7 @@ void main() {
       xpService: xpService,
       settingsService: settings,
       statisticsService: statistics,
+      achievementService: achievementService,
     );
     addTearDown(wordStore.clearCachedData);
     addTearDown(streak.dispose);
@@ -973,6 +1108,7 @@ void main() {
     addTearDown(settings.dispose);
     addTearDown(statistics.dispose);
     addTearDown(dataManagement.dispose);
+    addTearDown(achievementService.dispose);
 
     await settings.resetToDefaults();
     expect(settings.dailyGoal, 5);
@@ -981,6 +1117,7 @@ void main() {
     expect(wordStore.progressFor('dog').nextReviewAt, isNotNull);
     expect(await quizStore.getTotalQuizCount(), 1);
     expect(xpService.totalXp, 5);
+    expect(achievementService.isUnlocked('first_step'), isTrue);
 
     await settings.setDailyGoal(10);
     await dataManagement.resetLearningData();
@@ -992,18 +1129,23 @@ void main() {
     expect(xpService.totalXp, 0);
     expect(streak.todayCount, 0);
     expect(streak.currentStreak, 0);
+    expect(achievementService.unlockedCount, 0);
     final learning = LearningCenterService(wordProgressStore: wordStore).load();
     expect(learning.totalCount, 122);
     expect(learning.favoriteCount, 0);
     expect(learning.repeatPendingCount, 0);
     expect(learning.learnedCount, 0);
 
+    await achievementStore.unlock('first_step', DateTime.utc(2026, 7, 16));
+    await achievementService.initialize();
+    expect(achievementService.unlockedCount, 1);
     await settings.setDailyGoal(20);
     await settings.setSpeechRate(SpeechRatePreference.slow);
     await dataManagement.resetAllData();
     expect(resetStore.calls, [false, true]);
     expect(settings.dailyGoal, 5);
     expect(settings.speechRate, SpeechRatePreference.normal);
+    expect(achievementService.unlockedCount, 0);
     expect(CategoryCatalog.categories, hasLength(6));
     expect(
       CategoryCatalog.categories.expand((category) => category.words),
@@ -1377,6 +1519,27 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byIcon(Icons.favorite_rounded), findsOneWidget);
   });
+
+  testWidgets(
+    'İlk başarılı kelime değerlendirmesi başarım bildirimi gösterir',
+    (tester) async {
+      final achievementStore = FakeAchievementStore();
+      await pumpKelimoApp(tester, achievementStore: achievementStore);
+      await openAnimalsCategory(tester);
+      await tester.tap(find.text('Öğrenmeye Başla'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Kolay'));
+      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Yeni başarım!'), findsOneWidget);
+      expect(find.text('İlk Adım'), findsOneWidget);
+      expect(achievementStore.records.containsKey('first_step'), isTrue);
+      await tester.tap(find.text('Harika!'));
+      await tester.pumpAndSettle();
+    },
+  );
 
   testWidgets('Zor seçilen kelime bir kart sonra yeniden gösterilir', (
     tester,
@@ -2715,6 +2878,8 @@ void main() {
       expect(find.text('Favori kelime'), findsOneWidget);
       expect(find.text('Tamamlanan quiz'), findsOneWidget);
       expect(find.text('Quiz başarısı'), findsOneWidget);
+      expect(find.text('Başarımlar'), findsOneWidget);
+      expect(find.text('12 / 12 rozet'), findsOneWidget);
       expect(find.text('Yeni'), findsOneWidget);
       expect(find.text('122 • %100'), findsOneWidget);
       expect(find.text('Henüz tamamlanmış bir quiz yok.'), findsOneWidget);

@@ -4,8 +4,10 @@ import 'package:kelimo/models/word.dart';
 import 'package:kelimo/repositories/quiz_repository.dart';
 import 'package:kelimo/screens/quiz_result_screen.dart';
 import 'package:kelimo/services/xp_service.dart';
+import 'package:kelimo/services/achievement_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 import 'package:kelimo/widgets/scale_down_single_line_text.dart';
+import 'package:kelimo/widgets/achievement_notification.dart';
 
 class CategoryQuizScreen extends StatefulWidget {
   CategoryQuizScreen({
@@ -14,6 +16,7 @@ class CategoryQuizScreen extends StatefulWidget {
     required this.xpService,
     DateTime Function()? now,
     super.key,
+    this.achievementService,
   }) : now = now ?? DateTime.now,
        assert(category.words.length >= 4);
 
@@ -21,6 +24,7 @@ class CategoryQuizScreen extends StatefulWidget {
   final QuizStore quizStore;
   final XpService xpService;
   final DateTime Function() now;
+  final AchievementService? achievementService;
 
   @override
   State<CategoryQuizScreen> createState() => _CategoryQuizScreenState();
@@ -133,6 +137,16 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
       );
       widget.xpService.applyPersistedState(completion.xpState);
       if (!mounted) return;
+      final achievementService = widget.achievementService;
+      if (achievementService != null) {
+        try {
+          final unlocked = await achievementService.evaluate();
+          if (mounted) await showAchievementNotifications(context, unlocked);
+        } catch (_) {
+          // Quiz sonucu kaydedildi; başarım kontrolü akışı engellememeli.
+        }
+      }
+      if (!mounted) return;
 
       navigator.pushReplacement(
         MaterialPageRoute<void>(
@@ -151,6 +165,7 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
                     category: widget.category,
                     quizStore: widget.quizStore,
                     xpService: widget.xpService,
+                    achievementService: widget.achievementService,
                     now: widget.now,
                   ),
                 ),

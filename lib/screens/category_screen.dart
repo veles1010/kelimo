@@ -7,6 +7,7 @@ import 'package:kelimo/screens/category_quiz_screen.dart';
 import 'package:kelimo/screens/category_statistics_screen.dart';
 import 'package:kelimo/screens/word_card_screen.dart';
 import 'package:kelimo/services/streak_service.dart';
+import 'package:kelimo/services/achievement_service.dart';
 import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/services/xp_service.dart';
@@ -21,6 +22,7 @@ class CategoryScreen extends StatefulWidget {
     required this.quizStore,
     required this.statisticsService,
     required this.settingsService,
+    this.achievementService,
     super.key,
   });
 
@@ -31,6 +33,7 @@ class CategoryScreen extends StatefulWidget {
   final QuizStore quizStore;
   final StatisticsService statisticsService;
   final SettingsService settingsService;
+  final AchievementService? achievementService;
 
   @override
   State<CategoryScreen> createState() => _CategoryScreenState();
@@ -100,6 +103,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
                               wordProgressStore: wordProgressStore,
                               xpService: xpService,
                               settingsService: widget.settingsService,
+                              achievementService: widget.achievementService,
                             ),
                           ),
                         );
@@ -120,6 +124,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
                               category: widget.category,
                               quizStore: quizStore,
                               xpService: xpService,
+                              achievementService: widget.achievementService,
                             ),
                           ),
                         );

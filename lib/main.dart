@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:kelimo/data/local/database_service.dart';
 import 'package:kelimo/repositories/daily_progress_repository.dart';
+import 'package:kelimo/repositories/achievement_repository.dart';
 import 'package:kelimo/repositories/data_reset_repository.dart';
 import 'package:kelimo/repositories/quiz_repository.dart';
 import 'package:kelimo/repositories/settings_repository.dart';
@@ -8,6 +9,7 @@ import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/repositories/xp_repository.dart';
 import 'package:kelimo/screens/home_screen.dart';
 import 'package:kelimo/services/data_management_service.dart';
+import 'package:kelimo/services/achievement_service.dart';
 import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/services/statistics_service.dart';
@@ -27,6 +29,7 @@ class KelimoApp extends StatefulWidget {
     this.quizStore,
     this.settingsStore,
     this.dataResetStore,
+    this.achievementStore,
   });
 
   final WordProgressStore? wordProgressStore;
@@ -35,6 +38,7 @@ class KelimoApp extends StatefulWidget {
   final QuizStore? quizStore;
   final SettingsStore? settingsStore;
   final DataResetStore? dataResetStore;
+  final AchievementStore? achievementStore;
 
   @override
   State<KelimoApp> createState() => _KelimoAppState();
@@ -49,6 +53,7 @@ class _KelimoAppState extends State<KelimoApp> {
   late final StatisticsService _statisticsService;
   late final SettingsService _settingsService;
   late final DataManagementService _dataManagementService;
+  late final AchievementService _achievementService;
   late final Future<void> _initialization;
 
   @override
@@ -76,6 +81,15 @@ class _KelimoAppState extends State<KelimoApp> {
       streakService: _streakService,
       xpService: _xpService,
     );
+    _achievementService = AchievementService(
+      repository:
+          widget.achievementStore ?? AchievementRepository(databaseService),
+      metricsLoader: AchievementMetricsLoader(
+        wordProgressStore: _wordProgressStore,
+        quizStore: _quizStore,
+        streakService: _streakService,
+      ),
+    );
     _dataManagementService = DataManagementService(
       repository: widget.dataResetStore ?? DataResetRepository(databaseService),
       wordProgressStore: _wordProgressStore,
@@ -84,6 +98,7 @@ class _KelimoAppState extends State<KelimoApp> {
       xpService: _xpService,
       settingsService: _settingsService,
       statisticsService: _statisticsService,
+      achievementService: _achievementService,
     );
     _initialization = _initializePersistence();
   }
@@ -97,6 +112,7 @@ class _KelimoAppState extends State<KelimoApp> {
     await _settingsService.initialize();
     await _streakService.initialize();
     await _xpService.initialize();
+    await _achievementService.initialize();
   }
 
   @override
@@ -106,6 +122,7 @@ class _KelimoAppState extends State<KelimoApp> {
     _statisticsService.dispose();
     _settingsService.dispose();
     _dataManagementService.dispose();
+    _achievementService.dispose();
     super.dispose();
   }
 
@@ -134,6 +151,7 @@ class _KelimoAppState extends State<KelimoApp> {
             statisticsService: _statisticsService,
             settingsService: _settingsService,
             dataManagementService: _dataManagementService,
+            achievementService: _achievementService,
           );
         },
       ),

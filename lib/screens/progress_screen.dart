@@ -1,15 +1,23 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:kelimo/data/achievement_catalog.dart';
 import 'package:kelimo/models/progress_statistics.dart';
 import 'package:kelimo/models/quiz_attempt.dart';
+import 'package:kelimo/screens/achievements_screen.dart';
+import 'package:kelimo/services/achievement_service.dart';
 import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 
 class ProgressScreen extends StatefulWidget {
-  const ProgressScreen({required this.statisticsService, super.key});
+  const ProgressScreen({
+    required this.statisticsService,
+    super.key,
+    this.achievementService,
+  });
 
   final StatisticsService statisticsService;
+  final AchievementService? achievementService;
 
   @override
   State<ProgressScreen> createState() => _ProgressScreenState();
@@ -20,6 +28,18 @@ class _ProgressScreenState extends State<ProgressScreen> {
   void initState() {
     super.initState();
     unawaited(widget.statisticsService.refresh());
+    final achievementService = widget.achievementService;
+    if (achievementService != null) {
+      unawaited(_refreshAchievements(achievementService));
+    }
+  }
+
+  Future<void> _refreshAchievements(AchievementService service) async {
+    try {
+      await service.evaluate();
+    } catch (_) {
+      // İstatistik ekranı başarım verisi geçici olarak okunamasa da açılmalı.
+    }
   }
 
   @override
@@ -60,6 +80,23 @@ class _ProgressScreenState extends State<ProgressScreen> {
                         const Text('Tüm çalışmalarının güncel özeti'),
                         const SizedBox(height: 24),
                         _OverviewGrid(statistics: statistics),
+                        if (widget.achievementService case final service?) ...[
+                          const SizedBox(height: 16),
+                          _AchievementsLinkCard(
+                            service: service,
+                            onTap: () async {
+                              await Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) =>
+                                      AchievementsScreen(service: service),
+                                ),
+                              );
+                              if (mounted) {
+                                unawaited(_refreshAchievements(service));
+                              }
+                            },
+                          ),
+                        ],
                         const SizedBox(height: 16),
                         _WordDistributionCard(
                           distribution: statistics.distribution,
@@ -88,6 +125,64 @@ class _ProgressScreenState extends State<ProgressScreen> {
           );
         },
       ),
+    );
+  }
+}
+
+class _AchievementsLinkCard extends StatelessWidget {
+  const _AchievementsLinkCard({required this.service, required this.onTap});
+
+  final AchievementService service;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = AchievementCatalog.achievements.length;
+    return AnimatedBuilder(
+      animation: service,
+      builder: (context, child) {
+        final unlocked = service.unlockedCount;
+        return Card(
+          key: const ValueKey('progress-achievements-card'),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: AppDimensions.cardPadding,
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.workspace_premium_rounded,
+                    size: 36,
+                    color: Theme.of(context).colorScheme.secondary,
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Başarımlar',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 4),
+                        Text('$unlocked / $total rozet'),
+                        const SizedBox(height: 8),
+                        LinearProgressIndicator(
+                          value: total == 0 ? 0 : unlocked / total,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Icon(Icons.chevron_right_rounded),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

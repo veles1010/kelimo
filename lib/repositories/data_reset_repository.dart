@@ -17,6 +17,7 @@ class DataResetRepository implements DataResetStore {
     'quiz_attempts',
     'streak_state',
     'xp_state',
+    'achievement_unlocks',
   ];
 
   final DatabaseService _databaseService;
