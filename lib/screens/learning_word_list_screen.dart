@@ -182,6 +182,11 @@ class _WordRow extends StatelessWidget {
                       children: [
                         _Label(text: entry.category.title),
                         _Label(text: entry.status.label),
+                        if (entry.reviewTimeLabel case final label?)
+                          _Label(
+                            text: label,
+                            key: ValueKey('review-time-${entry.word.id}'),
+                          ),
                       ],
                     ),
                   ],
@@ -205,7 +210,7 @@ class _WordRow extends StatelessWidget {
 }
 
 class _Label extends StatelessWidget {
-  const _Label({required this.text});
+  const _Label({required this.text, super.key});
 
   final String text;
 

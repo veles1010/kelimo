@@ -1,10 +1,14 @@
 import 'package:flutter/foundation.dart';
+import 'package:kelimo/services/review_scheduler.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
 class DatabaseService {
   static const databaseName = 'kelimo.db';
-  static const databaseVersion = 4;
+  static const databaseVersion = 5;
+  static const addReviewStageColumnSql =
+      'ALTER TABLE word_progress ADD COLUMN review_stage '
+      'INTEGER NOT NULL DEFAULT 0';
   static const createAppSettingsTableSql = '''
     CREATE TABLE IF NOT EXISTS app_settings (
       key TEXT PRIMARY KEY,
@@ -52,6 +56,7 @@ class DatabaseService {
     if (version >= 2) await _migrateVersion1To2(database);
     if (version >= 3) await _migrateVersion2To3(database);
     if (version >= 4) await _migrateVersion3To4(database);
+    if (version >= 5) await _migrateVersion4To5(database);
   }
 
   Future<void> _createVersion1(Database database) async {
@@ -99,6 +104,9 @@ class DatabaseService {
     if (oldVersion < 4 && newVersion >= 4) {
       await _migrateVersion3To4(database);
     }
+    if (oldVersion < 5 && newVersion >= 5) {
+      await _migrateVersion4To5(database);
+    }
   }
 
   Future<void> _migrateVersion1To2(Database database) async {
@@ -133,4 +141,45 @@ class DatabaseService {
   Future<void> _migrateVersion3To4(Database database) async {
     await database.execute(createAppSettingsTableSql);
   }
+
+  Future<void> _migrateVersion4To5(Database database) async {
+    final columns = await database.rawQuery('PRAGMA table_info(word_progress)');
+    final hasReviewStage = columns.any(
+      (column) => column['name'] == 'review_stage',
+    );
+    if (hasReviewStage) return;
+    await database.execute(addReviewStageColumnSql);
+
+    final migratedAt = DateTime.now().toUtc();
+    final rows = await database.query('word_progress');
+    final batch = database.batch();
+    for (final row in rows) {
+      final wordId = row['word_id']! as String;
+      final mastery = row['mastery'] as String? ?? 'new';
+      final lastReviewedValue = row['last_reviewed_at'] as String?;
+      final existingNextReviewValue = row['next_review_at'] as String?;
+
+      final schedule = ReviewScheduler.legacySchedule(
+        mastery: mastery,
+        migratedAt: migratedAt,
+        lastReviewedAt: _tryParseUtc(lastReviewedValue),
+        existingNextReviewAt: _tryParseUtc(existingNextReviewValue),
+      );
+      if (schedule == null) continue;
+      batch.update(
+        'word_progress',
+        {
+          'review_stage': schedule.reviewStage,
+          'next_review_at': schedule.nextReviewAt.toIso8601String(),
+        },
+        where: 'word_id = ?',
+        whereArgs: [wordId],
+      );
+    }
+    await batch.commit(noResult: true);
+  }
+}
+
+DateTime? _tryParseUtc(String? value) {
+  return value == null ? null : DateTime.tryParse(value)?.toUtc();
 }

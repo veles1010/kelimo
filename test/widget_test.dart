@@ -142,6 +142,8 @@ WordProgress testWordProgress({
   String mastery = 'new',
   int repetitionCount = 0,
   bool isFavorite = false,
+  int reviewStage = 0,
+  DateTime? nextReviewAt,
 }) {
   final now = DateTime.parse('2026-07-14T12:00:00.000');
   return WordProgress(
@@ -152,8 +154,11 @@ WordProgress testWordProgress({
     correctCount: mastery == 'easy' ? 1 : 0,
     wrongCount: mastery == 'again' || mastery == 'hard' ? 1 : 0,
     lastReviewedAt: repetitionCount > 0 ? now : null,
-    nextReviewAt: null,
+    nextReviewAt:
+        nextReviewAt ??
+        ((mastery == 'again' || mastery == 'hard') ? now : null),
     updatedAt: now,
+    reviewStage: reviewStage,
   );
 }
 
@@ -716,6 +721,7 @@ void main() {
       lastReviewedAt: reviewedAt,
       nextReviewAt: nextReviewAt,
       updatedAt: reviewedAt,
+      reviewStage: 2,
     );
 
     final restored = WordProgress.fromMap(progress.toMap());
@@ -726,10 +732,13 @@ void main() {
     expect(restored.repetitionCount, 3);
     expect(restored.correctCount, 1);
     expect(restored.wrongCount, 2);
-    expect(restored.lastReviewedAt, reviewedAt);
-    expect(restored.nextReviewAt, nextReviewAt);
-    expect(restored.updatedAt, reviewedAt);
+    expect(restored.lastReviewedAt, reviewedAt.toUtc());
+    expect(restored.nextReviewAt, nextReviewAt.toUtc());
+    expect(restored.updatedAt, reviewedAt.toUtc());
+    expect(restored.reviewStage, 2);
     expect(progress.toMap()['is_favorite'], 1);
+    expect(progress.toMap()['review_stage'], 2);
+    expect(progress.toMap()['next_review_at'], endsWith('Z'));
   });
 
   test('Günlük progress mapping bool değerlerini 0 ve 1 olarak saklar', () {
@@ -762,8 +771,8 @@ void main() {
     expect(restored.updatedAt, updatedAt);
   });
 
-  test('Veritabanı şema sürümü ayar migration ile 4 olur', () {
-    expect(DatabaseService.databaseVersion, 4);
+  test('Veritabanı şema sürümü tekrar planı migration ile 5 olur', () {
+    expect(DatabaseService.databaseVersion, 5);
     expect(
       DatabaseService.createAppSettingsTableSql,
       contains('CREATE TABLE IF NOT EXISTS app_settings'),
@@ -784,6 +793,14 @@ void main() {
     expect(
       DatabaseService.createAppSettingsTableSql,
       isNot(contains('DELETE')),
+    );
+    expect(
+      DatabaseService.addReviewStageColumnSql,
+      contains('ALTER TABLE word_progress ADD COLUMN review_stage'),
+    );
+    expect(
+      DatabaseService.addReviewStageColumnSql,
+      contains('INTEGER NOT NULL DEFAULT 0'),
     );
     expect(DataResetRepository.learningDataTables, [
       'word_progress',
@@ -961,6 +978,7 @@ void main() {
     expect(settings.dailyGoal, 5);
     expect(settings.speechRate, SpeechRatePreference.normal);
     expect(wordStore.progressFor('dog').isFavorite, isTrue);
+    expect(wordStore.progressFor('dog').nextReviewAt, isNotNull);
     expect(await quizStore.getTotalQuizCount(), 1);
     expect(xpService.totalXp, 5);
 
@@ -969,6 +987,7 @@ void main() {
     expect(resetStore.calls, [false]);
     expect(settings.dailyGoal, 10);
     expect(wordStore.getAllProgress(), isEmpty);
+    expect(wordStore.progressFor('dog').nextReviewAt, isNull);
     expect(await quizStore.getAllAttempts(), isEmpty);
     expect(xpService.totalXp, 0);
     expect(streak.todayCount, 0);
@@ -1182,6 +1201,11 @@ void main() {
       expect(progress.correctCount, 0);
       expect(progress.wrongCount, 1);
       expect(progress.lastReviewedAt, isNotNull);
+      expect(progress.reviewStage, 0);
+      expect(
+        progress.nextReviewAt,
+        DateTime.parse('2026-07-15T10:30:00.000').toUtc(),
+      );
     },
   );
 
@@ -2327,6 +2351,7 @@ void main() {
 
     expect(find.byType(LearningCenterScreen), findsOneWidget);
     expect(find.text('Öğrenme Merkezi'), findsOneWidget);
+    expect(find.text('Çalışma zamanı gelen kelimeler'), findsOneWidget);
     expect(find.text('Toplam kelime'), findsOneWidget);
     expect(find.text('Favoriler'), findsOneWidget);
     expect(find.text('Tekrar bekleyenler'), findsOneWidget);
@@ -2399,6 +2424,7 @@ void main() {
     expect(find.text('Köpek'), findsOneWidget);
     expect(find.text('Hayvanlar'), findsWidgets);
     expect(find.text('Öğreniliyor'), findsOneWidget);
+    expect(find.text('Şimdi'), findsOneWidget);
     expect(find.text('Yeni'), findsWidgets);
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('learning-word-bird')),

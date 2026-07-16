@@ -88,8 +88,7 @@ class _LearningCenterScreenState extends State<LearningCenterScreen> {
                     key: const ValueKey('learning-filter-repeat'),
                     icon: Icons.replay_rounded,
                     title: 'Tekrar Bekleyenler',
-                    description:
-                        'Tekrar Et veya Zor olarak işaretlediğin kelimeler',
+                    description: 'Çalışma zamanı gelen kelimeler',
                     count: _snapshot.repeatPendingCount,
                     onTap: () =>
                         _openFilter(LearningCenterFilter.repeatPending),

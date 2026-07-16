@@ -3,13 +3,19 @@ import 'package:kelimo/models/learning_center.dart';
 import 'package:kelimo/models/word_progress.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/services/statistics_service.dart';
+import 'package:kelimo/utils/review_time_label.dart';
 
 class LearningCenterService {
-  const LearningCenterService({required this.wordProgressStore});
+  LearningCenterService({
+    required this.wordProgressStore,
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now;
 
   final WordProgressStore wordProgressStore;
+  final DateTime Function() _now;
 
   LearningCenterSnapshot load() {
+    final now = _now();
     final progressByWordId = {
       for (final progress in wordProgressStore.getAllProgress())
         progress.wordId: progress,
@@ -21,12 +27,18 @@ class LearningCenterService {
       for (final word in category.words) {
         final progress =
             progressByWordId[word.id] ?? WordProgress.initial(word.id);
+        final nextReviewAt = progress.nextReviewAt;
         words.add(
           LearningCenterWord(
             category: category,
             word: word,
             progress: progress,
             status: _statusFor(progress),
+            isReviewDue:
+                nextReviewAt != null && !nextReviewAt.isAfter(now.toUtc()),
+            reviewTimeLabel: nextReviewAt == null
+                ? null
+                : reviewTimeLabel(nextReviewAt, now: now),
           ),
         );
       }

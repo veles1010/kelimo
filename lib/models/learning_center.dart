@@ -20,12 +20,16 @@ class LearningCenterWord {
     required this.word,
     required this.progress,
     required this.status,
+    required this.isReviewDue,
+    required this.reviewTimeLabel,
   });
 
   final LearningCategory category;
   final Word word;
   final WordProgress progress;
   final LearningCenterWordStatus status;
+  final bool isReviewDue;
+  final String? reviewTimeLabel;
 }
 
 class LearningCenterSnapshot {
@@ -36,13 +40,7 @@ class LearningCenterSnapshot {
   List<LearningCenterWord> wordsFor(LearningCenterFilter filter) {
     return switch (filter) {
       LearningCenterFilter.repeatPending =>
-        allWords
-            .where(
-              (entry) =>
-                  entry.progress.mastery == 'again' ||
-                  entry.progress.mastery == 'hard',
-            )
-            .toList(growable: false),
+        allWords.where((entry) => entry.isReviewDue).toList(growable: false),
       LearningCenterFilter.favorites =>
         allWords
             .where((entry) => entry.progress.isFavorite)

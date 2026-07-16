@@ -2,21 +2,31 @@ import 'package:flutter/foundation.dart';
 import 'package:kelimo/data/local/database_service.dart';
 import 'package:kelimo/models/word_progress.dart';
 import 'package:kelimo/services/learning_engine.dart';
+import 'package:kelimo/services/review_scheduler.dart';
 import 'package:sqflite/sqflite.dart';
 
 WordProgress wordProgressAfterLearningResult(
   WordProgress current,
   LearningReviewResult result, {
   DateTime? reviewedAt,
+  ReviewScheduler? scheduler,
 }) {
-  final reviewDate = reviewedAt ?? DateTime.now();
+  final reviewScheduler = scheduler ?? ReviewScheduler();
+  final reviewDate = (reviewedAt ?? reviewScheduler.currentTime).toUtc();
   final isCorrect = result.rating == LearningRating.easy;
+  final schedule = reviewScheduler.schedule(
+    rating: result.rating,
+    currentStage: current.reviewStage,
+    reviewedAt: reviewDate,
+  );
   return current.copyWith(
     mastery: result.rating.name,
     repetitionCount: current.repetitionCount + 1,
     correctCount: current.correctCount + (isCorrect ? 1 : 0),
     wrongCount: current.wrongCount + (isCorrect ? 0 : 1),
     lastReviewedAt: reviewDate,
+    reviewStage: schedule.reviewStage,
+    nextReviewAt: schedule.nextReviewAt,
     updatedAt: reviewDate,
   );
 }
@@ -36,9 +46,13 @@ abstract interface class WordProgressStore {
 }
 
 class WordProgressRepository implements WordProgressStore {
-  WordProgressRepository(this._databaseService);
+  WordProgressRepository(
+    this._databaseService, {
+    ReviewScheduler? reviewScheduler,
+  }) : _reviewScheduler = reviewScheduler ?? ReviewScheduler();
 
   final DatabaseService _databaseService;
+  final ReviewScheduler _reviewScheduler;
   final Map<String, WordProgress> _progressByWordId = {};
 
   @override
@@ -111,6 +125,7 @@ class WordProgressRepository implements WordProgressStore {
       current,
       result,
       reviewedAt: reviewedAt,
+      scheduler: _reviewScheduler,
     );
     await saveProgress(progress);
     return progress;

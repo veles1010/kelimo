@@ -9,6 +9,7 @@ class WordProgress {
     required this.lastReviewedAt,
     required this.nextReviewAt,
     required this.updatedAt,
+    this.reviewStage = 0,
   });
 
   factory WordProgress.initial(String wordId, {DateTime? now}) {
@@ -22,6 +23,7 @@ class WordProgress {
       lastReviewedAt: null,
       nextReviewAt: null,
       updatedAt: now ?? DateTime.now(),
+      reviewStage: 0,
     );
   }
 
@@ -36,6 +38,7 @@ class WordProgress {
       lastReviewedAt: _dateTimeFromDatabase(map['last_reviewed_at']),
       nextReviewAt: _dateTimeFromDatabase(map['next_review_at']),
       updatedAt: DateTime.parse(map['updated_at']! as String),
+      reviewStage: (map['review_stage'] as int?) ?? 0,
     );
   }
 
@@ -48,6 +51,7 @@ class WordProgress {
   final DateTime? lastReviewedAt;
   final DateTime? nextReviewAt;
   final DateTime updatedAt;
+  final int reviewStage;
 
   Map<String, Object?> toMap() {
     return {
@@ -57,9 +61,10 @@ class WordProgress {
       'repetition_count': repetitionCount,
       'correct_count': correctCount,
       'wrong_count': wrongCount,
-      'last_reviewed_at': lastReviewedAt?.toIso8601String(),
-      'next_review_at': nextReviewAt?.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
+      'last_reviewed_at': lastReviewedAt?.toUtc().toIso8601String(),
+      'next_review_at': nextReviewAt?.toUtc().toIso8601String(),
+      'updated_at': updatedAt.toUtc().toIso8601String(),
+      'review_stage': reviewStage,
     };
   }
 
@@ -72,6 +77,7 @@ class WordProgress {
     DateTime? lastReviewedAt,
     DateTime? nextReviewAt,
     DateTime? updatedAt,
+    int? reviewStage,
   }) {
     return WordProgress(
       wordId: wordId,
@@ -83,10 +89,11 @@ class WordProgress {
       lastReviewedAt: lastReviewedAt ?? this.lastReviewedAt,
       nextReviewAt: nextReviewAt ?? this.nextReviewAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      reviewStage: reviewStage ?? this.reviewStage,
     );
   }
 }
 
 DateTime? _dateTimeFromDatabase(Object? value) {
-  return value == null ? null : DateTime.parse(value as String);
+  return value == null ? null : DateTime.parse(value as String).toUtc();
 }
