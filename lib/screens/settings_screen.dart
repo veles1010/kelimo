@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:kelimo/models/app_settings.dart';
 import 'package:kelimo/services/data_management_service.dart';
+import 'package:kelimo/services/daily_reminder_service.dart';
 import 'package:kelimo/services/english_tts_service.dart';
+import 'package:kelimo/services/notification_service.dart';
 import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 
@@ -12,12 +14,14 @@ class SettingsScreen extends StatefulWidget {
     required this.settingsService,
     required this.dataManagementService,
     this.previewTtsService,
+    this.dailyReminderService,
     super.key,
   });
 
   final SettingsService settingsService;
   final DataManagementService dataManagementService;
   final EnglishTtsService? previewTtsService;
+  final DailyReminderService? dailyReminderService;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -66,6 +70,104 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Ses oynatılamadı')));
+    }
+  }
+
+  Future<void> _setReminderEnabled(bool enabled) async {
+    final service = widget.dailyReminderService;
+    if (service == null || _isBusy) return;
+    setState(() => _isBusy = true);
+    final result = await service.setEnabled(enabled);
+    if (!mounted) return;
+    final message = switch (result) {
+      ReminderUpdateResult.success =>
+        enabled ? 'Günlük hatırlatıcı açıldı' : 'Günlük hatırlatıcı kapatıldı',
+      ReminderUpdateResult.permissionDenied =>
+        'Bildirim izni verilmedi. Hatırlatıcı açılamadı.',
+      ReminderUpdateResult.permanentlyDenied =>
+        'Bildirim izni kapalı. Cihaz ayarlarından izin vermelisin.',
+      ReminderUpdateResult.failed => 'Hatırlatıcı güncellenemedi',
+    };
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+    setState(() => _isBusy = false);
+  }
+
+  Future<void> _pickReminderTime() async {
+    final service = widget.dailyReminderService;
+    if (service == null || _isBusy) return;
+    final selected = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: service.hour, minute: service.minute),
+      helpText: 'Hatırlatma saatini seç',
+      cancelText: 'İptal',
+      confirmText: 'Kaydet',
+    );
+    if (selected == null || !mounted) return;
+    setState(() => _isBusy = true);
+    final saved = await service.setTime(
+      hour: selected.hour,
+      minute: selected.minute,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          saved
+              ? 'Hatırlatma saati güncellendi'
+              : 'Hatırlatma saati planlanamadı',
+        ),
+      ),
+    );
+    setState(() => _isBusy = false);
+  }
+
+  Future<void> _requestNotificationPermission() async {
+    final service = widget.dailyReminderService;
+    if (service == null || _isBusy) return;
+    setState(() => _isBusy = true);
+    final status = await service.requestPermission();
+    if (!mounted) return;
+    final message = switch (status) {
+      NotificationPermissionStatus.granted => 'Bildirim izni verildi',
+      NotificationPermissionStatus.permanentlyDenied =>
+        'İzin kapalı. Cihaz ayarlarından bildirimlere izin vermelisin.',
+      _ => 'Bildirim izni verilmedi',
+    };
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+    setState(() => _isBusy = false);
+  }
+
+  Future<void> _testNotification() async {
+    final service = widget.dailyReminderService;
+    if (service == null || _isBusy) return;
+    setState(() => _isBusy = true);
+    final result = await service.scheduleTestNotification();
+    if (!mounted) return;
+    final message = switch (result) {
+      ReminderUpdateResult.success =>
+        'Test bildirimi 10 saniye sonrası için planlandı',
+      ReminderUpdateResult.permissionDenied =>
+        'Bildirim izni verilmedi. Test bildirimi planlanamadı.',
+      ReminderUpdateResult.permanentlyDenied =>
+        'Bildirim izni kapalı. Cihaz ayarlarından izin vermelisin.',
+      ReminderUpdateResult.failed => 'Test bildirimi planlanamadı',
+    };
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+    setState(() => _isBusy = false);
+  }
+
+  Future<void> _resetPreferences() async {
+    final reminderService = widget.dailyReminderService;
+    if (reminderService != null) {
+      await reminderService.resetPreferences();
+    } else {
+      await widget.settingsService.resetToDefaults();
     }
   }
 
@@ -127,7 +229,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return SafeArea(
       bottom: false,
       child: AnimatedBuilder(
-        animation: widget.settingsService,
+        animation: widget.dailyReminderService == null
+            ? widget.settingsService
+            : Listenable.merge([
+                widget.settingsService,
+                widget.dailyReminderService!,
+              ]),
         builder: (context, child) => ListView(
           padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
           children: [
@@ -176,6 +283,76 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
+                    if (widget.dailyReminderService case final service?) ...[
+                      _Section(
+                        title: 'Hatırlatıcılar',
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            SwitchListTile.adaptive(
+                              key: const ValueKey('daily-reminder-switch'),
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text('Günlük çalışma hatırlatıcısı'),
+                              subtitle: const Text(
+                                'Her gün seçtiğin saatte çalışmanı hatırlatır.',
+                              ),
+                              value: service.isEnabled,
+                              onChanged: _isBusy || service.isLoading
+                                  ? null
+                                  : (value) =>
+                                        unawaited(_setReminderEnabled(value)),
+                            ),
+                            const SizedBox(height: 8),
+                            ListTile(
+                              key: const ValueKey('reminder-time-tile'),
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Icons.schedule_rounded),
+                              title: const Text('Hatırlatma saati'),
+                              subtitle: Text(
+                                formatReminderTime24Hour(
+                                  service.hour,
+                                  service.minute,
+                                ),
+                              ),
+                              trailing: const Icon(Icons.chevron_right_rounded),
+                              enabled: !_isBusy,
+                              onTap: _isBusy
+                                  ? null
+                                  : () => unawaited(_pickReminderTime()),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Bildirim izni: ${_permissionLabel(service.permissionStatus)}',
+                            ),
+                            if (service.permissionStatus !=
+                                NotificationPermissionStatus.granted) ...[
+                              const SizedBox(height: 10),
+                              OutlinedButton.icon(
+                                onPressed: _isBusy
+                                    ? null
+                                    : () => unawaited(
+                                        _requestNotificationPermission(),
+                                      ),
+                                icon: const Icon(
+                                  Icons.notifications_active_outlined,
+                                ),
+                                label: const Text('Bildirim izni ver'),
+                              ),
+                            ],
+                            const SizedBox(height: 10),
+                            OutlinedButton.icon(
+                              key: const ValueKey('test-reminder-notification'),
+                              onPressed: _isBusy
+                                  ? null
+                                  : () => unawaited(_testNotification()),
+                              icon: const Icon(Icons.notification_add_outlined),
+                              label: const Text('Bildirimi test et'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     _Section(
                       title: 'Ses',
                       child: Column(
@@ -225,12 +402,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     _confirmReset(
                                       title: 'Tercihleri sıfırla',
                                       message:
-                                          'Günlük hedef ve telaffuz hızı '
-                                          'varsayılan değerlere dönecek. '
-                                          'Öğrenme verilerin korunacak.',
-                                      action: widget
-                                          .settingsService
-                                          .resetToDefaults,
+                                          'Günlük hedef, telaffuz hızı ve '
+                                          'hatırlatıcı ayarları varsayılan '
+                                          'değerlere dönecek. Öğrenme '
+                                          'verilerin korunacak.',
+                                      action: _resetPreferences,
                                       successMessage:
                                           'Tercihler varsayılana döndürüldü',
                                     ),
@@ -301,6 +477,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
   }
+}
+
+String formatReminderTime24Hour(int hour, int minute) {
+  return '${hour.toString().padLeft(2, '0')}:'
+      '${minute.toString().padLeft(2, '0')}';
+}
+
+String _permissionLabel(NotificationPermissionStatus status) {
+  return switch (status) {
+    NotificationPermissionStatus.granted => 'İzin verildi',
+    NotificationPermissionStatus.permanentlyDenied =>
+      'Cihaz ayarlarında kapalı',
+    NotificationPermissionStatus.denied => 'İzin verilmedi',
+    NotificationPermissionStatus.unknown => 'Kontrol ediliyor',
+  };
 }
 
 class _Section extends StatelessWidget {

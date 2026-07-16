@@ -5,6 +5,7 @@ import 'package:kelimo/models/learning_category.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/services/english_tts_service.dart';
 import 'package:kelimo/services/achievement_service.dart';
+import 'package:kelimo/services/daily_reminder_service.dart';
 import 'package:kelimo/services/learning_engine.dart';
 import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/services/streak_service.dart';
@@ -23,6 +24,7 @@ class WordCardScreen extends StatefulWidget {
     this.initialWordIndex = 0,
     this.settingsService,
     this.achievementService,
+    this.dailyReminderService,
   }) : assert(
          initialWordIndex >= 0 && initialWordIndex < category.words.length,
        );
@@ -35,6 +37,7 @@ class WordCardScreen extends StatefulWidget {
   final int initialWordIndex;
   final SettingsService? settingsService;
   final AchievementService? achievementService;
+  final DailyReminderService? dailyReminderService;
 
   @override
   State<WordCardScreen> createState() => _WordCardScreenState();
@@ -184,6 +187,7 @@ class _WordCardScreenState extends State<WordCardScreen>
     }
 
     if (progressSaved) await _evaluateAchievements();
+    if (progressSaved) await widget.dailyReminderService?.refreshSchedule();
 
     if (_learningEngine.isComplete) await _showCompletionDialog();
   }

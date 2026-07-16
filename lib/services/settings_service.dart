@@ -19,6 +19,9 @@ class SettingsService extends ChangeNotifier {
   int get activeDailyGoal => _activeDailyGoal;
   SpeechRatePreference get speechRate => _settings.speechRate;
   double get ttsSpeechRate => speechRate.ttsRate;
+  bool get reminderEnabled => _settings.reminderEnabled;
+  int get reminderHour => _settings.reminderHour;
+  int get reminderMinute => _settings.reminderMinute;
   bool get isLoading => _isLoading;
 
   Future<void> initialize() async {
@@ -48,6 +51,21 @@ class SettingsService extends ChangeNotifier {
   Future<void> setSpeechRate(SpeechRatePreference speechRate) async {
     await repository.setSpeechRate(speechRate);
     _settings = _settings.copyWith(speechRate: speechRate);
+    notifyListeners();
+  }
+
+  Future<void> setReminderEnabled(bool enabled) async {
+    await repository.setReminderEnabled(enabled);
+    _settings = _settings.copyWith(reminderEnabled: enabled);
+    notifyListeners();
+  }
+
+  Future<void> setReminderTime({required int hour, required int minute}) async {
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+      throw ArgumentError('Geçersiz hatırlatma saati');
+    }
+    await repository.setReminderTime(hour: hour, minute: minute);
+    _settings = _settings.copyWith(reminderHour: hour, reminderMinute: minute);
     notifyListeners();
   }
 

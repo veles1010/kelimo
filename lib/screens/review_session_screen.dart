@@ -6,6 +6,7 @@ import 'package:kelimo/models/review_session.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/services/english_tts_service.dart';
 import 'package:kelimo/services/achievement_service.dart';
+import 'package:kelimo/services/daily_reminder_service.dart';
 import 'package:kelimo/services/learning_engine.dart';
 import 'package:kelimo/services/review_session_builder.dart';
 import 'package:kelimo/services/settings_service.dart';
@@ -27,6 +28,7 @@ class ReviewSessionScreen extends StatefulWidget {
     super.key,
     this.ttsService,
     this.achievementService,
+    this.dailyReminderService,
   }) : assert(initialItems.length > 0);
 
   final List<ReviewSessionItem> initialItems;
@@ -37,6 +39,7 @@ class ReviewSessionScreen extends StatefulWidget {
   final SettingsService settingsService;
   final EnglishTtsService? ttsService;
   final AchievementService? achievementService;
+  final DailyReminderService? dailyReminderService;
 
   @override
   State<ReviewSessionScreen> createState() => _ReviewSessionScreenState();
@@ -183,6 +186,7 @@ class _ReviewSessionScreenState extends State<ReviewSessionScreen>
       );
     }
     await _evaluateAchievements();
+    await widget.dailyReminderService?.refreshSchedule();
 
     _counter.record(rating);
     unawaited(_ttsService.stop());

@@ -133,6 +133,16 @@ class _ReviewSettingsStore implements SettingsStore {
   Future<void> setSpeechRate(SpeechRatePreference speechRate) async {
     settings = settings.copyWith(speechRate: speechRate);
   }
+
+  @override
+  Future<void> setReminderEnabled(bool enabled) async {
+    settings = settings.copyWith(reminderEnabled: enabled);
+  }
+
+  @override
+  Future<void> setReminderTime({required int hour, required int minute}) async {
+    settings = settings.copyWith(reminderHour: hour, reminderMinute: minute);
+  }
 }
 
 class _ReviewTtsEngine implements TtsEngine {

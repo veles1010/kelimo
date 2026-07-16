@@ -12,6 +12,8 @@ import 'package:kelimo/screens/progress_screen.dart';
 import 'package:kelimo/screens/settings_screen.dart';
 import 'package:kelimo/services/data_management_service.dart';
 import 'package:kelimo/services/achievement_service.dart';
+import 'package:kelimo/services/app_navigation_controller.dart';
+import 'package:kelimo/services/daily_reminder_service.dart';
 import 'package:kelimo/services/learning_center_service.dart';
 import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/services/streak_service.dart';
@@ -29,6 +31,9 @@ class HomeScreen extends StatefulWidget {
     required this.settingsService,
     required this.dataManagementService,
     this.achievementService,
+    this.learningCenterService,
+    this.dailyReminderService,
+    this.navigationController,
     super.key,
   });
 
@@ -40,6 +45,9 @@ class HomeScreen extends StatefulWidget {
   final SettingsService settingsService;
   final DataManagementService dataManagementService;
   final AchievementService? achievementService;
+  final LearningCenterService? learningCenterService;
+  final DailyReminderService? dailyReminderService;
+  final AppNavigationController? navigationController;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -53,10 +61,12 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _learningCenterService = LearningCenterService(
-      wordProgressStore: widget.wordProgressStore,
-    );
+    _learningCenterService =
+        widget.learningCenterService ??
+        LearningCenterService(wordProgressStore: widget.wordProgressStore);
     widget.dataManagementService.addListener(_handleDataReset);
+    widget.navigationController?.addListener(_handleNavigationRequest);
+    _handleNavigationRequest();
     unawaited(widget.statisticsService.refresh());
     _categoryProgress = _loadCategoryProgress();
   }
@@ -65,9 +75,17 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) _reloadCategoryProgress();
   }
 
+  void _handleNavigationRequest() {
+    if (widget.navigationController?.consumeDailyReviewRequest() != true) {
+      return;
+    }
+    if (mounted) setState(() => _selectedIndex = 1);
+  }
+
   @override
   void dispose() {
     widget.dataManagementService.removeListener(_handleDataReset);
+    widget.navigationController?.removeListener(_handleNavigationRequest);
     super.dispose();
   }
 
@@ -102,6 +120,7 @@ class _HomeScreenState extends State<HomeScreen> {
           xpService: xpService,
           settingsService: widget.settingsService,
           achievementService: widget.achievementService,
+          dailyReminderService: widget.dailyReminderService,
         ),
         2 => ProgressScreen(
           statisticsService: widget.statisticsService,
@@ -110,6 +129,7 @@ class _HomeScreenState extends State<HomeScreen> {
         3 => SettingsScreen(
           settingsService: widget.settingsService,
           dataManagementService: widget.dataManagementService,
+          dailyReminderService: widget.dailyReminderService,
         ),
         _ => SafeArea(
           bottom: false,
@@ -206,6 +226,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                                     widget.settingsService,
                                                 achievementService:
                                                     widget.achievementService,
+                                                dailyReminderService:
+                                                    widget.dailyReminderService,
                                               ),
                                             ),
                                           );

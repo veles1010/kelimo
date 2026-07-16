@@ -40,8 +40,11 @@ import 'package:kelimo/screens/word_card_screen.dart';
 import 'package:kelimo/services/english_tts_service.dart';
 import 'package:kelimo/services/data_management_service.dart';
 import 'package:kelimo/services/achievement_service.dart';
+import 'package:kelimo/services/app_navigation_controller.dart';
+import 'package:kelimo/services/daily_reminder_service.dart';
 import 'package:kelimo/services/learning_engine.dart';
 import 'package:kelimo/services/learning_center_service.dart';
+import 'package:kelimo/services/notification_service.dart';
 import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/services/statistics_service.dart';
@@ -84,6 +87,107 @@ class FakeTtsEngine implements TtsEngine {
   Future<void> stop() async {
     stopCallCount++;
   }
+}
+
+class FakeNotificationService implements NotificationService {
+  NotificationPermissionStatus status = NotificationPermissionStatus.granted;
+  NotificationPermissionStatus requestResult =
+      NotificationPermissionStatus.granted;
+  String? launchPayload;
+  int initializeCalls = 0;
+  int requestCalls = 0;
+  int cancelCalls = 0;
+  int cancelTestCalls = 0;
+  int scheduleCalls = 0;
+  int testScheduleCalls = 0;
+  bool failTestScheduling = false;
+  final schedules =
+      <({int hour, int minute, String title, String body, String payload})>[];
+  final testSchedules =
+      <({String title, String body, String payload, Duration delay})>[];
+  final StreamController<String> controller = StreamController.broadcast();
+
+  @override
+  Stream<String> get payloads => controller.stream;
+
+  @override
+  Future<void> cancelDailyReminder() async {
+    cancelCalls++;
+    schedules.clear();
+  }
+
+  @override
+  Future<void> cancelTestNotification() async {
+    cancelTestCalls++;
+    testSchedules.clear();
+  }
+
+  @override
+  Future<void> cancelAllReminders() async {
+    await cancelDailyReminder();
+    await cancelTestNotification();
+  }
+
+  @override
+  void dispose() => controller.close();
+
+  @override
+  Future<String?> getLaunchPayload() async => launchPayload;
+
+  @override
+  Future<void> initialize() async => initializeCalls++;
+
+  @override
+  Future<NotificationPermissionStatus> notificationPermissionStatus() async =>
+      status;
+
+  @override
+  Future<NotificationPermissionStatus> requestPermission() async {
+    requestCalls++;
+    status = requestResult;
+    return requestResult;
+  }
+
+  @override
+  Future<void> scheduleDailyReminder({
+    required int hour,
+    required int minute,
+    required String title,
+    required String body,
+    required String payload,
+  }) async {
+    scheduleCalls++;
+    await cancelDailyReminder();
+    schedules
+      ..clear()
+      ..add((
+        hour: hour,
+        minute: minute,
+        title: title,
+        body: body,
+        payload: payload,
+      ));
+  }
+
+  @override
+  Future<void> scheduleTestNotification({
+    required String title,
+    required String body,
+    required String payload,
+    Duration delay = const Duration(seconds: 10),
+  }) async {
+    testScheduleCalls++;
+    if (failTestScheduling) throw StateError('notification unavailable');
+    await cancelTestNotification();
+    testSchedules.add((
+      title: title,
+      body: body,
+      payload: payload,
+      delay: delay,
+    ));
+  }
+
+  void sendPayload(String payload) => controller.add(payload);
 }
 
 class FakeWordProgressStore implements WordProgressStore {
@@ -380,6 +484,15 @@ class FakeSettingsStore implements SettingsStore {
       speechRate: SpeechRatePreference.fromStorage(
         storage.values[SettingsRepository.speechRateKey],
       ),
+      reminderEnabled: AppSettings.safeReminderEnabled(
+        storage.values[SettingsRepository.reminderEnabledKey],
+      ),
+      reminderHour: AppSettings.safeReminderHour(
+        storage.values[SettingsRepository.reminderHourKey],
+      ),
+      reminderMinute: AppSettings.safeReminderMinute(
+        storage.values[SettingsRepository.reminderMinuteKey],
+      ),
     );
   }
 
@@ -405,6 +518,12 @@ class FakeSettingsStore implements SettingsStore {
         '${AppSettings.defaults.dailyGoal}';
     storage.values[SettingsRepository.speechRateKey] =
         AppSettings.defaults.speechRate.storageValue;
+    storage.values[SettingsRepository.reminderEnabledKey] =
+        '${AppSettings.defaults.reminderEnabled}';
+    storage.values[SettingsRepository.reminderHourKey] =
+        '${AppSettings.defaults.reminderHour}';
+    storage.values[SettingsRepository.reminderMinuteKey] =
+        '${AppSettings.defaults.reminderMinute}';
   }
 
   @override
@@ -418,6 +537,17 @@ class FakeSettingsStore implements SettingsStore {
   @override
   Future<void> setSpeechRate(SpeechRatePreference speechRate) async {
     storage.values[SettingsRepository.speechRateKey] = speechRate.storageValue;
+  }
+
+  @override
+  Future<void> setReminderEnabled(bool enabled) async {
+    storage.values[SettingsRepository.reminderEnabledKey] = '$enabled';
+  }
+
+  @override
+  Future<void> setReminderTime({required int hour, required int minute}) async {
+    storage.values[SettingsRepository.reminderHourKey] = '$hour';
+    storage.values[SettingsRepository.reminderMinuteKey] = '$minute';
   }
 }
 
@@ -498,6 +628,7 @@ DataManagementService createDataManagementService({
   required SettingsService settingsService,
   required StatisticsService statisticsService,
   AchievementService? achievementService,
+  DailyReminderService? dailyReminderService,
   DataResetStore? repository,
 }) {
   return DataManagementService(
@@ -509,6 +640,7 @@ DataManagementService createDataManagementService({
     settingsService: settingsService,
     statisticsService: statisticsService,
     achievementService: achievementService,
+    dailyReminderService: dailyReminderService,
   );
 }
 
@@ -568,8 +700,12 @@ Future<void> pumpKelimoApp(
   FakeSettingsStorage? settingsStorage,
   DataResetStore? dataResetStore,
   AchievementStore? achievementStore,
+  NotificationService? notificationService,
+  AppNavigationController? navigationController,
 }) async {
   final sharedXpStorage = xpStorage ?? FakeXpStorage();
+  final notifications = notificationService ?? FakeNotificationService();
+  if (notificationService == null) addTearDown(notifications.dispose);
   await tester.pumpWidget(
     KelimoApp(
       wordProgressStore: wordProgressStore ?? FakeWordProgressStore(),
@@ -591,6 +727,8 @@ Future<void> pumpKelimoApp(
               ),
             ),
           ),
+      notificationService: notifications,
+      navigationController: navigationController,
     ),
   );
   await tester.pumpAndSettle();
@@ -939,11 +1077,178 @@ void main() {
       expect(service.dailyGoal, 5);
       expect(service.activeDailyGoal, 5);
       expect(service.speechRate, SpeechRatePreference.normal);
+      expect(service.reminderEnabled, isFalse);
+      expect(service.reminderHour, 20);
+      expect(service.reminderMinute, 0);
       expect(service.ttsSpeechRate, 0.42);
       expect(AppSettings.safeDailyGoal('10'), 10);
       expect(AppSettings.safeDailyGoal('7'), 5);
       expect(AppSettings.safeDailyGoal('bozuk'), 5);
       expect(() => service.setDailyGoal(7), throwsA(isA<ArgumentError>()));
+      expect(AppSettings.safeReminderEnabled('bozuk'), isFalse);
+      expect(AppSettings.safeReminderHour('24'), 20);
+      expect(AppSettings.safeReminderMinute('60'), 0);
+    },
+  );
+
+  test(
+    'Hatırlatıcı tercihleri repository yeniden oluşturulunca korunur',
+    () async {
+      final storage = FakeSettingsStorage();
+      final first = await createSettingsService(
+        repository: FakeSettingsStore(storage),
+      );
+      await first.setReminderEnabled(true);
+      await first.setReminderTime(hour: 8, minute: 35);
+      first.dispose();
+
+      final restored = await createSettingsService(
+        repository: FakeSettingsStore(storage),
+      );
+      addTearDown(restored.dispose);
+
+      expect(restored.reminderEnabled, isTrue);
+      expect(restored.reminderHour, 8);
+      expect(restored.reminderMinute, 35);
+      expect(storage.values[SettingsRepository.reminderEnabledKey], 'true');
+      expect(storage.values[SettingsRepository.reminderHourKey], '8');
+      expect(storage.values[SettingsRepository.reminderMinuteKey], '35');
+      expect(DatabaseService.databaseVersion, 6);
+    },
+  );
+
+  test('Hatırlatıcı açma, kapama ve saat değişimi tek planı korur', () async {
+    final settings = await createSettingsService();
+    final notifications = FakeNotificationService();
+    final reminder = DailyReminderService(
+      settingsService: settings,
+      notificationService: notifications,
+      learningCenterService: LearningCenterService(
+        wordProgressStore: FakeWordProgressStore(),
+      ),
+    );
+    addTearDown(settings.dispose);
+    addTearDown(reminder.dispose);
+    addTearDown(notifications.dispose);
+    await reminder.initialize();
+
+    expect(await reminder.setEnabled(true), ReminderUpdateResult.success);
+    expect(settings.reminderEnabled, isTrue);
+    expect(notifications.schedules, hasLength(1));
+    expect(notifications.schedules.single.hour, 20);
+
+    final cancelBeforeTimeChange = notifications.cancelCalls;
+    expect(await reminder.setTime(hour: 9, minute: 25), isTrue);
+    expect(notifications.cancelCalls, cancelBeforeTimeChange + 1);
+    expect(notifications.schedules, hasLength(1));
+    expect(notifications.schedules.single.hour, 9);
+    expect(notifications.schedules.single.minute, 25);
+
+    await Future.wait([reminder.refreshSchedule(), reminder.refreshSchedule()]);
+    expect(notifications.schedules, hasLength(1));
+    expect(await reminder.setEnabled(false), ReminderUpdateResult.success);
+    expect(settings.reminderEnabled, isFalse);
+    expect(notifications.schedules, isEmpty);
+  });
+
+  test(
+    'Günlük ve test bildirimleri ayrı kimliklerle birbirini bozmaz',
+    () async {
+      final settings = await createSettingsService();
+      final notifications = FakeNotificationService();
+      final reminder = DailyReminderService(
+        settingsService: settings,
+        notificationService: notifications,
+        learningCenterService: LearningCenterService(
+          wordProgressStore: FakeWordProgressStore(),
+        ),
+      );
+      addTearDown(settings.dispose);
+      addTearDown(reminder.dispose);
+      addTearDown(notifications.dispose);
+      await reminder.initialize();
+
+      expect(await reminder.setEnabled(true), ReminderUpdateResult.success);
+      expect(
+        await reminder.scheduleTestNotification(),
+        ReminderUpdateResult.success,
+      );
+      expect(notifications.schedules, hasLength(1));
+      expect(notifications.testSchedules, hasLength(1));
+      expect(
+        notifications.testSchedules.single.delay,
+        const Duration(seconds: 10),
+      );
+
+      await reminder.scheduleTestNotification();
+      expect(notifications.schedules, hasLength(1));
+      expect(notifications.testSchedules, hasLength(1));
+    },
+  );
+
+  test('İzin reddedilince hatırlatıcı kapalı kalır', () async {
+    final settings = await createSettingsService();
+    final notifications = FakeNotificationService()
+      ..status = NotificationPermissionStatus.denied
+      ..requestResult = NotificationPermissionStatus.denied;
+    final reminder = DailyReminderService(
+      settingsService: settings,
+      notificationService: notifications,
+      learningCenterService: LearningCenterService(
+        wordProgressStore: FakeWordProgressStore(),
+      ),
+    );
+    addTearDown(settings.dispose);
+    addTearDown(reminder.dispose);
+    addTearDown(notifications.dispose);
+    await reminder.initialize();
+
+    expect(
+      await reminder.setEnabled(true),
+      ReminderUpdateResult.permissionDenied,
+    );
+    expect(settings.reminderEnabled, isFalse);
+    expect(notifications.requestCalls, 1);
+    expect(notifications.schedules, isEmpty);
+  });
+
+  test(
+    'Hatırlatıcı içeriği vadesi gelen tekrar durumuna göre değişir',
+    () async {
+      final settings = await createSettingsService();
+      final notifications = FakeNotificationService();
+      final store = FakeWordProgressStore({
+        animalWords.first.id: testWordProgress(
+          wordId: animalWords.first.id,
+          mastery: 'again',
+          repetitionCount: 1,
+          nextReviewAt: DateTime.now().subtract(const Duration(minutes: 1)),
+        ),
+      });
+      final reminder = DailyReminderService(
+        settingsService: settings,
+        notificationService: notifications,
+        learningCenterService: LearningCenterService(wordProgressStore: store),
+      );
+      addTearDown(settings.dispose);
+      addTearDown(reminder.dispose);
+      addTearDown(notifications.dispose);
+      await reminder.initialize();
+      await reminder.setEnabled(true);
+
+      expect(notifications.schedules.single.title, 'Tekrar zamanı!');
+      expect(
+        notifications.schedules.single.body,
+        'Çalışma zamanı gelen kelimelerin seni bekliyor.',
+      );
+      expect(notifications.schedules.single.payload, 'daily_review');
+
+      store.clearCachedData();
+      await reminder.refreshSchedule();
+      expect(
+        notifications.schedules.single.title,
+        'Bugünün kelimelerine hazır mısın?',
+      );
     },
   );
 
@@ -967,12 +1272,18 @@ void main() {
 
       storage.values[SettingsRepository.dailyGoalKey] = '999';
       storage.values[SettingsRepository.speechRateKey] = 'çok_hızlı';
+      storage.values[SettingsRepository.reminderEnabledKey] = 'bozuk';
+      storage.values[SettingsRepository.reminderHourKey] = '99';
+      storage.values[SettingsRepository.reminderMinuteKey] = '-1';
       final safe = await createSettingsService(
         repository: FakeSettingsStore(storage),
       );
       addTearDown(safe.dispose);
       expect(safe.dailyGoal, 5);
       expect(safe.speechRate, SpeechRatePreference.normal);
+      expect(safe.reminderEnabled, isFalse);
+      expect(safe.reminderHour, 20);
+      expect(safe.reminderMinute, 0);
     },
   );
 
@@ -1070,6 +1381,17 @@ void main() {
       wordProgressStore: wordStore,
       quizStore: quizStore,
     );
+    final notificationService = FakeNotificationService();
+    final reminderService = DailyReminderService(
+      settingsService: settings,
+      notificationService: notificationService,
+      learningCenterService: LearningCenterService(
+        wordProgressStore: wordStore,
+      ),
+    );
+    await reminderService.initialize();
+    await reminderService.setTime(hour: 8, minute: 15);
+    await reminderService.setEnabled(true);
     final resetStore = FakeDataResetStore(
       onReset: (resetSettings) {
         dailyStorage.dailyProgress.clear();
@@ -1101,6 +1423,7 @@ void main() {
       settingsService: settings,
       statisticsService: statistics,
       achievementService: achievementService,
+      dailyReminderService: reminderService,
     );
     addTearDown(wordStore.clearCachedData);
     addTearDown(streak.dispose);
@@ -1109,8 +1432,12 @@ void main() {
     addTearDown(statistics.dispose);
     addTearDown(dataManagement.dispose);
     addTearDown(achievementService.dispose);
+    addTearDown(reminderService.dispose);
+    addTearDown(notificationService.dispose);
 
-    await settings.resetToDefaults();
+    await reminderService.scheduleTestNotification();
+    expect(notificationService.testSchedules, hasLength(1));
+    await reminderService.resetPreferences();
     expect(settings.dailyGoal, 5);
     expect(settings.speechRate, SpeechRatePreference.normal);
     expect(wordStore.progressFor('dog').isFavorite, isTrue);
@@ -1118,8 +1445,15 @@ void main() {
     expect(await quizStore.getTotalQuizCount(), 1);
     expect(xpService.totalXp, 5);
     expect(achievementService.isUnlocked('first_step'), isTrue);
+    expect(settings.reminderEnabled, isFalse);
+    expect(settings.reminderHour, 20);
+    expect(settings.reminderMinute, 0);
+    expect(notificationService.schedules, isEmpty);
+    expect(notificationService.testSchedules, isEmpty);
 
     await settings.setDailyGoal(10);
+    await reminderService.setTime(hour: 8, minute: 15);
+    await reminderService.setEnabled(true);
     await dataManagement.resetLearningData();
     expect(resetStore.calls, [false]);
     expect(settings.dailyGoal, 10);
@@ -1130,6 +1464,14 @@ void main() {
     expect(streak.todayCount, 0);
     expect(streak.currentStreak, 0);
     expect(achievementService.unlockedCount, 0);
+    expect(settings.reminderEnabled, isTrue);
+    expect(settings.reminderHour, 8);
+    expect(settings.reminderMinute, 15);
+    expect(notificationService.schedules, hasLength(1));
+    expect(
+      notificationService.schedules.single.title,
+      'Bugünün kelimelerine hazır mısın?',
+    );
     final learning = LearningCenterService(wordProgressStore: wordStore).load();
     expect(learning.totalCount, 122);
     expect(learning.favoriteCount, 0);
@@ -1141,11 +1483,18 @@ void main() {
     expect(achievementService.unlockedCount, 1);
     await settings.setDailyGoal(20);
     await settings.setSpeechRate(SpeechRatePreference.slow);
+    await reminderService.scheduleTestNotification();
+    expect(notificationService.testSchedules, hasLength(1));
     await dataManagement.resetAllData();
     expect(resetStore.calls, [false, true]);
     expect(settings.dailyGoal, 5);
     expect(settings.speechRate, SpeechRatePreference.normal);
     expect(achievementService.unlockedCount, 0);
+    expect(settings.reminderEnabled, isFalse);
+    expect(settings.reminderHour, 20);
+    expect(settings.reminderMinute, 0);
+    expect(notificationService.schedules, isEmpty);
+    expect(notificationService.testSchedules, isEmpty);
     expect(CategoryCatalog.categories, hasLength(6));
     expect(
       CategoryCatalog.categories.expand((category) => category.words),
@@ -1540,6 +1889,31 @@ void main() {
       await tester.pumpAndSettle();
     },
   );
+
+  testWidgets('Kelime değerlendirmesi açık hatırlatıcıyı yeniden planlar', (
+    tester,
+  ) async {
+    final storage = FakeSettingsStorage()
+      ..values[SettingsRepository.reminderEnabledKey] = 'true';
+    final notifications = FakeNotificationService();
+    await pumpKelimoApp(
+      tester,
+      settingsStorage: storage,
+      notificationService: notifications,
+    );
+    addTearDown(notifications.dispose);
+    final initialScheduleCalls = notifications.scheduleCalls;
+
+    await openAnimalsCategory(tester);
+    await tester.tap(find.text('Öğrenmeye Başla'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Zor'));
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pumpAndSettle();
+
+    expect(notifications.scheduleCalls, initialScheduleCalls + 1);
+    expect(notifications.schedules, hasLength(1));
+  });
 
   testWidgets('Zor seçilen kelime bir kart sonra yeniden gösterilir', (
     tester,
@@ -2781,6 +3155,10 @@ void main() {
       find.text('Yeni hedef bir sonraki günlük çalışmada uygulanır.'),
       findsOneWidget,
     );
+    expect(find.text('Hatırlatıcılar'), findsOneWidget);
+    expect(find.text('Günlük çalışma hatırlatıcısı'), findsOneWidget);
+    expect(find.text('Hatırlatma saati'), findsOneWidget);
+    expect(find.text('20:00'), findsOneWidget);
     expect(find.text('Ses'), findsOneWidget);
     expect(find.text('Telaffuz hızı'), findsOneWidget);
     expect(find.text('Sesi dene'), findsOneWidget);
@@ -2804,6 +3182,55 @@ void main() {
     await tester.pumpAndSettle();
     expect(resetStore.calls, isEmpty);
   });
+
+  testWidgets('Hatırlatma saati gece yarısında 00:35 olarak gösterilir', (
+    tester,
+  ) async {
+    final storage = FakeSettingsStorage()
+      ..values[SettingsRepository.reminderHourKey] = '0'
+      ..values[SettingsRepository.reminderMinuteKey] = '35';
+    await pumpKelimoApp(tester, settingsStorage: storage);
+
+    await tester.tap(find.text('Ayarlar'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('00:35'), findsOneWidget);
+    expect(find.text('12:35'), findsNothing);
+  });
+
+  testWidgets(
+    'Bildirimi test et günlük planı değiştirmeden geri bildirim verir',
+    (tester) async {
+      final notifications = FakeNotificationService();
+      await pumpKelimoApp(tester, notificationService: notifications);
+      addTearDown(notifications.dispose);
+
+      await tester.tap(find.text('Ayarlar'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('daily-reminder-switch')));
+      await tester.pumpAndSettle();
+      expect(notifications.schedules, hasLength(1));
+      await tester.pump(const Duration(seconds: 5));
+
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('test-reminder-notification')),
+        180,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('test-reminder-notification')),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(notifications.schedules, hasLength(1));
+      expect(notifications.testSchedules, hasLength(1));
+      expect(
+        find.text('Test bildirimi 10 saniye sonrası için planlandı'),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets(
     'Sesi dene seçili telaffuz hızını kullanır ve küçük ekranda taşmaz',
@@ -2863,6 +3290,116 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('Hatırlatıcı switch açma ve kapama planı günceller', (
+    tester,
+  ) async {
+    final notifications = FakeNotificationService();
+    await pumpKelimoApp(tester, notificationService: notifications);
+    addTearDown(notifications.dispose);
+
+    await tester.tap(find.text('Ayarlar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('daily-reminder-switch')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Günlük hatırlatıcı açıldı'), findsOneWidget);
+    expect(notifications.schedules, hasLength(1));
+    expect(notifications.schedules.single.payload, 'daily_review');
+
+    await tester.tap(find.byKey(const ValueKey('daily-reminder-switch')));
+    await tester.pumpAndSettle();
+    final switchTile = tester.widget<SwitchListTile>(
+      find.byKey(const ValueKey('daily-reminder-switch')),
+    );
+    expect(switchTile.value, isFalse);
+    expect(notifications.schedules, isEmpty);
+  });
+
+  testWidgets('İzin reddedilince switch kapalı ve açıklama görünür kalır', (
+    tester,
+  ) async {
+    final notifications = FakeNotificationService()
+      ..status = NotificationPermissionStatus.denied
+      ..requestResult = NotificationPermissionStatus.permanentlyDenied;
+    await pumpKelimoApp(tester, notificationService: notifications);
+    addTearDown(notifications.dispose);
+
+    await tester.tap(find.text('Ayarlar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('daily-reminder-switch')));
+    await tester.pumpAndSettle();
+
+    final switchTile = tester.widget<SwitchListTile>(
+      find.byKey(const ValueKey('daily-reminder-switch')),
+    );
+    expect(switchTile.value, isFalse);
+    expect(
+      find.text('Bildirim izni kapalı. Cihaz ayarlarından izin vermelisin.'),
+      findsOneWidget,
+    );
+    expect(find.text('Bildirim izni ver'), findsOneWidget);
+    expect(notifications.schedules, isEmpty);
+  });
+
+  testWidgets('Açık hatırlatıcı başlangıçta yeniden planlanır', (tester) async {
+    final storage = FakeSettingsStorage()
+      ..values[SettingsRepository.reminderEnabledKey] = 'true'
+      ..values[SettingsRepository.reminderHourKey] = '7'
+      ..values[SettingsRepository.reminderMinuteKey] = '45';
+    final notifications = FakeNotificationService();
+    await pumpKelimoApp(
+      tester,
+      settingsStorage: storage,
+      notificationService: notifications,
+    );
+    addTearDown(notifications.dispose);
+
+    expect(notifications.initializeCalls, 1);
+    expect(notifications.schedules, hasLength(1));
+    expect(notifications.schedules.single.hour, 7);
+    expect(notifications.schedules.single.minute, 45);
+
+    final scheduleCalls = notifications.scheduleCalls;
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(notifications.scheduleCalls, scheduleCalls + 1);
+    expect(notifications.schedules, hasLength(1));
+  });
+
+  testWidgets('daily_review payload Öğrenme Merkezine bir kez yönlendirir', (
+    tester,
+  ) async {
+    var now = DateTime(2026, 7, 16, 10);
+    final navigation = AppNavigationController(now: () => now);
+    var navigationEvents = 0;
+    navigation.addListener(() => navigationEvents++);
+    final notifications = FakeNotificationService()
+      ..launchPayload = LocalNotificationService.dailyReminderPayload;
+    await pumpKelimoApp(
+      tester,
+      notificationService: notifications,
+      navigationController: navigation,
+    );
+    addTearDown(notifications.dispose);
+    addTearDown(navigation.dispose);
+
+    expect(find.text('Öğrenme Merkezi'), findsOneWidget);
+    expect(find.text('Tekrar Bekleyenler'), findsOneWidget);
+    final eventsAfterLaunch = navigationEvents;
+    notifications
+      ..sendPayload(LocalNotificationService.dailyReminderPayload)
+      ..sendPayload(LocalNotificationService.dailyReminderPayload);
+    await tester.pumpAndSettle();
+    expect(navigationEvents, eventsAfterLaunch);
+
+    now = now.add(const Duration(seconds: 3));
+    notifications.sendPayload(LocalNotificationService.dailyReminderPayload);
+    await tester.pumpAndSettle();
+    expect(navigationEvents, eventsAfterLaunch + 1);
+    expect(find.text('Öğrenme Merkezi'), findsOneWidget);
+  });
 
   testWidgets(
     'İlerleme ekranı boş veride güvenli değerleri ve boş quiz durumunu gösterir',

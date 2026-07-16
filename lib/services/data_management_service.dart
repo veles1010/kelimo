@@ -4,6 +4,7 @@ import 'package:kelimo/repositories/quiz_repository.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/services/achievement_service.dart';
+import 'package:kelimo/services/daily_reminder_service.dart';
 import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/services/xp_service.dart';
@@ -18,6 +19,7 @@ class DataManagementService extends ChangeNotifier {
     required this.settingsService,
     required this.statisticsService,
     this.achievementService,
+    this.dailyReminderService,
   });
 
   final DataResetStore repository;
@@ -28,6 +30,7 @@ class DataManagementService extends ChangeNotifier {
   final SettingsService settingsService;
   final StatisticsService statisticsService;
   final AchievementService? achievementService;
+  final DailyReminderService? dailyReminderService;
 
   Future<void> resetLearningData() => _reset(resetSettings: false);
 
@@ -42,6 +45,11 @@ class DataManagementService extends ChangeNotifier {
     achievementService?.resetAfterDataClear();
     if (resetSettings) await settingsService.reload();
     await statisticsService.refresh();
+    if (resetSettings) {
+      await dailyReminderService?.resetAllNotifications();
+    } else {
+      await dailyReminderService?.refreshSchedule();
+    }
     notifyListeners();
   }
 }

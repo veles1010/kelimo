@@ -7,6 +7,8 @@ abstract interface class SettingsStore {
   Future<AppSettings> load();
   Future<void> setDailyGoal(int dailyGoal);
   Future<void> setSpeechRate(SpeechRatePreference speechRate);
+  Future<void> setReminderEnabled(bool enabled);
+  Future<void> setReminderTime({required int hour, required int minute});
   Future<void> resetToDefaults();
   Future<int> resolveDailyGoalForDate({
     required String dateKey,
@@ -21,6 +23,9 @@ class SettingsRepository implements SettingsStore {
   static const speechRateKey = 'speech_rate';
   static const activeDailyGoalKey = 'active_daily_goal';
   static const activeDailyGoalDateKey = 'active_daily_goal_date';
+  static const reminderEnabledKey = 'reminder_enabled';
+  static const reminderHourKey = 'reminder_hour';
+  static const reminderMinuteKey = 'reminder_minute';
 
   final DatabaseService _databaseService;
 
@@ -31,6 +36,13 @@ class SettingsRepository implements SettingsStore {
       return AppSettings(
         dailyGoal: AppSettings.safeDailyGoal(values[dailyGoalKey]),
         speechRate: SpeechRatePreference.fromStorage(values[speechRateKey]),
+        reminderEnabled: AppSettings.safeReminderEnabled(
+          values[reminderEnabledKey],
+        ),
+        reminderHour: AppSettings.safeReminderHour(values[reminderHourKey]),
+        reminderMinute: AppSettings.safeReminderMinute(
+          values[reminderMinuteKey],
+        ),
       );
     } catch (error, stackTrace) {
       debugPrint('Ayarlar yüklenemedi: $error\n$stackTrace');
@@ -52,13 +64,45 @@ class SettingsRepository implements SettingsStore {
   }
 
   @override
+  Future<void> setReminderEnabled(bool enabled) {
+    return _writeValue(reminderEnabledKey, '$enabled');
+  }
+
+  @override
+  Future<void> setReminderTime({required int hour, required int minute}) async {
+    _validateReminderTime(hour, minute);
+    final database = await _databaseService.database;
+    await database.transaction((transaction) async {
+      final updatedAt = DateTime.now().toIso8601String();
+      await _upsert(
+        transaction,
+        reminderHourKey,
+        '$hour',
+        updatedAt: updatedAt,
+      );
+      await _upsert(
+        transaction,
+        reminderMinuteKey,
+        '$minute',
+        updatedAt: updatedAt,
+      );
+    });
+  }
+
+  @override
   Future<void> resetToDefaults() async {
     final database = await _databaseService.database;
     await database.transaction((transaction) async {
       await transaction.delete(
         'app_settings',
-        where: 'key IN (?, ?)',
-        whereArgs: [dailyGoalKey, speechRateKey],
+        where: 'key IN (?, ?, ?, ?, ?)',
+        whereArgs: [
+          dailyGoalKey,
+          speechRateKey,
+          reminderEnabledKey,
+          reminderHourKey,
+          reminderMinuteKey,
+        ],
       );
       await _writeDefaults(transaction);
     });
@@ -136,6 +180,30 @@ class SettingsRepository implements SettingsStore {
       AppSettings.defaults.speechRate.storageValue,
       updatedAt: now,
     );
+    await _upsert(
+      database,
+      reminderEnabledKey,
+      '${AppSettings.defaults.reminderEnabled}',
+      updatedAt: now,
+    );
+    await _upsert(
+      database,
+      reminderHourKey,
+      '${AppSettings.defaults.reminderHour}',
+      updatedAt: now,
+    );
+    await _upsert(
+      database,
+      reminderMinuteKey,
+      '${AppSettings.defaults.reminderMinute}',
+      updatedAt: now,
+    );
+  }
+
+  static void _validateReminderTime(int hour, int minute) {
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+      throw ArgumentError('Geçersiz hatırlatma saati: $hour:$minute');
+    }
   }
 
   static Future<void> _upsert(
