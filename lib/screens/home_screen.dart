@@ -19,6 +19,7 @@ import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/services/xp_service.dart';
+import 'package:kelimo/services/interstitial_ad_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -34,6 +35,7 @@ class HomeScreen extends StatefulWidget {
     this.learningCenterService,
     this.dailyReminderService,
     this.navigationController,
+    this.interstitialAdService,
     super.key,
   });
 
@@ -48,6 +50,7 @@ class HomeScreen extends StatefulWidget {
   final LearningCenterService? learningCenterService;
   final DailyReminderService? dailyReminderService;
   final AppNavigationController? navigationController;
+  final InterstitialAdService? interstitialAdService;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -130,6 +133,7 @@ class _HomeScreenState extends State<HomeScreen> {
           settingsService: widget.settingsService,
           dataManagementService: widget.dataManagementService,
           dailyReminderService: widget.dailyReminderService,
+          interstitialAdService: widget.interstitialAdService,
         ),
         _ => SafeArea(
           bottom: false,
@@ -228,6 +232,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                                     widget.achievementService,
                                                 dailyReminderService:
                                                     widget.dailyReminderService,
+                                                interstitialAdService: widget
+                                                    .interstitialAdService,
                                               ),
                                             ),
                                           );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:kelimo/services/interstitial_ad_service.dart';
 
 int calculateQuizPercentage({required int correct, required int total}) {
   if (total <= 0) return 0;
@@ -35,7 +36,7 @@ String formatQuizDuration(Duration duration) {
   return '$minutes dk $seconds sn';
 }
 
-class QuizResultScreen extends StatelessWidget {
+class QuizResultScreen extends StatefulWidget {
   QuizResultScreen({
     super.key,
     required this.categoryName,
@@ -48,6 +49,7 @@ class QuizResultScreen extends StatelessWidget {
     required this.onRetry,
     required this.onReturnToCategory,
     required this.onReturnHome,
+    this.interstitialAdService,
   }) : assert(totalQuestionCount > 0),
        assert(correctAnswerCount >= 0),
        assert(correctAnswerCount <= totalQuestionCount),
@@ -67,12 +69,36 @@ class QuizResultScreen extends StatelessWidget {
   final VoidCallback onRetry;
   final VoidCallback onReturnToCategory;
   final VoidCallback onReturnHome;
+  final InterstitialAdService? interstitialAdService;
+
+  @override
+  State<QuizResultScreen> createState() => _QuizResultScreenState();
+}
+
+class _QuizResultScreenState extends State<QuizResultScreen> {
+  bool _isLeaving = false;
+
+  Future<void> _leave(VoidCallback navigate) async {
+    if (_isLeaving) return;
+    final adService = widget.interstitialAdService;
+    if (adService == null) {
+      navigate();
+      return;
+    }
+    setState(() => _isLeaving = true);
+    try {
+      await adService.showIfEligible();
+    } catch (_) {
+      // Reklam hatası kullanıcının seçtiği navigasyonu engellememeli.
+    }
+    if (mounted) navigate();
+  }
 
   @override
   Widget build(BuildContext context) {
     final starCount = quizStarCount(
-      correct: correctAnswerCount,
-      total: totalQuestionCount,
+      correct: widget.correctAnswerCount,
+      total: widget.totalQuestionCount,
     );
     final textTheme = Theme.of(context).textTheme;
 
@@ -102,27 +128,27 @@ class QuizResultScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      '$categoryName Quizi Tamamlandı',
+                      '${widget.categoryName} Quizi Tamamlandı',
                       textAlign: TextAlign.center,
                       style: textTheme.titleMedium,
                     ),
                     const SizedBox(height: 24),
                     _ScoreCard(
-                      correctAnswerCount: correctAnswerCount,
-                      totalQuestionCount: totalQuestionCount,
-                      percentage: successPercentage,
+                      correctAnswerCount: widget.correctAnswerCount,
+                      totalQuestionCount: widget.totalQuestionCount,
+                      percentage: widget.successPercentage,
                       starCount: starCount,
                     ),
                     const SizedBox(height: 20),
                     Text(
-                      quizMotivation(successPercentage),
+                      quizMotivation(widget.successPercentage),
                       textAlign: TextAlign.center,
                       style: textTheme.titleLarge?.copyWith(
                         color: Theme.of(context).colorScheme.primary,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    if (xpAwarded > 0) ...[
+                    if (widget.xpAwarded > 0) ...[
                       const SizedBox(height: 12),
                       Text(
                         '🏆 Kusursuz sonuç! +25 XP kazandın.',
@@ -135,23 +161,27 @@ class QuizResultScreen extends StatelessWidget {
                     ],
                     const SizedBox(height: 24),
                     _SummaryCards(
-                      xpAwarded: xpAwarded,
-                      longestCorrectStreak: longestCorrectStreak,
-                      elapsedDuration: elapsedDuration,
+                      xpAwarded: widget.xpAwarded,
+                      longestCorrectStreak: widget.longestCorrectStreak,
+                      elapsedDuration: widget.elapsedDuration,
                     ),
                     const SizedBox(height: 28),
                     FilledButton(
-                      onPressed: onRetry,
+                      onPressed: _isLeaving ? null : widget.onRetry,
                       child: const Text('Tekrar Çöz'),
                     ),
                     const SizedBox(height: 12),
                     OutlinedButton(
-                      onPressed: onReturnToCategory,
+                      onPressed: _isLeaving
+                          ? null
+                          : () => _leave(widget.onReturnToCategory),
                       child: const Text('Kategoriye Dön'),
                     ),
                     const SizedBox(height: 8),
                     TextButton(
-                      onPressed: onReturnHome,
+                      onPressed: _isLeaving
+                          ? null
+                          : () => _leave(widget.onReturnHome),
                       child: const Text('Ana Sayfa'),
                     ),
                   ],

@@ -10,6 +10,7 @@ import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/services/achievement_service.dart';
 import 'package:kelimo/services/daily_reminder_service.dart';
 import 'package:kelimo/services/statistics_service.dart';
+import 'package:kelimo/services/interstitial_ad_service.dart';
 import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
@@ -25,6 +26,7 @@ class CategoryScreen extends StatefulWidget {
     required this.settingsService,
     this.achievementService,
     this.dailyReminderService,
+    this.interstitialAdService,
     super.key,
   });
 
@@ -37,6 +39,7 @@ class CategoryScreen extends StatefulWidget {
   final SettingsService settingsService;
   final AchievementService? achievementService;
   final DailyReminderService? dailyReminderService;
+  final InterstitialAdService? interstitialAdService;
 
   @override
   State<CategoryScreen> createState() => _CategoryScreenState();
@@ -129,6 +132,8 @@ class _CategoryScreenState extends State<CategoryScreen> {
                               quizStore: quizStore,
                               xpService: xpService,
                               achievementService: widget.achievementService,
+                              interstitialAdService:
+                                  widget.interstitialAdService,
                             ),
                           ),
                         );

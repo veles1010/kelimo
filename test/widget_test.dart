@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,6 +23,7 @@ import 'package:kelimo/models/quiz_attempt.dart';
 import 'package:kelimo/models/word.dart';
 import 'package:kelimo/models/word_progress.dart';
 import 'package:kelimo/models/xp_state.dart';
+import 'package:kelimo/models/ad_display_state.dart';
 import 'package:kelimo/repositories/daily_progress_repository.dart';
 import 'package:kelimo/repositories/achievement_repository.dart';
 import 'package:kelimo/repositories/data_reset_repository.dart';
@@ -49,9 +51,21 @@ import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/services/xp_service.dart';
+import 'package:kelimo/services/interstitial_ad_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 import 'package:kelimo/utils/turkish_case.dart';
 import 'package:kelimo/widgets/scale_down_single_line_text.dart';
+
+class NoShuffleRandom implements Random {
+  @override
+  bool nextBool() => false;
+
+  @override
+  double nextDouble() => 0;
+
+  @override
+  int nextInt(int max) => max - 1;
+}
 
 class FakeTtsEngine implements TtsEngine {
   String? language;
@@ -188,6 +202,105 @@ class FakeNotificationService implements NotificationService {
   }
 
   void sendPayload(String payload) => controller.add(payload);
+}
+
+class FakeInterstitialStorage {
+  AdDisplayState state = AdDisplayState.initial;
+}
+
+class FakeInterstitialAdService extends InterstitialAdService {
+  FakeInterstitialAdService({
+    FakeInterstitialStorage? storage,
+    DateTime Function()? now,
+    this.consentAllowed = true,
+    this.adReady = true,
+    this.privacyRequired = true,
+  }) : storage = storage ?? FakeInterstitialStorage(),
+       now = now ?? DateTime.now;
+
+  final FakeInterstitialStorage storage;
+  final DateTime Function() now;
+  bool consentAllowed;
+  bool adReady;
+  bool privacyRequired;
+  bool foreground = true;
+  bool showSucceeds = true;
+  int initializeCalls = 0;
+  int consentCalls = 0;
+  int preloadCalls = 0;
+  int showCalls = 0;
+  int testShowCalls = 0;
+  int privacyCalls = 0;
+  final policy = const InterstitialAdPolicy();
+
+  @override
+  bool get privacyOptionsRequired => privacyRequired;
+
+  @override
+  bool get canShow => policy.isEligible(
+    state: storage.state,
+    now: now(),
+    isForeground: foreground,
+    canRequestAds: consentAllowed,
+    isAdReady: adReady,
+  );
+
+  @override
+  Future<void> initialize() async {
+    initializeCalls++;
+    await requestConsentIfNeeded();
+  }
+
+  @override
+  Future<void> requestConsentIfNeeded() async {
+    consentCalls++;
+    if (consentAllowed) await preload();
+  }
+
+  @override
+  Future<void> preload() async {
+    preloadCalls++;
+  }
+
+  @override
+  Future<void> recordQuizCompleted() async {
+    storage.state = AdDisplayState(
+      completedQuizCountSinceLastAd:
+          storage.state.completedQuizCountSinceLastAd + 1,
+      lastInterstitialShownAt: storage.state.lastInterstitialShownAt,
+    );
+    notifyListeners();
+  }
+
+  @override
+  Future<bool> showIfEligible() async {
+    showCalls++;
+    if (!canShow || !showSucceeds) return false;
+    storage.state = AdDisplayState(
+      completedQuizCountSinceLastAd: 0,
+      lastInterstitialShownAt: now().toUtc(),
+    );
+    notifyListeners();
+    return true;
+  }
+
+  @override
+  Future<bool> showTestAd() async {
+    testShowCalls++;
+    return consentAllowed && foreground && adReady && showSucceeds;
+  }
+
+  @override
+  Future<bool> showPrivacyOptions() async {
+    privacyCalls++;
+    return true;
+  }
+
+  @override
+  void setForeground(bool isForeground) {
+    foreground = isForeground;
+    notifyListeners();
+  }
 }
 
 class FakeWordProgressStore implements WordProgressStore {
@@ -702,10 +815,13 @@ Future<void> pumpKelimoApp(
   AchievementStore? achievementStore,
   NotificationService? notificationService,
   AppNavigationController? navigationController,
+  InterstitialAdService? interstitialAdService,
 }) async {
   final sharedXpStorage = xpStorage ?? FakeXpStorage();
   final notifications = notificationService ?? FakeNotificationService();
   if (notificationService == null) addTearDown(notifications.dispose);
+  final ads = interstitialAdService ?? FakeInterstitialAdService();
+  if (interstitialAdService == null) addTearDown(ads.dispose);
   await tester.pumpWidget(
     KelimoApp(
       wordProgressStore: wordProgressStore ?? FakeWordProgressStore(),
@@ -729,6 +845,7 @@ Future<void> pumpKelimoApp(
           ),
       notificationService: notifications,
       navigationController: navigationController,
+      interstitialAdService: ads,
     ),
   );
   await tester.pumpAndSettle();
@@ -798,6 +915,27 @@ Future<void> selectLearningRating(WidgetTester tester, String rating) async {
   await tester.pumpAndSettle();
 }
 
+Word currentQuizWord(WidgetTester tester, List<Word> words) {
+  return words.firstWhere(
+    (word) =>
+        find.byKey(ValueKey('quiz-question-${word.id}')).evaluate().isNotEmpty,
+  );
+}
+
+String visibleWrongQuizAnswer(
+  WidgetTester tester,
+  List<Word> words,
+  String correctAnswer,
+) {
+  return words
+      .map((word) => word.turkish)
+      .where((answer) => answer != correctAnswer)
+      .firstWhere(
+        (answer) =>
+            find.byKey(ValueKey('quiz-option-$answer')).evaluate().isNotEmpty,
+      );
+}
+
 Future<void> completeQuiz(
   WidgetTester tester, {
   bool perfect = true,
@@ -808,9 +946,10 @@ Future<void> completeQuiz(
   for (var index = 0; index < 10; index++) {
     beforeAnswer?.call(index);
     final isCorrect = answerPattern?[index] ?? (perfect || index != 0);
+    final currentWord = currentQuizWord(tester, words);
     final answer = isCorrect
-        ? words[index].turkish
-        : words[(index + 1) % words.length].turkish;
+        ? currentWord.turkish
+        : visibleWrongQuizAnswer(tester, words, currentWord.turkish);
     final option = find.byKey(ValueKey('quiz-option-$answer'));
     await tester.ensureVisible(option);
     await tester.pumpAndSettle();
@@ -1116,6 +1255,44 @@ void main() {
       expect(DatabaseService.databaseVersion, 6);
     },
   );
+
+  test('Consent verilmeden reklam preload edilmez', () async {
+    final ads = FakeInterstitialAdService(consentAllowed: false);
+    addTearDown(ads.dispose);
+
+    await ads.initialize();
+
+    expect(ads.consentCalls, 1);
+    expect(ads.preloadCalls, 0);
+  });
+
+  test('Reklam sayacı ve cooldown servis yeniden açılınca korunur', () async {
+    final storage = FakeInterstitialStorage();
+    var now = DateTime.utc(2026, 7, 17, 12);
+    final first = FakeInterstitialAdService(storage: storage, now: () => now);
+    addTearDown(first.dispose);
+    await first.initialize();
+    await first.recordQuizCompleted();
+    await first.recordQuizCompleted();
+    expect(first.canShow, isFalse);
+    await first.recordQuizCompleted();
+    expect(first.canShow, isTrue);
+    expect(await first.showIfEligible(), isTrue);
+    expect(storage.state.completedQuizCountSinceLastAd, 0);
+
+    final reopened = FakeInterstitialAdService(
+      storage: storage,
+      now: () => now,
+    );
+    addTearDown(reopened.dispose);
+    await reopened.initialize();
+    await reopened.recordQuizCompleted();
+    await reopened.recordQuizCompleted();
+    await reopened.recordQuizCompleted();
+    expect(reopened.canShow, isFalse);
+    now = now.add(const Duration(minutes: 15));
+    expect(reopened.canShow, isTrue);
+  });
 
   test('Hatırlatıcı açma, kapama ve saat değişimi tek planı korur', () async {
     final settings = await createSettingsService();
@@ -3199,6 +3376,34 @@ void main() {
   });
 
   testWidgets(
+    'Ayarlar gizlilik seçeneklerini ve debug test reklamını kullanır',
+    (tester) async {
+      final ads = FakeInterstitialAdService();
+      await pumpKelimoApp(tester, interstitialAdService: ads);
+      addTearDown(ads.dispose);
+
+      await tester.tap(find.text('Ayarlar'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.text('Gizlilik ve Reklamlar'), 250);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Gizlilik ve Reklamlar'), findsOneWidget);
+      expect(find.text('Gizlilik seçenekleri'), findsOneWidget);
+      expect(find.text('Test reklamını göster'), findsOneWidget);
+
+      await tester.tap(find.text('Gizlilik seçenekleri'));
+      await tester.pump();
+      expect(ads.privacyCalls, 1);
+
+      await tester.pump(const Duration(seconds: 5));
+      await tester.ensureVisible(find.text('Test reklamını göster'));
+      await tester.tap(find.text('Test reklamını göster'));
+      await tester.pump();
+      expect(ads.testShowCalls, 1);
+    },
+  );
+
+  testWidgets(
     'Bildirimi test et günlük planı değiştirmeden geri bildirim verir',
     (tester) async {
       final notifications = FakeNotificationService();
@@ -3808,6 +4013,7 @@ void main() {
             category: quizCategory,
             quizStore: FakeQuizStore(FakeQuizStorage(), xpStorage),
             xpService: xpService,
+            random: NoShuffleRandom(),
           ),
         ),
       );
@@ -3876,6 +4082,7 @@ void main() {
           ),
           quizStore: FakeQuizStore(FakeQuizStorage(), FakeXpStorage()),
           xpService: xpService,
+          random: NoShuffleRandom(),
         ),
       ),
     );
@@ -3949,6 +4156,7 @@ void main() {
           ),
           quizStore: FakeQuizStore(FakeQuizStorage(), FakeXpStorage()),
           xpService: xpService,
+          random: NoShuffleRandom(),
         ),
       ),
     );
@@ -4024,6 +4232,7 @@ void main() {
           ),
           quizStore: FakeQuizStore(FakeQuizStorage(), FakeXpStorage()),
           xpService: xpService,
+          random: NoShuffleRandom(),
         ),
       ),
     );
@@ -4043,11 +4252,16 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Yiyecekler Quiz'), findsOneWidget);
-    expect(find.text('APPLE'), findsOneWidget);
-    expect(find.text('DOG'), findsNothing);
-    for (final translation in ['Elma', 'Muz', 'Portakal', 'Çilek']) {
-      expect(find.byKey(ValueKey('quiz-option-$translation')), findsOneWidget);
-    }
+    expect(foodWords, contains(currentQuizWord(tester, foodWords)));
+    expect(
+      animalWords.any(
+        (word) => find
+            .byKey(ValueKey('quiz-question-${word.id}'))
+            .evaluate()
+            .isNotEmpty,
+      ),
+      isFalse,
+    );
 
     await completeQuiz(tester, words: foodWords);
 
@@ -4113,11 +4327,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Renkler Quiz'), findsOneWidget);
-    expect(find.text('RED'), findsOneWidget);
-    expect(find.text('APPLE'), findsNothing);
-    for (final translation in ['Kırmızı', 'Mavi', 'Sarı', 'Yeşil']) {
-      expect(find.byKey(ValueKey('quiz-option-$translation')), findsOneWidget);
-    }
+    expect(colorWords, contains(currentQuizWord(tester, colorWords)));
 
     await completeQuiz(tester, words: colorWords);
 
@@ -4180,11 +4390,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Ev Quiz'), findsOneWidget);
-    expect(find.text('HOUSE'), findsOneWidget);
-    expect(find.text('RED'), findsNothing);
-    for (final translation in ['Ev', 'Oda', 'Mutfak', 'Banyo']) {
-      expect(find.byKey(ValueKey('quiz-option-$translation')), findsOneWidget);
-    }
+    expect(homeWords, contains(currentQuizWord(tester, homeWords)));
 
     await completeQuiz(tester, words: homeWords);
 
@@ -4264,11 +4470,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Aile Quiz'), findsOneWidget);
-    expect(find.text('FAMILY'), findsOneWidget);
-    expect(find.text('HOUSE'), findsNothing);
-    for (final translation in ['Aile', 'Anne', 'Baba', 'Ebeveynler']) {
-      expect(find.byKey(ValueKey('quiz-option-$translation')), findsOneWidget);
-    }
+    expect(familyWords, contains(currentQuizWord(tester, familyWords)));
 
     await completeQuiz(tester, words: familyWords);
 
@@ -4364,11 +4566,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Ulaşım Quiz'), findsOneWidget);
-    expect(find.text('CAR'), findsOneWidget);
-    expect(find.text('FAMILY'), findsNothing);
-    for (final translation in ['Araba', 'Otobüs', 'Tren', 'Bisiklet']) {
-      expect(find.byKey(ValueKey('quiz-option-$translation')), findsOneWidget);
-    }
+    expect(
+      transportationWords,
+      contains(currentQuizWord(tester, transportationWords)),
+    );
 
     await completeQuiz(tester, words: transportationWords);
 
@@ -4559,23 +4760,29 @@ void main() {
 
     expect(find.text('Hayvanlar Quiz'), findsOneWidget);
     expect(find.text('Soru 1 / 10'), findsOneWidget);
-    expect(find.text('DOG'), findsOneWidget);
     expect(find.text('Doğru Türkçe karşılığı seç'), findsOneWidget);
+    final firstWord = currentQuizWord(tester, animalWords);
+    final wrongAnswer = visibleWrongQuizAnswer(
+      tester,
+      animalWords,
+      firstWord.turkish,
+    );
 
     var nextButton = tester.widget<FilledButton>(
       find.widgetWithText(FilledButton, 'Sonraki Soru'),
     );
     expect(nextButton.onPressed, isNull);
 
-    await tester.tap(find.byKey(const ValueKey('quiz-option-Kedi')));
+    final wrongOption = find.byKey(ValueKey('quiz-option-$wrongAnswer'));
+    await tester.ensureVisible(wrongOption);
+    await tester.pumpAndSettle();
+    await tester.tap(wrongOption);
     await tester.pump();
 
     expect(find.byIcon(Icons.cancel_rounded), findsOneWidget);
     expect(find.byIcon(Icons.check_circle_rounded), findsOneWidget);
 
-    final lockedOption = tester.widget<InkWell>(
-      find.byKey(const ValueKey('quiz-option-Kedi')),
-    );
+    final lockedOption = tester.widget<InkWell>(wrongOption);
     expect(lockedOption.onTap, isNull);
 
     nextButton = tester.widget<FilledButton>(
@@ -4589,7 +4796,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Soru 2 / 10'), findsOneWidget);
-    expect(find.text('CAT'), findsOneWidget);
+    expect(currentQuizWord(tester, animalWords).id, isNot(firstWord.id));
     expect(find.byIcon(Icons.cancel_rounded), findsNothing);
     expect(find.byIcon(Icons.check_circle_rounded), findsNothing);
   });
@@ -4840,6 +5047,85 @@ void main() {
     expect(find.text('Hayvanlar Quizi Tamamlandı'), findsNothing);
   });
 
+  testWidgets(
+    'Quiz sonucu yalnızca doğal çıkışta reklam dener ve hata navigasyonu engellemez',
+    (tester) async {
+      final ads = FakeInterstitialAdService()..showSucceeds = false;
+      addTearDown(ads.dispose);
+      await ads.recordQuizCompleted();
+      await ads.recordQuizCompleted();
+      await ads.recordQuizCompleted();
+      var action = '';
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: QuizResultScreen(
+            categoryName: 'Hayvanlar',
+            correctAnswerCount: 8,
+            totalQuestionCount: 10,
+            successPercentage: 80,
+            xpAwarded: 0,
+            longestCorrectStreak: 3,
+            elapsedDuration: const Duration(seconds: 30),
+            interstitialAdService: ads,
+            onRetry: () => action = 'retry',
+            onReturnToCategory: () => action = 'category',
+            onReturnHome: () => action = 'home',
+          ),
+        ),
+      );
+
+      await tester.scrollUntilVisible(find.text('Tekrar Çöz'), 250);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Tekrar Çöz'));
+      expect(action, 'retry');
+      expect(ads.showCalls, 0);
+
+      action = '';
+      await tester.scrollUntilVisible(find.text('Ana Sayfa'), 180);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ana Sayfa'));
+      await tester.pump();
+      expect(ads.showCalls, 1);
+      expect(action, 'home');
+    },
+  );
+
+  testWidgets('Reklam kapanınca sayaç sıfırlanır', (tester) async {
+    final ads = FakeInterstitialAdService();
+    addTearDown(ads.dispose);
+    for (var index = 0; index < 3; index++) {
+      await ads.recordQuizCompleted();
+    }
+    var returned = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: QuizResultScreen(
+          categoryName: 'Hayvanlar',
+          correctAnswerCount: 10,
+          totalQuestionCount: 10,
+          successPercentage: 100,
+          xpAwarded: 25,
+          longestCorrectStreak: 10,
+          elapsedDuration: const Duration(seconds: 30),
+          interstitialAdService: ads,
+          onRetry: () {},
+          onReturnToCategory: () => returned = true,
+          onReturnHome: () {},
+        ),
+      ),
+    );
+
+    await tester.scrollUntilVisible(find.text('Kategoriye Dön'), 250);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Kategoriye Dön'));
+    await tester.pump();
+
+    expect(returned, isTrue);
+    expect(ads.storage.state.completedQuizCountSinceLastAd, 0);
+    expect(ads.storage.state.lastInterstitialShownAt, isNotNull);
+  });
+
   testWidgets('Ortak quiz verilen kategori kimliğiyle kayıt oluşturur', (
     tester,
   ) async {
@@ -4853,6 +5139,8 @@ void main() {
       emoji: '🧪',
       words: animalWords.take(10).toList(growable: false),
     );
+    final ads = FakeInterstitialAdService();
+    addTearDown(ads.dispose);
 
     await tester.pumpWidget(
       MaterialApp(
@@ -4860,12 +5148,14 @@ void main() {
           category: category,
           quizStore: FakeQuizStore(quizStorage, xpStorage),
           xpService: xpService,
+          interstitialAdService: ads,
         ),
       ),
     );
     await completeQuiz(tester);
 
     expect(quizStorage.attempts.single.categoryId, 'test-category');
+    expect(ads.storage.state.completedQuizCountSinceLastAd, 1);
     expect(find.text('Test Kategorisi Quizi Tamamlandı'), findsOneWidget);
   });
 }

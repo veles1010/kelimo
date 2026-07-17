@@ -9,6 +9,7 @@ import 'package:kelimo/repositories/quiz_repository.dart';
 import 'package:kelimo/repositories/settings_repository.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/repositories/xp_repository.dart';
+import 'package:kelimo/repositories/ad_frequency_repository.dart';
 import 'package:kelimo/screens/home_screen.dart';
 import 'package:kelimo/services/data_management_service.dart';
 import 'package:kelimo/services/achievement_service.dart';
@@ -20,6 +21,7 @@ import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/services/xp_service.dart';
+import 'package:kelimo/services/interstitial_ad_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 
 void main() {
@@ -38,6 +40,7 @@ class KelimoApp extends StatefulWidget {
     this.achievementStore,
     this.notificationService,
     this.navigationController,
+    this.interstitialAdService,
   });
 
   final WordProgressStore? wordProgressStore;
@@ -49,6 +52,7 @@ class KelimoApp extends StatefulWidget {
   final AchievementStore? achievementStore;
   final NotificationService? notificationService;
   final AppNavigationController? navigationController;
+  final InterstitialAdService? interstitialAdService;
 
   @override
   State<KelimoApp> createState() => _KelimoAppState();
@@ -70,6 +74,8 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
   late final DailyReminderService _dailyReminderService;
   late final AppNavigationController _navigationController;
   late final bool _ownsNavigationController;
+  late final InterstitialAdService _interstitialAdService;
+  late final bool _ownsInterstitialAdService;
   late final StreamSubscription<String> _notificationPayloadSubscription;
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   late final Future<void> _initialization;
@@ -111,6 +117,10 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
       notificationService: _notificationService,
       learningCenterService: _learningCenterService,
     );
+    _ownsInterstitialAdService = widget.interstitialAdService == null;
+    _interstitialAdService =
+        widget.interstitialAdService ??
+        GoogleInterstitialAdService(AdFrequencyRepository(databaseService));
     _ownsNavigationController = widget.navigationController == null;
     _navigationController =
         widget.navigationController ?? AppNavigationController();
@@ -156,6 +166,7 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
     await _xpService.initialize();
     await _achievementService.initialize();
     await _dailyReminderService.initialize();
+    await _interstitialAdService.initialize();
     try {
       _navigationController.handlePayload(
         await _dailyReminderService.getLaunchPayload(),
@@ -169,6 +180,7 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _interstitialAdService.setForeground(state == AppLifecycleState.resumed);
     if (state == AppLifecycleState.resumed) {
       unawaited(_dailyReminderService.refreshSchedule());
     }
@@ -187,6 +199,7 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
     _dailyReminderService.dispose();
     if (_ownsNotificationService) _notificationService.dispose();
     if (_ownsNavigationController) _navigationController.dispose();
+    if (_ownsInterstitialAdService) _interstitialAdService.dispose();
     super.dispose();
   }
 
@@ -220,6 +233,7 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
             learningCenterService: _learningCenterService,
             dailyReminderService: _dailyReminderService,
             navigationController: _navigationController,
+            interstitialAdService: _interstitialAdService,
           );
         },
       ),

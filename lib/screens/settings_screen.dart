@@ -1,12 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:kelimo/models/app_settings.dart';
 import 'package:kelimo/services/data_management_service.dart';
 import 'package:kelimo/services/daily_reminder_service.dart';
 import 'package:kelimo/services/english_tts_service.dart';
 import 'package:kelimo/services/notification_service.dart';
 import 'package:kelimo/services/settings_service.dart';
+import 'package:kelimo/services/interstitial_ad_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -15,6 +17,7 @@ class SettingsScreen extends StatefulWidget {
     required this.dataManagementService,
     this.previewTtsService,
     this.dailyReminderService,
+    this.interstitialAdService,
     super.key,
   });
 
@@ -22,6 +25,7 @@ class SettingsScreen extends StatefulWidget {
   final DataManagementService dataManagementService;
   final EnglishTtsService? previewTtsService;
   final DailyReminderService? dailyReminderService;
+  final InterstitialAdService? interstitialAdService;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -171,6 +175,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _showPrivacyOptions() async {
+    final service = widget.interstitialAdService;
+    if (service == null || _isBusy) return;
+    setState(() => _isBusy = true);
+    final shown = await service.showPrivacyOptions();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          shown
+              ? 'Gizlilik seçenekleri güncellendi'
+              : 'Gizlilik seçenekleri açılamadı',
+        ),
+      ),
+    );
+    setState(() => _isBusy = false);
+  }
+
+  Future<void> _showTestAd() async {
+    final service = widget.interstitialAdService;
+    if (service == null || _isBusy) return;
+    setState(() => _isBusy = true);
+    final shown = await service.showTestAd();
+    if (!mounted) return;
+    if (!shown) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Test reklamı henüz hazır değil')),
+      );
+    }
+    setState(() => _isBusy = false);
+  }
+
   Future<void> _confirmReset({
     required String title,
     required String message,
@@ -229,12 +265,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return SafeArea(
       bottom: false,
       child: AnimatedBuilder(
-        animation: widget.dailyReminderService == null
-            ? widget.settingsService
-            : Listenable.merge([
-                widget.settingsService,
-                widget.dailyReminderService!,
-              ]),
+        animation: Listenable.merge([
+          widget.settingsService,
+          if (widget.dailyReminderService != null) widget.dailyReminderService!,
+          if (widget.interstitialAdService != null)
+            widget.interstitialAdService!,
+        ]),
         builder: (context, child) => ListView(
           padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
           children: [
@@ -390,6 +426,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
+                    if (widget.interstitialAdService case final adService?) ...[
+                      _Section(
+                        title: 'Gizlilik ve Reklamlar',
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const Text(
+                              'Geçiş reklamları yalnızca quiz sonrasındaki '
+                              'doğal çıkışlarda ve seyrek olarak gösterilebilir.',
+                            ),
+                            if (adService.privacyOptionsRequired) ...[
+                              const SizedBox(height: 12),
+                              OutlinedButton.icon(
+                                key: const ValueKey('privacy-options-button'),
+                                onPressed: _isBusy
+                                    ? null
+                                    : () => unawaited(_showPrivacyOptions()),
+                                icon: const Icon(Icons.privacy_tip_outlined),
+                                label: const Text('Gizlilik seçenekleri'),
+                              ),
+                            ],
+                            if (kDebugMode) ...[
+                              const SizedBox(height: 10),
+                              OutlinedButton.icon(
+                                key: const ValueKey('test-interstitial-button'),
+                                onPressed: _isBusy
+                                    ? null
+                                    : () => unawaited(_showTestAd()),
+                                icon: const Icon(Icons.ad_units_outlined),
+                                label: const Text('Test reklamını göster'),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     _Section(
                       title: 'Veri Yönetimi',
                       child: Column(

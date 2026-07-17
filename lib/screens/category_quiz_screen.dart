@@ -1,10 +1,14 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:kelimo/models/learning_category.dart';
 import 'package:kelimo/models/word.dart';
 import 'package:kelimo/repositories/quiz_repository.dart';
 import 'package:kelimo/screens/quiz_result_screen.dart';
 import 'package:kelimo/services/xp_service.dart';
+import 'package:kelimo/services/interstitial_ad_service.dart';
 import 'package:kelimo/services/achievement_service.dart';
+import 'package:kelimo/services/quiz_session_builder.dart';
 import 'package:kelimo/theme/app_theme.dart';
 import 'package:kelimo/widgets/scale_down_single_line_text.dart';
 import 'package:kelimo/widgets/achievement_notification.dart';
@@ -15,16 +19,21 @@ class CategoryQuizScreen extends StatefulWidget {
     required this.quizStore,
     required this.xpService,
     DateTime Function()? now,
+    Random? random,
     super.key,
     this.achievementService,
+    this.interstitialAdService,
   }) : now = now ?? DateTime.now,
+       random = random ?? Random(),
        assert(category.words.length >= 4);
 
   final LearningCategory category;
   final QuizStore quizStore;
   final XpService xpService;
   final DateTime Function() now;
+  final Random random;
   final AchievementService? achievementService;
+  final InterstitialAdService? interstitialAdService;
 
   @override
   State<CategoryQuizScreen> createState() => _CategoryQuizScreenState();
@@ -58,37 +67,26 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
   final QuizCorrectStreakCounter _correctStreak = QuizCorrectStreakCounter();
   late final DateTime _startedAt;
   Duration? _elapsedDuration;
+  late final QuizSession _session;
 
   @override
   void initState() {
     super.initState();
+    _session = QuizSessionBuilder(random: widget.random).build(widget.category);
     _startedAt = widget.now();
   }
 
-  int get _questionCount =>
-      widget.category.words.length < 10 ? widget.category.words.length : 10;
+  int get _questionCount => _session.questions.length;
 
-  Word get _currentWord => widget.category.words[_questionIndex];
+  QuizQuestion get _currentQuestion => _session.questions[_questionIndex];
 
-  List<String> _optionsFor(int index) {
-    final words = widget.category.words;
-    final distinctOptions = <String>{words[index].turkish};
-    var offset = 1;
-    while (distinctOptions.length < 4 && offset < words.length) {
-      distinctOptions.add(words[(index + offset) % words.length].turkish);
-      offset++;
-    }
-    final options = distinctOptions.toList(growable: false);
-    final shift = (index + 1) % options.length;
-
-    return [...options.skip(shift), ...options.take(shift)];
-  }
+  Word get _currentWord => _currentQuestion.word;
 
   void _selectAnswer(String answer) {
     if (_selectedAnswer != null) return;
     setState(() {
       _selectedAnswer = answer;
-      final isCorrect = answer == _currentWord.turkish;
+      final isCorrect = _currentQuestion.isCorrectAnswer(answer);
       _correctStreak.recordAnswer(isCorrect: isCorrect);
       if (isCorrect) {
         _correctAnswerCount++;
@@ -136,6 +134,7 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
         scorePercent: successPercentage,
       );
       widget.xpService.applyPersistedState(completion.xpState);
+      await widget.interstitialAdService?.recordQuizCompleted();
       if (!mounted) return;
       final achievementService = widget.achievementService;
       if (achievementService != null) {
@@ -158,6 +157,7 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
             xpAwarded: completion.attempt.xpAwarded,
             longestCorrectStreak: _correctStreak.longest,
             elapsedDuration: elapsedDuration,
+            interstitialAdService: widget.interstitialAdService,
             onRetry: () {
               navigator.pushReplacement(
                 MaterialPageRoute<void>(
@@ -167,6 +167,8 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
                     xpService: widget.xpService,
                     achievementService: widget.achievementService,
                     now: widget.now,
+                    random: widget.random,
+                    interstitialAdService: widget.interstitialAdService,
                   ),
                 ),
               );
@@ -187,7 +189,7 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final options = _optionsFor(_questionIndex);
+    final options = _currentQuestion.options;
 
     return Scaffold(
       appBar: AppBar(
@@ -226,7 +228,7 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
                     for (final option in options) ...[
                       _AnswerOption(
                         option: option,
-                        correctAnswer: _currentWord.turkish,
+                        correctAnswer: _currentQuestion.correctAnswer,
                         selectedAnswer: _selectedAnswer,
                         onTap: () => _selectAnswer(option),
                       ),
@@ -273,6 +275,7 @@ class _QuestionCard extends StatelessWidget {
             const SizedBox(height: 12),
             ScaleDownSingleLineText(
               word.english.toUpperCase(),
+              key: ValueKey('quiz-question-${word.id}'),
               style: textTheme.displaySmall?.copyWith(
                 fontWeight: FontWeight.bold,
                 letterSpacing: 1.5,
