@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:kelimo/models/app_settings.dart';
+import 'package:kelimo/screens/about_screen.dart';
+import 'package:kelimo/screens/privacy_center_screen.dart';
+import 'package:kelimo/services/app_info_provider.dart';
 import 'package:kelimo/services/data_management_service.dart';
 import 'package:kelimo/services/daily_reminder_service.dart';
 import 'package:kelimo/services/english_tts_service.dart';
@@ -18,6 +21,7 @@ class SettingsScreen extends StatefulWidget {
     this.previewTtsService,
     this.dailyReminderService,
     this.interstitialAdService,
+    this.appInfoProvider,
     super.key,
   });
 
@@ -26,6 +30,7 @@ class SettingsScreen extends StatefulWidget {
   final EnglishTtsService? previewTtsService;
   final DailyReminderService? dailyReminderService;
   final InterstitialAdService? interstitialAdService;
+  final AppInfoProvider? appInfoProvider;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -35,6 +40,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late final EnglishTtsService _ttsService;
   late final bool _ownsTtsService;
   bool _isBusy = false;
+  final GlobalKey _dataManagementKey = GlobalKey();
 
   @override
   void initState() {
@@ -64,6 +70,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await _run(
       () => widget.settingsService.setSpeechRate(value),
       successMessage: 'Telaffuz hızı kaydedildi',
+    );
+  }
+
+  Future<void> _setThemeMode(ThemePreference? value) async {
+    if (value == null || _isBusy) return;
+    await _run(
+      () => widget.settingsService.setThemeMode(value),
+      successMessage: 'Tema tercihi kaydedildi',
     );
   }
 
@@ -207,6 +221,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _isBusy = false);
   }
 
+  void _openAbout() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => AboutScreen(
+          appInfoProvider: widget.appInfoProvider,
+          interstitialAdService: widget.interstitialAdService,
+          onManageData: _showDataManagement,
+        ),
+      ),
+    );
+  }
+
+  void _openPrivacyCenter() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PrivacyCenterScreen(
+          interstitialAdService: widget.interstitialAdService,
+          onManageData: _showDataManagement,
+        ),
+      ),
+    );
+  }
+
+  void _showDataManagement() {
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final targetContext = _dataManagementKey.currentContext;
+      if (!mounted || targetContext == null) return;
+      Scrollable.ensureVisible(
+        targetContext,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
   Future<void> _confirmReset({
     required String title,
     required String message,
@@ -262,6 +312,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isCompact = MediaQuery.sizeOf(context).width < 360;
     return SafeArea(
       bottom: false,
       child: AnimatedBuilder(
@@ -272,7 +323,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             widget.interstitialAdService!,
         ]),
         builder: (context, child) => ListView(
-          padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
+          padding: EdgeInsets.fromLTRB(
+            isCompact ? 16 : 24,
+            28,
+            isCompact ? 16 : 24,
+            32,
+          ),
           children: [
             Center(
               child: ConstrainedBox(
@@ -287,11 +343,74 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     const SizedBox(height: 24),
                     _Section(
+                      title: 'Uygulama',
+                      child: Column(
+                        children: [
+                          Semantics(
+                            button: true,
+                            label: 'Kelimo hakkında ekranını aç',
+                            child: ListTile(
+                              key: const ValueKey('settings-about'),
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Icons.info_outline_rounded),
+                              title: const Text('Hakkında'),
+                              trailing: const Icon(Icons.chevron_right_rounded),
+                              onTap: _openAbout,
+                            ),
+                          ),
+                          const Divider(height: 1),
+                          Semantics(
+                            button: true,
+                            label: 'Gizlilik Merkezini aç',
+                            child: ListTile(
+                              key: const ValueKey('settings-privacy-center'),
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Icons.shield_outlined),
+                              title: const Text('Gizlilik Merkezi'),
+                              trailing: const Icon(Icons.chevron_right_rounded),
+                              onTap: _openPrivacyCenter,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _Section(
+                      title: 'Görünüm',
+                      child: Semantics(
+                        label: 'Uygulama teması seçimi',
+                        child: DropdownButtonFormField<ThemePreference>(
+                          isExpanded: true,
+                          key: ValueKey(
+                            'theme-mode-${widget.settingsService.themeMode.storageValue}',
+                          ),
+                          initialValue: widget.settingsService.themeMode,
+                          decoration: const InputDecoration(
+                            labelText: 'Tema',
+                            helperText: 'Uygulamanın görünümünü seç',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: [
+                            for (final theme in ThemePreference.values)
+                              DropdownMenuItem(
+                                value: theme,
+                                child: Text(theme.label),
+                              ),
+                          ],
+                          onChanged: _isBusy
+                              ? null
+                              : (value) => unawaited(_setThemeMode(value)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _Section(
                       title: 'Öğrenme',
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           DropdownButtonFormField<int>(
+                            isExpanded: true,
                             key: ValueKey(
                               'daily-goal-${widget.settingsService.dailyGoal}',
                             ),
@@ -395,6 +514,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           DropdownButtonFormField<SpeechRatePreference>(
+                            isExpanded: true,
                             key: ValueKey(
                               'speech-rate-${widget.settingsService.speechRate.storageValue}',
                             ),
@@ -464,6 +584,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       const SizedBox(height: 16),
                     ],
                     _Section(
+                      key: _dataManagementKey,
                       title: 'Veri Yönetimi',
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -568,16 +689,19 @@ String _permissionLabel(NotificationPermissionStatus status) {
 }
 
 class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.child});
+  const _Section({required this.title, required this.child, super.key});
 
   final String title;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
+    final padding = MediaQuery.sizeOf(context).width < 360
+        ? const EdgeInsets.all(18)
+        : AppDimensions.cardPadding;
     return Card(
       child: Padding(
-        padding: AppDimensions.cardPadding,
+        padding: padding,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

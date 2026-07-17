@@ -32,14 +32,17 @@ import 'package:kelimo/repositories/settings_repository.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/repositories/xp_repository.dart';
 import 'package:kelimo/screens/quiz_result_screen.dart';
+import 'package:kelimo/screens/about_screen.dart';
 import 'package:kelimo/screens/category_quiz_screen.dart';
 import 'package:kelimo/screens/category_screen.dart';
 import 'package:kelimo/screens/home_screen.dart';
 import 'package:kelimo/screens/learning_center_screen.dart';
 import 'package:kelimo/screens/learning_word_list_screen.dart';
 import 'package:kelimo/screens/settings_screen.dart';
+import 'package:kelimo/screens/privacy_center_screen.dart';
 import 'package:kelimo/screens/word_card_screen.dart';
 import 'package:kelimo/services/english_tts_service.dart';
+import 'package:kelimo/services/app_info_provider.dart';
 import 'package:kelimo/services/data_management_service.dart';
 import 'package:kelimo/services/achievement_service.dart';
 import 'package:kelimo/services/app_navigation_controller.dart';
@@ -65,6 +68,18 @@ class NoShuffleRandom implements Random {
 
   @override
   int nextInt(int max) => max - 1;
+}
+
+class FakeAppInfoProvider implements AppInfoProvider {
+  FakeAppInfoProvider({this.version = '2.3.4', this.buildNumber = '56'});
+
+  final String version;
+  final String buildNumber;
+
+  @override
+  Future<AppVersionInfo> load() async {
+    return AppVersionInfo(version: version, buildNumber: buildNumber);
+  }
 }
 
 class FakeTtsEngine implements TtsEngine {
@@ -606,6 +621,9 @@ class FakeSettingsStore implements SettingsStore {
       reminderMinute: AppSettings.safeReminderMinute(
         storage.values[SettingsRepository.reminderMinuteKey],
       ),
+      themeMode: ThemePreference.fromStorage(
+        storage.values[SettingsRepository.themeModeKey],
+      ),
     );
   }
 
@@ -637,6 +655,8 @@ class FakeSettingsStore implements SettingsStore {
         '${AppSettings.defaults.reminderHour}';
     storage.values[SettingsRepository.reminderMinuteKey] =
         '${AppSettings.defaults.reminderMinute}';
+    storage.values[SettingsRepository.themeModeKey] =
+        AppSettings.defaults.themeMode.storageValue;
   }
 
   @override
@@ -661,6 +681,11 @@ class FakeSettingsStore implements SettingsStore {
   Future<void> setReminderTime({required int hour, required int minute}) async {
     storage.values[SettingsRepository.reminderHourKey] = '$hour';
     storage.values[SettingsRepository.reminderMinuteKey] = '$minute';
+  }
+
+  @override
+  Future<void> setThemeMode(ThemePreference themeMode) async {
+    storage.values[SettingsRepository.themeModeKey] = themeMode.storageValue;
   }
 }
 
@@ -1219,6 +1244,8 @@ void main() {
       expect(service.reminderEnabled, isFalse);
       expect(service.reminderHour, 20);
       expect(service.reminderMinute, 0);
+      expect(service.themeMode, ThemePreference.system);
+      expect(service.materialThemeMode, ThemeMode.system);
       expect(service.ttsSpeechRate, 0.42);
       expect(AppSettings.safeDailyGoal('10'), 10);
       expect(AppSettings.safeDailyGoal('7'), 5);
@@ -1227,8 +1254,57 @@ void main() {
       expect(AppSettings.safeReminderEnabled('bozuk'), isFalse);
       expect(AppSettings.safeReminderHour('24'), 20);
       expect(AppSettings.safeReminderMinute('60'), 0);
+      expect(ThemePreference.fromStorage(null), ThemePreference.system);
+      expect(ThemePreference.fromStorage('bozuk'), ThemePreference.system);
     },
   );
+
+  test(
+    'Tema tercihi kaydedilir, yeniden yüklenir ve anında bildirilir',
+    () async {
+      final storage = FakeSettingsStorage();
+      final first = await createSettingsService(
+        repository: FakeSettingsStore(storage),
+      );
+      var notificationCount = 0;
+      first.addListener(() => notificationCount++);
+
+      await first.setThemeMode(ThemePreference.dark);
+      expect(first.themeMode, ThemePreference.dark);
+      expect(first.materialThemeMode, ThemeMode.dark);
+      expect(notificationCount, 1);
+      expect(storage.values[SettingsRepository.themeModeKey], 'dark');
+      first.dispose();
+
+      final restored = await createSettingsService(
+        repository: FakeSettingsStore(storage),
+      );
+      addTearDown(restored.dispose);
+      expect(restored.themeMode, ThemePreference.dark);
+
+      storage.values[SettingsRepository.themeModeKey] = 'desteklenmiyor';
+      await restored.reload();
+      expect(restored.themeMode, ThemePreference.system);
+    },
+  );
+
+  test('Koyu tema ortak Material yüzeylerini tutarlı biçimde tanımlar', () {
+    final theme = AppTheme.dark;
+
+    expect(theme.brightness, Brightness.dark);
+    expect(theme.scaffoldBackgroundColor, isNot(theme.cardColor));
+    expect(theme.dialogTheme.backgroundColor, isNotNull);
+    expect(theme.bottomSheetTheme.modalBackgroundColor, isNotNull);
+    expect(theme.navigationBarTheme.backgroundColor, theme.cardColor);
+    expect(
+      theme.navigationBarTheme.indicatorColor,
+      theme.colorScheme.primaryContainer,
+    );
+    expect(theme.inputDecorationTheme.filled, isTrue);
+    expect(theme.snackBarTheme.backgroundColor, isNotNull);
+    expect(theme.dividerTheme.color, theme.colorScheme.outlineVariant);
+    expect(theme.progressIndicatorTheme.color, theme.colorScheme.primary);
+  });
 
   test(
     'Hatırlatıcı tercihleri repository yeniden oluşturulunca korunur',
@@ -1552,6 +1628,7 @@ void main() {
     );
     await settings.setDailyGoal(10);
     await settings.setSpeechRate(SpeechRatePreference.fast);
+    await settings.setThemeMode(ThemePreference.dark);
     final statistics = createStatisticsService(
       streakService: streak,
       xpService: xpService,
@@ -1625,10 +1702,12 @@ void main() {
     expect(settings.reminderEnabled, isFalse);
     expect(settings.reminderHour, 20);
     expect(settings.reminderMinute, 0);
+    expect(settings.themeMode, ThemePreference.system);
     expect(notificationService.schedules, isEmpty);
     expect(notificationService.testSchedules, isEmpty);
 
     await settings.setDailyGoal(10);
+    await settings.setThemeMode(ThemePreference.dark);
     await reminderService.setTime(hour: 8, minute: 15);
     await reminderService.setEnabled(true);
     await dataManagement.resetLearningData();
@@ -1644,6 +1723,7 @@ void main() {
     expect(settings.reminderEnabled, isTrue);
     expect(settings.reminderHour, 8);
     expect(settings.reminderMinute, 15);
+    expect(settings.themeMode, ThemePreference.dark);
     expect(notificationService.schedules, hasLength(1));
     expect(
       notificationService.schedules.single.title,
@@ -1670,6 +1750,7 @@ void main() {
     expect(settings.reminderEnabled, isFalse);
     expect(settings.reminderHour, 20);
     expect(settings.reminderMinute, 0);
+    expect(settings.themeMode, ThemePreference.system);
     expect(notificationService.schedules, isEmpty);
     expect(notificationService.testSchedules, isEmpty);
     expect(CategoryCatalog.categories, hasLength(6));
@@ -3326,6 +3407,12 @@ void main() {
 
     expect(find.byType(SettingsScreen), findsOneWidget);
     expect(find.text('Ayarlar'), findsWidgets);
+    expect(find.text('Uygulama'), findsOneWidget);
+    expect(find.text('Hakkında'), findsOneWidget);
+    expect(find.text('Gizlilik Merkezi'), findsOneWidget);
+    expect(find.text('Görünüm'), findsOneWidget);
+    expect(find.text('Tema'), findsOneWidget);
+    expect(find.text('Uygulamanın görünümünü seç'), findsOneWidget);
     expect(find.text('Öğrenme'), findsOneWidget);
     expect(find.text('Günlük kelime hedefi'), findsOneWidget);
     expect(
@@ -3358,6 +3445,244 @@ void main() {
     await tester.tap(find.text('İptal'));
     await tester.pumpAndSettle();
     expect(resetStore.calls, isEmpty);
+  });
+
+  testWidgets('Kök uygulama kayıtlı sistem, açık ve koyu temayı uygular', (
+    tester,
+  ) async {
+    final expectations = {
+      ThemePreference.system: ThemeMode.system,
+      ThemePreference.light: ThemeMode.light,
+      ThemePreference.dark: ThemeMode.dark,
+    };
+
+    for (final entry in expectations.entries) {
+      final storage = FakeSettingsStorage()
+        ..values[SettingsRepository.themeModeKey] = entry.key.storageValue;
+      await pumpKelimoApp(tester, settingsStorage: storage);
+      final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+      expect(app.themeMode, entry.value);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+    }
+  });
+
+  testWidgets('Ayarlar üç tema seçeneğini anında uygular', (tester) async {
+    final storage = FakeSettingsStorage();
+    await pumpKelimoApp(tester, settingsStorage: storage);
+    await tester.tap(find.text('Ayarlar'));
+    await tester.pumpAndSettle();
+
+    final selector = find.byKey(const ValueKey('theme-mode-system'));
+    expect(selector, findsOneWidget);
+    await tester.tap(selector);
+    await tester.pumpAndSettle();
+    expect(find.text('Sistem ayarı'), findsWidgets);
+    expect(find.text('Açık'), findsOneWidget);
+    expect(find.text('Koyu'), findsOneWidget);
+
+    await tester.tap(find.text('Koyu'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<MaterialApp>(find.byType(MaterialApp)).themeMode,
+      ThemeMode.dark,
+    );
+    expect(
+      Theme.of(tester.element(find.byType(SettingsScreen))).brightness,
+      Brightness.dark,
+    );
+    expect(storage.values[SettingsRepository.themeModeKey], 'dark');
+
+    await tester.tap(find.byKey(const ValueKey('theme-mode-dark')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Açık'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<MaterialApp>(find.byType(MaterialApp)).themeMode,
+      ThemeMode.light,
+    );
+    expect(storage.values[SettingsRepository.themeModeKey], 'light');
+  });
+
+  testWidgets('Hakkında ekranı sürüm, gizlilik ve lisansları gösterir', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(home: AboutScreen(appInfoProvider: FakeAppInfoProvider())),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Kelimo'), findsOneWidget);
+    expect(find.text('Sürüm 2.3.4 • Yapı 56'), findsOneWidget);
+    expect(find.text('Gizlilik Merkezi'), findsOneWidget);
+    expect(find.text('Açık kaynak lisansları'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('about-privacy-center')));
+    await tester.pumpAndSettle();
+    expect(find.byType(PrivacyCenterScreen), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('about-open-source-licenses')));
+    await tester.pumpAndSettle();
+    expect(find.byType(LicensePage), findsOneWidget);
+  });
+
+  testWidgets('Koyu temada Hakkında ve Gizlilik Merkezi taşmadan çalışır', (
+    tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(320, 568));
+    final ads = FakeInterstitialAdService(privacyRequired: true);
+    addTearDown(ads.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        darkTheme: AppTheme.dark,
+        themeMode: ThemeMode.dark,
+        home: AboutScreen(
+          appInfoProvider: FakeAppInfoProvider(),
+          interstitialAdService: ads,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      Theme.of(tester.element(find.byType(AboutScreen))).brightness,
+      Brightness.dark,
+    );
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.byKey(const ValueKey('about-open-source-licenses')));
+    await tester.pumpAndSettle();
+    expect(find.byType(LicensePage), findsOneWidget);
+    expect(
+      Theme.of(tester.element(find.byType(LicensePage))).brightness,
+      Brightness.dark,
+    );
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('about-privacy-center')));
+    await tester.pumpAndSettle();
+    expect(find.byType(PrivacyCenterScreen), findsOneWidget);
+    expect(
+      Theme.of(tester.element(find.byType(PrivacyCenterScreen))).brightness,
+      Brightness.dark,
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('privacy-manage-data')),
+      250,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'Gizlilik Merkezi gerçek veri, bildirim ve reklam davranışlarını açıklar',
+    (tester) async {
+      final ads = FakeInterstitialAdService(privacyRequired: true);
+      addTearDown(ads.dispose);
+      var manageDataCalls = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PrivacyCenterScreen(
+            interstitialAdService: ads,
+            onManageData: () => manageDataCalls++,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Gizlilik Merkezi'), findsOneWidget);
+      expect(find.text('Gizlilik Özeti'), findsOneWidget);
+      expect(find.text('Öğrenme verilerin'), findsOneWidget);
+      expect(find.textContaining('yerel SQLite veritabanında'), findsOneWidget);
+      expect(find.text('Hesap ve bulut'), findsOneWidget);
+      expect(find.textContaining('hesap oluşturma'), findsOneWidget);
+      expect(find.text('Hatırlatıcılar'), findsOneWidget);
+      expect(find.textContaining('yerel bildirim sistemiyle'), findsOneWidget);
+      expect(find.text('Reklamlar ve seçimlerin'), findsOneWidget);
+      expect(find.textContaining('Google Mobile Ads'), findsOneWidget);
+      expect(find.text('Verilerini yönet'), findsOneWidget);
+      expect(
+        find.textContaining('Öğrenme verilerini veya tüm verileri'),
+        findsOneWidget,
+      );
+
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('privacy-center-ad-options')),
+        250,
+      );
+      final privacyOptions = find.byKey(
+        const ValueKey('privacy-center-ad-options'),
+      );
+      await tester.ensureVisible(privacyOptions);
+      await tester.pumpAndSettle();
+      await tester.tap(privacyOptions);
+      await tester.pump();
+      expect(ads.privacyCalls, 1);
+      expect(ads.showCalls, 0);
+      expect(ads.testShowCalls, 0);
+
+      await tester.pump(const Duration(seconds: 5));
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('privacy-manage-data')),
+        250,
+      );
+      final manageData = find.byKey(const ValueKey('privacy-manage-data'));
+      await tester.ensureVisible(manageData);
+      await tester.pumpAndSettle();
+      await tester.tap(manageData);
+      expect(manageDataCalls, 1);
+    },
+  );
+
+  testWidgets('Gizlilik Merkezi gereksiz UMP aksiyonunu pasif açıklar', (
+    tester,
+  ) async {
+    final ads = FakeInterstitialAdService(privacyRequired: false);
+    addTearDown(ads.dispose);
+    await tester.pumpWidget(
+      MaterialApp(home: PrivacyCenterScreen(interstitialAdService: ads)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Şu anda ek reklam gizliliği seçeneği yok.'),
+      250,
+    );
+    expect(
+      find.byKey(const ValueKey('privacy-center-ad-options')),
+      findsNothing,
+    );
+    expect(
+      find.text('Şu anda ek reklam gizliliği seçeneği yok.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('Gizlilik Merkezi mevcut Veri Yönetimi bölümüne döner', (
+    tester,
+  ) async {
+    await pumpKelimoApp(tester);
+    await tester.tap(find.text('Ayarlar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('settings-privacy-center')));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('privacy-manage-data')),
+      250,
+    );
+    final manageData = find.byKey(const ValueKey('privacy-manage-data'));
+    await tester.ensureVisible(manageData);
+    await tester.pumpAndSettle();
+    await tester.tap(manageData);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SettingsScreen), findsOneWidget);
+    expect(find.text('Veri Yönetimi'), findsOneWidget);
+    expect(find.text('Öğrenme verilerini sıfırla'), findsOneWidget);
   });
 
   testWidgets('Hatırlatma saati gece yarısında 00:35 olarak gösterilir', (
@@ -3412,7 +3737,12 @@ void main() {
 
       await tester.tap(find.text('Ayarlar'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('daily-reminder-switch')));
+      final reminderSwitch = find.byKey(
+        const ValueKey('daily-reminder-switch'),
+      );
+      await tester.ensureVisible(reminderSwitch);
+      await tester.pumpAndSettle();
+      await tester.tap(reminderSwitch);
       await tester.pumpAndSettle();
       expect(notifications.schedules, hasLength(1));
       await tester.pump(const Duration(seconds: 5));
@@ -3486,6 +3816,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Sesi dene'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Sesi dene'));
       await tester.pumpAndSettle();
 
@@ -3505,14 +3837,17 @@ void main() {
 
     await tester.tap(find.text('Ayarlar'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('daily-reminder-switch')));
+    final reminderSwitch = find.byKey(const ValueKey('daily-reminder-switch'));
+    await tester.ensureVisible(reminderSwitch);
+    await tester.pumpAndSettle();
+    await tester.tap(reminderSwitch);
     await tester.pumpAndSettle();
 
     expect(find.text('Günlük hatırlatıcı açıldı'), findsOneWidget);
     expect(notifications.schedules, hasLength(1));
     expect(notifications.schedules.single.payload, 'daily_review');
 
-    await tester.tap(find.byKey(const ValueKey('daily-reminder-switch')));
+    await tester.tap(reminderSwitch);
     await tester.pumpAndSettle();
     final switchTile = tester.widget<SwitchListTile>(
       find.byKey(const ValueKey('daily-reminder-switch')),
@@ -3532,7 +3867,10 @@ void main() {
 
     await tester.tap(find.text('Ayarlar'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('daily-reminder-switch')));
+    final reminderSwitch = find.byKey(const ValueKey('daily-reminder-switch'));
+    await tester.ensureVisible(reminderSwitch);
+    await tester.pumpAndSettle();
+    await tester.tap(reminderSwitch);
     await tester.pumpAndSettle();
 
     final switchTile = tester.widget<SwitchListTile>(

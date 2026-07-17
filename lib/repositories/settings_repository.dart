@@ -9,6 +9,7 @@ abstract interface class SettingsStore {
   Future<void> setSpeechRate(SpeechRatePreference speechRate);
   Future<void> setReminderEnabled(bool enabled);
   Future<void> setReminderTime({required int hour, required int minute});
+  Future<void> setThemeMode(ThemePreference themeMode);
   Future<void> resetToDefaults();
   Future<int> resolveDailyGoalForDate({
     required String dateKey,
@@ -26,6 +27,7 @@ class SettingsRepository implements SettingsStore {
   static const reminderEnabledKey = 'reminder_enabled';
   static const reminderHourKey = 'reminder_hour';
   static const reminderMinuteKey = 'reminder_minute';
+  static const themeModeKey = 'theme_mode';
 
   final DatabaseService _databaseService;
 
@@ -43,6 +45,7 @@ class SettingsRepository implements SettingsStore {
         reminderMinute: AppSettings.safeReminderMinute(
           values[reminderMinuteKey],
         ),
+        themeMode: ThemePreference.fromStorage(values[themeModeKey]),
       );
     } catch (error, stackTrace) {
       debugPrint('Ayarlar yüklenemedi: $error\n$stackTrace');
@@ -90,18 +93,24 @@ class SettingsRepository implements SettingsStore {
   }
 
   @override
+  Future<void> setThemeMode(ThemePreference themeMode) {
+    return _writeValue(themeModeKey, themeMode.storageValue);
+  }
+
+  @override
   Future<void> resetToDefaults() async {
     final database = await _databaseService.database;
     await database.transaction((transaction) async {
       await transaction.delete(
         'app_settings',
-        where: 'key IN (?, ?, ?, ?, ?)',
+        where: 'key IN (?, ?, ?, ?, ?, ?)',
         whereArgs: [
           dailyGoalKey,
           speechRateKey,
           reminderEnabledKey,
           reminderHourKey,
           reminderMinuteKey,
+          themeModeKey,
         ],
       );
       await _writeDefaults(transaction);
@@ -196,6 +205,12 @@ class SettingsRepository implements SettingsStore {
       database,
       reminderMinuteKey,
       '${AppSettings.defaults.reminderMinute}',
+      updatedAt: now,
+    );
+    await _upsert(
+      database,
+      themeModeKey,
+      AppSettings.defaults.themeMode.storageValue,
       updatedAt: now,
     );
   }

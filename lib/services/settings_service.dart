@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:kelimo/models/app_settings.dart';
 import 'package:kelimo/models/daily_progress.dart';
 import 'package:kelimo/repositories/settings_repository.dart';
@@ -22,6 +22,12 @@ class SettingsService extends ChangeNotifier {
   bool get reminderEnabled => _settings.reminderEnabled;
   int get reminderHour => _settings.reminderHour;
   int get reminderMinute => _settings.reminderMinute;
+  ThemePreference get themeMode => _settings.themeMode;
+  ThemeMode get materialThemeMode => switch (themeMode) {
+    ThemePreference.system => ThemeMode.system,
+    ThemePreference.light => ThemeMode.light,
+    ThemePreference.dark => ThemeMode.dark,
+  };
   bool get isLoading => _isLoading;
 
   Future<void> initialize() async {
@@ -66,6 +72,12 @@ class SettingsService extends ChangeNotifier {
     }
     await repository.setReminderTime(hour: hour, minute: minute);
     _settings = _settings.copyWith(reminderHour: hour, reminderMinute: minute);
+    notifyListeners();
+  }
+
+  Future<void> setThemeMode(ThemePreference themeMode) async {
+    await repository.setThemeMode(themeMode);
+    _settings = _settings.copyWith(themeMode: themeMode);
     notifyListeners();
   }
 

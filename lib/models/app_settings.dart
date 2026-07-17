@@ -17,6 +17,24 @@ enum SpeechRatePreference {
   }
 }
 
+enum ThemePreference {
+  system('system', 'Sistem ayarı'),
+  light('light', 'Açık'),
+  dark('dark', 'Koyu');
+
+  const ThemePreference(this.storageValue, this.label);
+
+  final String storageValue;
+  final String label;
+
+  static ThemePreference fromStorage(String? value) {
+    return values.firstWhere(
+      (theme) => theme.storageValue == value,
+      orElse: () => system,
+    );
+  }
+}
+
 class AppSettings {
   const AppSettings({
     required this.dailyGoal,
@@ -24,6 +42,7 @@ class AppSettings {
     required this.reminderEnabled,
     required this.reminderHour,
     required this.reminderMinute,
+    required this.themeMode,
   });
 
   static const allowedDailyGoals = {5, 10, 15, 20};
@@ -33,6 +52,7 @@ class AppSettings {
     reminderEnabled: false,
     reminderHour: 20,
     reminderMinute: 0,
+    themeMode: ThemePreference.system,
   );
 
   final int dailyGoal;
@@ -40,6 +60,7 @@ class AppSettings {
   final bool reminderEnabled;
   final int reminderHour;
   final int reminderMinute;
+  final ThemePreference themeMode;
 
   AppSettings copyWith({
     int? dailyGoal,
@@ -47,6 +68,7 @@ class AppSettings {
     bool? reminderEnabled,
     int? reminderHour,
     int? reminderMinute,
+    ThemePreference? themeMode,
   }) {
     return AppSettings(
       dailyGoal: dailyGoal ?? this.dailyGoal,
@@ -54,6 +76,7 @@ class AppSettings {
       reminderEnabled: reminderEnabled ?? this.reminderEnabled,
       reminderHour: reminderHour ?? this.reminderHour,
       reminderMinute: reminderMinute ?? this.reminderMinute,
+      themeMode: themeMode ?? this.themeMode,
     );
   }
 

@@ -143,6 +143,11 @@ class _ReviewSettingsStore implements SettingsStore {
   Future<void> setReminderTime({required int hour, required int minute}) async {
     settings = settings.copyWith(reminderHour: hour, reminderMinute: minute);
   }
+
+  @override
+  Future<void> setThemeMode(ThemePreference themeMode) async {
+    settings = settings.copyWith(themeMode: themeMode);
+  }
 }
 
 class _ReviewTtsEngine implements TtsEngine {

@@ -205,37 +205,40 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      navigatorKey: _navigatorKey,
-      title: 'Kelimo',
-      debugShowCheckedModeBanner: false,
-      locale: const Locale('tr', 'TR'),
-      theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
-      themeMode: ThemeMode.system,
-      home: FutureBuilder<void>(
-        future: _initialization,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
+    return AnimatedBuilder(
+      animation: _settingsService,
+      builder: (context, _) => MaterialApp(
+        navigatorKey: _navigatorKey,
+        title: 'Kelimo',
+        debugShowCheckedModeBanner: false,
+        locale: const Locale('tr', 'TR'),
+        theme: AppTheme.light,
+        darkTheme: AppTheme.dark,
+        themeMode: _settingsService.materialThemeMode,
+        home: FutureBuilder<void>(
+          future: _initialization,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
+            return HomeScreen(
+              streakService: _streakService,
+              wordProgressStore: _wordProgressStore,
+              xpService: _xpService,
+              quizStore: _quizStore,
+              statisticsService: _statisticsService,
+              settingsService: _settingsService,
+              dataManagementService: _dataManagementService,
+              achievementService: _achievementService,
+              learningCenterService: _learningCenterService,
+              dailyReminderService: _dailyReminderService,
+              navigationController: _navigationController,
+              interstitialAdService: _interstitialAdService,
             );
-          }
-          return HomeScreen(
-            streakService: _streakService,
-            wordProgressStore: _wordProgressStore,
-            xpService: _xpService,
-            quizStore: _quizStore,
-            statisticsService: _statisticsService,
-            settingsService: _settingsService,
-            dataManagementService: _dataManagementService,
-            achievementService: _achievementService,
-            learningCenterService: _learningCenterService,
-            dailyReminderService: _dailyReminderService,
-            navigationController: _navigationController,
-            interstitialAdService: _interstitialAdService,
-          );
-        },
+          },
+        ),
       ),
     );
   }
