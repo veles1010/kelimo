@@ -1,0 +1,20 @@
+flutter_native_splash:
+  android: true
+  ios: true
+  web: false
+
+  color: "#FFF9F1"
+  color_dark: "#0E1720"
+  image: assets/branding/kelimo_splash_preview.png
+  image_dark: assets/branding/kelimo_splash_dark.png
+
+  android_gravity: center
+  ios_content_mode: scaleAspectFit
+
+  android_12:
+    color: "#FFF9F1"
+    color_dark: "#0E1720"
+    image: assets/branding/kelimo_app_icon.png
+    image_dark: assets/branding/kelimo_app_icon.png
+    icon_background_color: "#FFF9F1"
+    icon_background_color_dark: "#0E1720"
