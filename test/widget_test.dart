@@ -1055,7 +1055,7 @@ void main() {
     }
 
     expect(engine.isComplete, isTrue);
-    expect(evaluationCount, 48);
+    expect(evaluationCount, 60);
     expect(engine.canNext, isFalse);
     expect(engine.canPrevious, isFalse);
   });
@@ -1730,7 +1730,7 @@ void main() {
       'Bugünün kelimelerine hazır mısın?',
     );
     final learning = LearningCenterService(wordProgressStore: wordStore).load();
-    expect(learning.totalCount, 122);
+    expect(learning.totalCount, 360);
     expect(learning.favoriteCount, 0);
     expect(learning.repeatPendingCount, 0);
     expect(learning.learnedCount, 0);
@@ -1753,10 +1753,10 @@ void main() {
     expect(settings.themeMode, ThemePreference.system);
     expect(notificationService.schedules, isEmpty);
     expect(notificationService.testSchedules, isEmpty);
-    expect(CategoryCatalog.categories, hasLength(6));
+    expect(CategoryCatalog.categories, hasLength(12));
     expect(
       CategoryCatalog.categories.expand((category) => category.words),
-      hasLength(122),
+      hasLength(360),
     );
   });
 
@@ -2326,9 +2326,9 @@ void main() {
     expect(toTurkishUpperCase('ışık şğüöç'), 'IŞIK ŞĞÜÖÇ');
   });
 
-  test('Hayvanlar listesi 24 benzersiz ve eksiksiz kelime içerir', () {
-    expect(animalWords, hasLength(24));
-    expect(animalWords.map((word) => word.english).toSet(), hasLength(24));
+  test('Hayvanlar listesi 30 benzersiz ve eksiksiz kelime içerir', () {
+    expect(animalWords, hasLength(30));
+    expect(animalWords.map((word) => word.english).toSet(), hasLength(30));
 
     for (final word in animalWords) {
       expect(word.english, isNotEmpty);
@@ -2347,24 +2347,24 @@ void main() {
     expect(category.title, 'Hayvanlar');
     expect(category.words, animalWords);
     expect(
-      category.words.map((word) => word.id).toList(),
-      animalWords.map((word) => word.english.toLowerCase()).toList(),
+      category.words.take(24).map((word) => word.id).toList(),
+      animalWords.take(24).map((word) => word.english.toLowerCase()).toList(),
     );
   });
 
-  test('Yiyecekler kataloğu 20 kararlı ve benzersiz kelime içerir', () {
+  test('Yiyecekler kataloğu 30 kararlı ve benzersiz kelime içerir', () {
     final category = CategoryCatalog.findById('foods');
 
-    expect(CategoryCatalog.categories, hasLength(6));
+    expect(CategoryCatalog.categories, hasLength(12));
     expect(category, same(CategoryCatalog.foods));
     expect(category!.id, 'foods');
     expect(category.title, 'Yiyecekler');
     expect(category.isAvailable, isTrue);
     expect(category.words, foodWords);
-    expect(foodWords, hasLength(20));
-    expect(foodWords.map((word) => word.id).toSet(), hasLength(20));
+    expect(foodWords, hasLength(30));
+    expect(foodWords.map((word) => word.id).toSet(), hasLength(30));
     expect(foodWords.every((word) => word.id.startsWith('foods_')), isTrue);
-    expect(foodWords.map((word) => word.id).toList(), [
+    expect(foodWords.take(20).map((word) => word.id).toList(), [
       'foods_apple',
       'foods_banana',
       'foods_orange',
@@ -2401,7 +2401,7 @@ void main() {
     expect(upcoming, isEmpty);
   });
 
-  test('Renkler kataloğu 16 kararlı ve benzersiz kelime içerir', () {
+  test('Renkler kataloğu 30 kararlı ve benzersiz kelime içerir', () {
     final category = CategoryCatalog.findById('colors');
 
     expect(category, same(CategoryCatalog.colors));
@@ -2409,10 +2409,10 @@ void main() {
     expect(category.title, 'Renkler');
     expect(category.isAvailable, isTrue);
     expect(category.words, colorWords);
-    expect(colorWords, hasLength(16));
-    expect(colorWords.map((word) => word.id).toSet(), hasLength(16));
+    expect(colorWords, hasLength(30));
+    expect(colorWords.map((word) => word.id).toSet(), hasLength(30));
     expect(colorWords.every((word) => word.id.startsWith('colors_')), isTrue);
-    expect(colorWords.map((word) => word.id).toList(), [
+    expect(colorWords.take(16).map((word) => word.id).toList(), [
       'colors_red',
       'colors_blue',
       'colors_yellow',
@@ -2443,7 +2443,7 @@ void main() {
     );
   });
 
-  test('Ev kataloğu 22 kararlı ve benzersiz kelime içerir', () {
+  test('Ev kataloğu 30 kararlı ve benzersiz kelime içerir', () {
     final category = CategoryCatalog.findById('home');
 
     expect(category, same(CategoryCatalog.home));
@@ -2451,10 +2451,10 @@ void main() {
     expect(category.title, 'Ev');
     expect(category.isAvailable, isTrue);
     expect(category.words, homeWords);
-    expect(homeWords, hasLength(22));
-    expect(homeWords.map((word) => word.id).toSet(), hasLength(22));
+    expect(homeWords, hasLength(30));
+    expect(homeWords.map((word) => word.id).toSet(), hasLength(30));
     expect(homeWords.every((word) => word.id.startsWith('home_')), isTrue);
-    expect(homeWords.map((word) => word.id).toList(), [
+    expect(homeWords.take(22).map((word) => word.id).toList(), [
       'home_house',
       'home_room',
       'home_kitchen',
@@ -2498,7 +2498,7 @@ void main() {
     );
   });
 
-  test('Aile kataloğu 20 kararlı ve benzersiz kelime içerir', () {
+  test('Aile kataloğu 30 kararlı ve benzersiz kelime içerir', () {
     final category = CategoryCatalog.findById('family');
 
     expect(category, same(CategoryCatalog.family));
@@ -2507,10 +2507,10 @@ void main() {
     expect(category.emoji, '👨‍👩‍👧‍👦');
     expect(category.isAvailable, isTrue);
     expect(category.words, familyWords);
-    expect(familyWords, hasLength(20));
-    expect(familyWords.map((word) => word.id).toSet(), hasLength(20));
+    expect(familyWords, hasLength(30));
+    expect(familyWords.map((word) => word.id).toSet(), hasLength(30));
     expect(familyWords.every((word) => word.id.startsWith('family_')), isTrue);
-    expect(familyWords.map((word) => word.id).toList(), [
+    expect(familyWords.take(20).map((word) => word.id).toList(), [
       'family_family',
       'family_mother',
       'family_father',
@@ -2534,8 +2534,8 @@ void main() {
     ]);
     expect(familyWords.first.english, 'Family');
     expect(familyWords.first.turkish, 'Aile');
-    expect(familyWords.last.english, 'Relative');
-    expect(familyWords.last.turkish, 'Akraba');
+    expect(familyWords[19].english, 'Relative');
+    expect(familyWords[19].turkish, 'Akraba');
     for (final word in familyWords) {
       expect(word.english, isNotEmpty);
       expect(word.turkish, isNotEmpty);
@@ -2546,11 +2546,11 @@ void main() {
     final availableCategories = CategoryCatalog.categories.where(
       (item) => item.isAvailable,
     );
-    expect(availableCategories, hasLength(6));
-    expect(availableCategories.expand((item) => item.words), hasLength(122));
+    expect(availableCategories, hasLength(12));
+    expect(availableCategories.expand((item) => item.words), hasLength(360));
   });
 
-  test('Ulaşım kataloğu 20 kararlı ve benzersiz kelime içerir', () {
+  test('Ulaşım kataloğu 30 kararlı ve benzersiz kelime içerir', () {
     final category = CategoryCatalog.findById('transportation');
 
     expect(category, same(CategoryCatalog.transportation));
@@ -2559,15 +2559,15 @@ void main() {
     expect(category.emoji, '🚍');
     expect(category.isAvailable, isTrue);
     expect(category.words, transportationWords);
-    expect(transportationWords, hasLength(20));
-    expect(transportationWords.map((word) => word.id).toSet(), hasLength(20));
+    expect(transportationWords, hasLength(30));
+    expect(transportationWords.map((word) => word.id).toSet(), hasLength(30));
     expect(
       transportationWords.every(
         (word) => word.id.startsWith('transportation_'),
       ),
       isTrue,
     );
-    expect(transportationWords.map((word) => word.id).toList(), [
+    expect(transportationWords.take(20).map((word) => word.id).toList(), [
       'transportation_car',
       'transportation_bus',
       'transportation_train',
@@ -2591,8 +2591,8 @@ void main() {
     ]);
     expect(transportationWords.first.english, 'Car');
     expect(transportationWords.first.turkish, 'Araba');
-    expect(transportationWords.last.english, 'Bridge');
-    expect(transportationWords.last.turkish, 'Köprü');
+    expect(transportationWords[19].english, 'Bridge');
+    expect(transportationWords[19].turkish, 'Köprü');
     for (final word in transportationWords) {
       expect(word.english, isNotEmpty);
       expect(word.turkish, isNotEmpty);
@@ -2628,7 +2628,7 @@ void main() {
     });
     final snapshot = LearningCenterService(wordProgressStore: store).load();
 
-    expect(snapshot.totalCount, 122);
+    expect(snapshot.totalCount, 360);
     expect(snapshot.favoriteCount, 1);
     expect(snapshot.repeatPendingCount, 2);
     expect(snapshot.learnedCount, 2);
@@ -2674,13 +2674,13 @@ void main() {
 
     expect(snapshot.allWords.first.word.english, 'Dog');
     expect(snapshot.allWords.first.category.id, 'animals');
-    expect(snapshot.allWords[24].word.english, 'Apple');
-    expect(snapshot.allWords[24].category.id, 'foods');
+    expect(snapshot.allWords[30].word.english, 'Apple');
+    expect(snapshot.allWords[30].category.id, 'foods');
     expect(snapshot.allWords.last.word.english, 'Bridge');
-    expect(snapshot.allWords.last.category.id, 'transportation');
+    expect(snapshot.allWords.last.category.id, 'city_places');
     expect(
       snapshot.allWords.map((entry) => entry.word.id).toSet(),
-      hasLength(122),
+      hasLength(360),
     );
   });
 
@@ -2704,8 +2704,8 @@ void main() {
     expect(statistics.todayReviewCount, 0);
     expect(statistics.startedWordCount, 0);
     expect(statistics.favoriteWordCount, 0);
-    expect(statistics.distribution.totalCount, 122);
-    expect(statistics.distribution.newCount, 122);
+    expect(statistics.distribution.totalCount, 360);
+    expect(statistics.distribution.newCount, 360);
     expect(statistics.distribution.learningCount, 0);
     expect(statistics.distribution.learnedCount, 0);
     expect(statistics.quizStatistics.totalQuizCount, 0);
@@ -2796,8 +2796,8 @@ void main() {
 
       expect(statistics.startedWordCount, 4);
       expect(statistics.favoriteWordCount, 2);
-      expect(statistics.distribution.totalCount, 122);
-      expect(statistics.distribution.newCount, 118);
+      expect(statistics.distribution.totalCount, 360);
+      expect(statistics.distribution.newCount, 356);
       expect(statistics.distribution.learningCount, 2);
       expect(statistics.distribution.learnedCount, 2);
       expect(statistics.quizStatistics.totalQuizCount, 7);
@@ -2809,11 +2809,11 @@ void main() {
       expect(statistics.recentAttempts.first.completedAt, DateTime(2026, 7, 7));
       expect(statistics.recentAttempts.last.completedAt, DateTime(2026, 7, 3));
 
-      expect(category.totalWordCount, 24);
+      expect(category.totalWordCount, 30);
       expect(category.reviewedWordCount, 4);
       expect(category.learnedWordCount, 2);
       expect(category.favoriteWordCount, 2);
-      expect(category.averageMasteryPercentage, 13);
+      expect(category.averageMasteryPercentage, 10);
       expect(category.completedQuizCount, 6);
       expect(category.highestQuizScore, 100);
       expect(category.averageQuizPercentage, 75);
@@ -2867,7 +2867,7 @@ void main() {
       final statistics = await statisticsService.loadCategory('foods');
 
       expect(statistics.categoryId, 'foods');
-      expect(statistics.totalWordCount, 20);
+      expect(statistics.totalWordCount, 30);
       expect(statistics.reviewedWordCount, 1);
       expect(statistics.learnedWordCount, 1);
       expect(statistics.favoriteWordCount, 1);
@@ -2922,7 +2922,7 @@ void main() {
     final statistics = await statisticsService.loadCategory('colors');
 
     expect(statistics.categoryId, 'colors');
-    expect(statistics.totalWordCount, 16);
+    expect(statistics.totalWordCount, 30);
     expect(statistics.reviewedWordCount, 1);
     expect(statistics.learnedWordCount, 1);
     expect(statistics.favoriteWordCount, 1);
@@ -2976,7 +2976,7 @@ void main() {
     final statistics = await statisticsService.loadCategory('home');
 
     expect(statistics.categoryId, 'home');
-    expect(statistics.totalWordCount, 22);
+    expect(statistics.totalWordCount, 30);
     expect(statistics.reviewedWordCount, 1);
     expect(statistics.learnedWordCount, 1);
     expect(statistics.favoriteWordCount, 1);
@@ -3030,7 +3030,7 @@ void main() {
     final statistics = await statisticsService.loadCategory('family');
 
     expect(statistics.categoryId, 'family');
-    expect(statistics.totalWordCount, 20);
+    expect(statistics.totalWordCount, 30);
     expect(statistics.reviewedWordCount, 1);
     expect(statistics.learnedWordCount, 1);
     expect(statistics.favoriteWordCount, 1);
@@ -3086,7 +3086,7 @@ void main() {
       final statistics = await statisticsService.loadCategory('transportation');
 
       expect(statistics.categoryId, 'transportation');
-      expect(statistics.totalWordCount, 20);
+      expect(statistics.totalWordCount, 30);
       expect(statistics.reviewedWordCount, 1);
       expect(statistics.learnedWordCount, 1);
       expect(statistics.favoriteWordCount, 1);
@@ -3102,7 +3102,7 @@ void main() {
     expect(find.text('Merhaba!'), findsOneWidget);
     expect(find.text('Bugün öğrenmeye hazır mısın?'), findsOneWidget);
     expect(find.text('Genel ilerleme'), findsOneWidget);
-    expect(find.text('0 / 122 kelime'), findsOneWidget);
+    expect(find.text('0 / 360 kelime'), findsOneWidget);
     expect(find.text('Henüz öğrenmeye başlamadın'), findsOneWidget);
     expect(find.text('Günlük ilerleme'), findsNothing);
     expect(find.text('18 / 30 kelime'), findsNothing);
@@ -3183,7 +3183,7 @@ void main() {
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('learning-filter-all')),
-        matching: find.text('122'),
+        matching: find.text('360'),
       ),
       findsOneWidget,
     );
@@ -3276,6 +3276,10 @@ void main() {
       find.byKey(const ValueKey('learning-word-home_washing_machine')),
       500,
     );
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('learning-word-home_washing_machine')),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(const ValueKey('learning-word-home_washing_machine')),
     );
@@ -3283,7 +3287,7 @@ void main() {
 
     expect(find.byType(WordCardScreen), findsOneWidget);
     expect(find.text('Ev'), findsOneWidget);
-    expect(find.text('20 / 22'), findsOneWidget);
+    expect(find.text('20 / 30'), findsOneWidget);
     expect(find.text('WASHING MACHINE'), findsOneWidget);
   });
 
@@ -3961,7 +3965,7 @@ void main() {
       expect(find.text('Başarımlar'), findsOneWidget);
       expect(find.text('12 / 12 rozet'), findsOneWidget);
       expect(find.text('Yeni'), findsOneWidget);
-      expect(find.text('122 • %100'), findsOneWidget);
+      expect(find.text('360 • %100'), findsOneWidget);
       expect(find.text('Henüz tamamlanmış bir quiz yok.'), findsOneWidget);
     },
   );
@@ -4084,7 +4088,7 @@ void main() {
     },
   );
 
-  testWidgets('altı kategori kartı ve içerikleri bulunur', (tester) async {
+  testWidgets('on iki kategori kartı ve içerikleri bulunur', (tester) async {
     await pumpKelimoApp(tester);
 
     for (final category in [
@@ -4094,6 +4098,12 @@ void main() {
       'Ev',
       'Aile',
       'Ulaşım',
+      'Günlük Rutinler',
+      'Okul',
+      'Giysiler',
+      'Vücut',
+      'Sağlık',
+      'Şehir ve Mekânlar',
     ]) {
       await tester.scrollUntilVisible(find.text(category), 200);
       expect(find.text(category), findsOneWidget);
@@ -4111,6 +4121,72 @@ void main() {
 
     await tester.scrollUntilVisible(find.text('Ulaşım'), 300);
     expect(find.text('Yakında'), findsNothing);
+  });
+
+  testWidgets(
+    'Yeni kategori ortak kart, flashcard, quiz ve istatistik akışını kullanır',
+    (tester) async {
+      await pumpKelimoApp(tester);
+      await tester.scrollUntilVisible(find.text('Günlük Rutinler'), 300);
+
+      final categoryCard = find.ancestor(
+        of: find.text('Günlük Rutinler'),
+        matching: find.byType(Card),
+      );
+      expect(categoryCard, findsOneWidget);
+      expect(
+        find.descendant(of: categoryCard, matching: find.text('30 kelime')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: categoryCard, matching: find.text('Yakında')),
+        findsNothing,
+      );
+
+      await tester.tap(find.text('Günlük Rutinler'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CategoryScreen), findsOneWidget);
+      expect(find.text('0 / 30 kelime'), findsOneWidget);
+
+      await tester.tap(find.text('Öğrenmeye Başla'));
+      await tester.pumpAndSettle();
+      expect(find.byType(WordCardScreen), findsOneWidget);
+      expect(find.text('WAKE UP'), findsOneWidget);
+      expect(find.text('1 / 30'), findsOneWidget);
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Quiz Çöz'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CategoryQuizScreen), findsOneWidget);
+      expect(find.text('Günlük Rutinler Quiz'), findsOneWidget);
+      expect(
+        CategoryCatalog.dailyRoutines.words,
+        contains(currentQuizWord(tester, CategoryCatalog.dailyRoutines.words)),
+      );
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('İstatistik'));
+      await tester.pumpAndSettle();
+      expect(find.text('Günlük Rutinler İstatistikleri'), findsOneWidget);
+      expect(find.text('Günlük Rutinler performansı'), findsOneWidget);
+    },
+  );
+
+  testWidgets('On iki kategori kartı küçük iPhone genişliğinde taşmaz', (
+    tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(320, 568));
+    await pumpKelimoApp(tester);
+
+    await tester.scrollUntilVisible(find.text('Şehir ve Mekânlar'), 300);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Şehir ve Mekânlar'), findsOneWidget);
+    expect(find.text('Yakında'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('uygulama Türkçe ve Material 3 kullanır', (tester) async {
@@ -4134,9 +4210,9 @@ void main() {
 
     expect(find.byType(CategoryScreen), findsOneWidget);
     expect(find.text('Hayvanlar'), findsOneWidget);
-    expect(find.text('24 kelime'), findsOneWidget);
+    expect(find.text('30 kelime'), findsOneWidget);
     expect(find.text('Kategori ilerlemesi'), findsOneWidget);
-    expect(find.text('0 / 24 kelime'), findsOneWidget);
+    expect(find.text('0 / 30 kelime'), findsOneWidget);
     expect(find.text('%0 tamamlandı'), findsOneWidget);
     expect(find.text('Öğrenmeye Başla'), findsOneWidget);
     expect(find.text('Quiz Çöz'), findsOneWidget);
@@ -4155,8 +4231,8 @@ void main() {
 
     expect(find.byType(CategoryScreen), findsOneWidget);
     expect(find.text('Yiyecekler'), findsOneWidget);
-    expect(find.text('20 kelime'), findsOneWidget);
-    expect(find.text('0 / 20 kelime'), findsOneWidget);
+    expect(find.text('30 kelime'), findsOneWidget);
+    expect(find.text('0 / 30 kelime'), findsOneWidget);
     expect(find.text('%0 tamamlandı'), findsOneWidget);
     expect(find.text('Apple'), findsOneWidget);
     expect(find.text('Elma'), findsOneWidget);
@@ -4165,7 +4241,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Yiyecekler'), findsOneWidget);
-    expect(find.text('1 / 20'), findsOneWidget);
+    expect(find.text('1 / 30'), findsOneWidget);
     expect(find.text('APPLE'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('word-card')));
     await tester.pumpAndSettle();
@@ -4615,8 +4691,8 @@ void main() {
 
     expect(find.byType(CategoryScreen), findsOneWidget);
     expect(find.text('Renkler'), findsOneWidget);
-    expect(find.text('16 kelime'), findsOneWidget);
-    expect(find.text('0 / 16 kelime'), findsOneWidget);
+    expect(find.text('30 kelime'), findsOneWidget);
+    expect(find.text('0 / 30 kelime'), findsOneWidget);
     expect(find.text('%0 tamamlandı'), findsOneWidget);
     expect(find.text('Red'), findsOneWidget);
     expect(find.text('Kırmızı'), findsOneWidget);
@@ -4625,7 +4701,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Renkler'), findsOneWidget);
-    expect(find.text('1 / 16'), findsOneWidget);
+    expect(find.text('1 / 30'), findsOneWidget);
     expect(find.text('RED'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('word-card')));
     await tester.pumpAndSettle();
@@ -4681,8 +4757,8 @@ void main() {
 
     expect(find.byType(CategoryScreen), findsOneWidget);
     expect(find.text('Ev'), findsWidgets);
-    expect(find.text('22 kelime'), findsOneWidget);
-    expect(find.text('0 / 22 kelime'), findsOneWidget);
+    expect(find.text('30 kelime'), findsOneWidget);
+    expect(find.text('0 / 30 kelime'), findsOneWidget);
     expect(find.text('%0 tamamlandı'), findsOneWidget);
     expect(find.text('House'), findsOneWidget);
 
@@ -4690,7 +4766,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Ev'), findsOneWidget);
-    expect(find.text('1 / 22'), findsOneWidget);
+    expect(find.text('1 / 30'), findsOneWidget);
     expect(find.text('HOUSE'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('word-card')));
     await tester.pumpAndSettle();
@@ -4748,7 +4824,7 @@ void main() {
     );
     expect(familyCard, findsOneWidget);
     expect(
-      find.descendant(of: familyCard, matching: find.text('20 kelime')),
+      find.descendant(of: familyCard, matching: find.text('30 kelime')),
       findsOneWidget,
     );
     expect(
@@ -4759,8 +4835,8 @@ void main() {
     await openFamilyCategory(tester);
     expect(find.byType(CategoryScreen), findsOneWidget);
     expect(find.text('Aile'), findsWidgets);
-    expect(find.text('20 kelime'), findsOneWidget);
-    expect(find.text('0 / 20 kelime'), findsOneWidget);
+    expect(find.text('30 kelime'), findsOneWidget);
+    expect(find.text('0 / 30 kelime'), findsOneWidget);
     expect(find.text('%0 tamamlandı'), findsOneWidget);
     expect(find.text('Family'), findsOneWidget);
 
@@ -4768,7 +4844,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Aile'), findsOneWidget);
-    expect(find.text('1 / 20'), findsOneWidget);
+    expect(find.text('1 / 30'), findsOneWidget);
     expect(find.text('FAMILY'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('word-card')));
     await tester.pumpAndSettle();
@@ -4826,7 +4902,7 @@ void main() {
 
     expect(find.text('Aile İstatistikleri'), findsOneWidget);
     expect(find.text('Aile performansı'), findsOneWidget);
-    expect(find.text('20'), findsOneWidget);
+    expect(find.text('30'), findsOneWidget);
     expect(find.text('Ev performansı'), findsNothing);
   });
 
@@ -4842,7 +4918,7 @@ void main() {
     );
     expect(transportationCard, findsOneWidget);
     expect(
-      find.descendant(of: transportationCard, matching: find.text('20 kelime')),
+      find.descendant(of: transportationCard, matching: find.text('30 kelime')),
       findsOneWidget,
     );
     expect(
@@ -4853,8 +4929,8 @@ void main() {
     await openTransportationCategory(tester);
     expect(find.byType(CategoryScreen), findsOneWidget);
     expect(find.text('Ulaşım'), findsOneWidget);
-    expect(find.text('20 kelime'), findsOneWidget);
-    expect(find.text('0 / 20 kelime'), findsOneWidget);
+    expect(find.text('30 kelime'), findsOneWidget);
+    expect(find.text('0 / 30 kelime'), findsOneWidget);
     expect(find.text('%0 tamamlandı'), findsOneWidget);
     expect(find.text('Car'), findsOneWidget);
 
@@ -4862,7 +4938,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Ulaşım'), findsOneWidget);
-    expect(find.text('1 / 20'), findsOneWidget);
+    expect(find.text('1 / 30'), findsOneWidget);
     expect(find.text('CAR'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('word-card')));
     await tester.pumpAndSettle();
@@ -4925,7 +5001,7 @@ void main() {
 
     expect(find.text('Ulaşım İstatistikleri'), findsOneWidget);
     expect(find.text('Ulaşım performansı'), findsOneWidget);
-    expect(find.text('20'), findsOneWidget);
+    expect(find.text('30'), findsOneWidget);
     expect(find.text('Aile performansı'), findsNothing);
   });
 
@@ -4947,20 +5023,20 @@ void main() {
         wordProgressStore: FakeWordProgressStore(records),
       );
 
-      expect(find.text('22 / 122 kelime'), findsOneWidget);
-      expect(find.text('2 kelime öğreniliyor'), findsOneWidget);
+      expect(find.text('22 / 360 kelime'), findsOneWidget);
+      expect(find.text('8 kelime öğreniliyor'), findsOneWidget);
       final generalProgress = tester.widget<LinearProgressIndicator>(
         find.byKey(const ValueKey('general-progress')),
       );
-      expect(generalProgress.value, 22 / 122);
+      expect(generalProgress.value, 22 / 360);
 
       await tester.scrollUntilVisible(find.text('Hayvanlar'), 300);
-      expect(find.text('%92'), findsOneWidget);
+      expect(find.text('%73'), findsOneWidget);
 
       await tester.tap(find.text('Hayvanlar'));
       await tester.pumpAndSettle();
-      expect(find.text('22 / 24 kelime'), findsOneWidget);
-      expect(find.text('%92 tamamlandı'), findsOneWidget);
+      expect(find.text('22 / 30 kelime'), findsOneWidget);
+      expect(find.text('%73 tamamlandı'), findsOneWidget);
 
       await tester.tap(find.text('İstatistik'));
       await tester.pumpAndSettle();
@@ -4973,14 +5049,9 @@ void main() {
     tester,
   ) async {
     final records = {
-      for (final word in [
-        ...animalWords,
-        ...foodWords,
-        ...colorWords,
-        ...homeWords,
-        ...familyWords,
-        ...transportationWords,
-      ])
+      for (final word in CategoryCatalog.categories.expand(
+        (category) => category.words,
+      ))
         word.id: testWordProgress(
           wordId: word.id,
           mastery: 'easy',
@@ -4993,7 +5064,7 @@ void main() {
       wordProgressStore: FakeWordProgressStore(records),
     );
 
-    expect(find.text('122 / 122 kelime'), findsOneWidget);
+    expect(find.text('360 / 360 kelime'), findsOneWidget);
     expect(find.text('Tüm kelimeleri öğrendin!'), findsOneWidget);
     final generalProgress = tester.widget<LinearProgressIndicator>(
       find.byKey(const ValueKey('general-progress')),
@@ -5008,7 +5079,7 @@ void main() {
       await pumpKelimoApp(tester, wordProgressStore: wordStore);
 
       await openAnimalsCategory(tester);
-      expect(find.text('0 / 24 kelime'), findsOneWidget);
+      expect(find.text('0 / 30 kelime'), findsOneWidget);
 
       await tester.tap(find.text('Öğrenmeye Başla'));
       await tester.pumpAndSettle();
@@ -5016,13 +5087,13 @@ void main() {
       await tester.pageBack();
       await tester.pumpAndSettle();
 
-      expect(find.text('1 / 24 kelime'), findsOneWidget);
-      expect(find.text('%4 tamamlandı'), findsOneWidget);
+      expect(find.text('1 / 30 kelime'), findsOneWidget);
+      expect(find.text('%3 tamamlandı'), findsOneWidget);
 
       await tester.pageBack();
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(find.text('Hayvanlar'), 300);
-      expect(find.text('%4'), findsOneWidget);
+      expect(find.text('%3'), findsOneWidget);
     },
   );
 
@@ -5055,7 +5126,7 @@ void main() {
     await tester.tap(find.text('Öğrenmeye Başla'));
     await tester.pumpAndSettle();
 
-    expect(find.text('1 / 24'), findsOneWidget);
+    expect(find.text('1 / 30'), findsOneWidget);
     expect(find.text('DOG'), findsOneWidget);
     expect(find.text('Kartı çevirmek için dokun'), findsOneWidget);
     expect(find.text('Dinle'), findsOneWidget);
@@ -5076,14 +5147,14 @@ void main() {
     await tester.tap(find.text('Sonraki'));
     await tester.pumpAndSettle();
 
-    expect(find.text('2 / 24'), findsOneWidget);
+    expect(find.text('2 / 30'), findsOneWidget);
     expect(find.text('CAT'), findsOneWidget);
     expect(find.text('Kartı çevirmek için dokun'), findsOneWidget);
 
     await tester.tap(find.text('Önceki'));
     await tester.pumpAndSettle();
 
-    expect(find.text('1 / 24'), findsOneWidget);
+    expect(find.text('1 / 30'), findsOneWidget);
     expect(find.text('DOG'), findsOneWidget);
   });
 

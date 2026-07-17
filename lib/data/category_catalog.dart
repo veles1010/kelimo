@@ -1,8 +1,14 @@
 import 'package:kelimo/data/animal_words.dart';
+import 'package:kelimo/data/body_words.dart';
+import 'package:kelimo/data/city_place_words.dart';
+import 'package:kelimo/data/clothing_words.dart';
 import 'package:kelimo/data/color_words.dart';
+import 'package:kelimo/data/daily_routine_words.dart';
 import 'package:kelimo/data/family_words.dart';
 import 'package:kelimo/data/food_words.dart';
+import 'package:kelimo/data/health_words.dart';
 import 'package:kelimo/data/home_words.dart';
+import 'package:kelimo/data/school_words.dart';
 import 'package:kelimo/data/transportation_words.dart';
 import 'package:kelimo/models/learning_category.dart';
 
@@ -49,6 +55,48 @@ abstract final class CategoryCatalog {
     words: transportationWords,
   );
 
+  static const dailyRoutines = LearningCategory(
+    id: 'daily_routines',
+    title: 'Günlük Rutinler',
+    emoji: '⏰',
+    words: dailyRoutineWords,
+  );
+
+  static const school = LearningCategory(
+    id: 'school',
+    title: 'Okul',
+    emoji: '🏫',
+    words: schoolWords,
+  );
+
+  static const clothing = LearningCategory(
+    id: 'clothing',
+    title: 'Giysiler',
+    emoji: '👕',
+    words: clothingWords,
+  );
+
+  static const body = LearningCategory(
+    id: 'body',
+    title: 'Vücut',
+    emoji: '🧍',
+    words: bodyWords,
+  );
+
+  static const health = LearningCategory(
+    id: 'health',
+    title: 'Sağlık',
+    emoji: '🩺',
+    words: healthWords,
+  );
+
+  static const cityPlaces = LearningCategory(
+    id: 'city_places',
+    title: 'Şehir ve Mekânlar',
+    emoji: '🏙️',
+    words: cityPlaceWords,
+  );
+
   static const categories = <LearningCategory>[
     animals,
     foods,
@@ -56,6 +104,12 @@ abstract final class CategoryCatalog {
     home,
     family,
     transportation,
+    dailyRoutines,
+    school,
+    clothing,
+    body,
+    health,
+    cityPlaces,
   ];
 
   static LearningCategory? findById(String id) {
