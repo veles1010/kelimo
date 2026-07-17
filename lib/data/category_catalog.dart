@@ -1,15 +1,21 @@
 import 'package:kelimo/data/animal_words.dart';
+import 'package:kelimo/data/basic_verb_words.dart';
 import 'package:kelimo/data/body_words.dart';
 import 'package:kelimo/data/city_place_words.dart';
 import 'package:kelimo/data/clothing_words.dart';
 import 'package:kelimo/data/color_words.dart';
+import 'package:kelimo/data/common_adjective_words.dart';
 import 'package:kelimo/data/daily_routine_words.dart';
 import 'package:kelimo/data/family_words.dart';
+import 'package:kelimo/data/feeling_words.dart';
 import 'package:kelimo/data/food_words.dart';
 import 'package:kelimo/data/health_words.dart';
 import 'package:kelimo/data/home_words.dart';
+import 'package:kelimo/data/nature_weather_words.dart';
+import 'package:kelimo/data/number_quantity_words.dart';
 import 'package:kelimo/data/school_words.dart';
 import 'package:kelimo/data/transportation_words.dart';
+import 'package:kelimo/data/time_date_words.dart';
 import 'package:kelimo/models/learning_category.dart';
 
 abstract final class CategoryCatalog {
@@ -97,6 +103,48 @@ abstract final class CategoryCatalog {
     words: cityPlaceWords,
   );
 
+  static const natureWeather = LearningCategory(
+    id: 'nature_weather',
+    title: 'Doğa ve Hava Durumu',
+    emoji: '🌦️',
+    words: natureWeatherWords,
+  );
+
+  static const timeDates = LearningCategory(
+    id: 'time_dates',
+    title: 'Zaman ve Tarihler',
+    emoji: '🗓️',
+    words: timeDateWords,
+  );
+
+  static const numbersQuantities = LearningCategory(
+    id: 'numbers_quantities',
+    title: 'Sayılar ve Miktarlar',
+    emoji: '🔢',
+    words: numberQuantityWords,
+  );
+
+  static const basicVerbs = LearningCategory(
+    id: 'basic_verbs',
+    title: 'Temel Fiiller',
+    emoji: '🏃',
+    words: basicVerbWords,
+  );
+
+  static const commonAdjectives = LearningCategory(
+    id: 'common_adjectives',
+    title: 'Yaygın Sıfatlar',
+    emoji: '✨',
+    words: commonAdjectiveWords,
+  );
+
+  static const feelings = LearningCategory(
+    id: 'feelings',
+    title: 'Duygular',
+    emoji: '😊',
+    words: feelingWords,
+  );
+
   static const categories = <LearningCategory>[
     animals,
     foods,
@@ -110,6 +158,12 @@ abstract final class CategoryCatalog {
     body,
     health,
     cityPlaces,
+    natureWeather,
+    timeDates,
+    numbersQuantities,
+    basicVerbs,
+    commonAdjectives,
+    feelings,
   ];
 
   static LearningCategory? findById(String id) {
