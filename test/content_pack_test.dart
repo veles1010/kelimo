@@ -51,10 +51,22 @@ void main() {
         'hotel_hotel|hotel_stay|hotel_reception|hotel_receptionist|hotel_lobby|hotel_guest|hotel_room_key|hotel_key_card|hotel_single_room|hotel_double_room|hotel_suite|hotel_pillow|hotel_blanket|hotel_towel|hotel_elevator|hotel_stairs|hotel_room_service|hotel_housekeeping|hotel_check_in|hotel_check_out|hotel_booking|hotel_vacancy|hotel_available|hotel_occupied|hotel_bell|hotel_porter|hotel_wake_up_call|hotel_laundry|hotel_minibar|hotel_wifi',
     'communication':
         'communication_communication|communication_message|communication_call|communication_phone|communication_mobile_phone|communication_telephone|communication_email|communication_letter|communication_postcard|communication_conversation|communication_chat|communication_voice|communication_sound|communication_word|communication_sentence|communication_language|communication_reply|communication_ask|communication_tell|communication_explain|communication_repeat|communication_understand|communication_mean|communication_spell|communication_listen|communication_talk|communication_text|communication_online|communication_offline|communication_signal',
+    'technology':
+        'technology_technology|technology_device|technology_laptop|technology_tablet|technology_screen|technology_keyboard|technology_touchpad|technology_printer|technology_camera|technology_charger|technology_battery|technology_internet|technology_website|technology_password|technology_username|technology_file|technology_folder|technology_download|technology_upload|technology_click|technology_type|technology_save|technology_delete|technology_search|technology_link|technology_application|technology_software|technology_digital|technology_robot|technology_smartwatch',
+    'hobbies':
+        'hobbies_hobby|hobbies_painting|hobbies_drawing|hobbies_knitting|hobbies_sewing|hobbies_gardening|hobbies_fishing|hobbies_camping|hobbies_hiking|hobbies_cycling|hobbies_swimming|hobbies_dancing|hobbies_singing|hobbies_cooking|hobbies_baking|hobbies_photography|hobbies_collecting|hobbies_chess|hobbies_puzzle|hobbies_origami|hobbies_craft|hobbies_pottery|hobbies_birdwatching|hobbies_reading|hobbies_writing|hobbies_gaming|hobbies_woodworking|hobbies_model_making|hobbies_yoga|hobbies_picnic',
+    'sports':
+        'sports_sport|sports_team|sports_player|sports_coach|sports_match|sports_score|sports_goal|sports_ball|sports_field|sports_court|sports_race|sports_winner|sports_loser|sports_medal|sports_training|sports_football|sports_basketball|sports_volleyball|sports_tennis|sports_table_tennis|sports_baseball|sports_handball|sports_golf|sports_boxing|sports_wrestling|sports_gymnastics|sports_athletics|sports_skiing|sports_skating|sports_archery',
+    'music':
+        'music_music|music_song|music_singer|music_band|music_orchestra|music_concert|music_rhythm|music_melody|music_note|music_beat|music_instrument|music_guitar|music_piano|music_violin|music_drum|music_flute|music_trumpet|music_saxophone|music_microphone|music_headphones|music_speaker|music_volume|music_loud|music_quiet|music_chorus|music_verse|music_stage|music_recording|music_playlist|music_tune',
+    'movies_tv':
+        'movies_tv_movie|movies_tv_tv|movies_tv_series|movies_tv_episode|movies_tv_scene|movies_tv_story|movies_tv_character|movies_tv_director|movies_tv_producer|movies_tv_screenwriter|movies_tv_actress|movies_tv_audience|movies_tv_channel|movies_tv_remote_control|movies_tv_subtitles|movies_tv_animation|movies_tv_cartoon|movies_tv_documentary|movies_tv_comedy|movies_tv_drama|movies_tv_action|movies_tv_news|movies_tv_tv_program|movies_tv_live|movies_tv_pause|movies_tv_rewind|movies_tv_trailer|movies_tv_credits|movies_tv_broadcast|movies_tv_studio',
+    'books_reading':
+        'books_reading_book|books_reading_reader|books_reading_author|books_reading_title|books_reading_cover|books_reading_page|books_reading_chapter|books_reading_paragraph|books_reading_line|books_reading_passage|books_reading_storybook|books_reading_novel|books_reading_poem|books_reading_poetry|books_reading_fairy_tale|books_reading_comic|books_reading_magazine|books_reading_newspaper|books_reading_encyclopedia|books_reading_glossary|books_reading_bookmark|books_reading_bookshelf|books_reading_paperback|books_reading_hardcover|books_reading_ebook|books_reading_audiobook|books_reading_read_aloud|books_reading_skim|books_reading_summary|books_reading_ending',
   };
 
-  test('içerik paketi 30 kategoride toplam 900 kelime içerir', () {
-    expect(CategoryCatalog.categories, hasLength(30));
+  test('içerik paketi 36 kategoride toplam 1080 kelime içerir', () {
+    expect(CategoryCatalog.categories, hasLength(36));
     expect(CategoryCatalog.categories.map((category) => category.id), [
       'animals',
       'foods',
@@ -86,13 +98,19 @@ void main() {
       'music',
       'movies_tv',
       'books_reading',
+      'kitchen_cooking',
+      'bathroom_personal_care',
+      'garden',
+      'cleaning_chores',
+      'geography',
+      'holidays_celebrations',
     ]);
 
     final allWords = CategoryCatalog.categories
         .expand((category) => category.words)
         .toList(growable: false);
-    expect(allWords, hasLength(900));
-    expect(allWords.map((word) => word.id).toSet(), hasLength(900));
+    expect(allWords, hasLength(1080));
+    expect(allWords.map((word) => word.id).toSet(), hasLength(1080));
   });
 
   test(
@@ -122,7 +140,7 @@ void main() {
     },
   );
 
-  test('mevcut 720 kelimenin kimlikleri ve sırası korunur', () {
+  test('mevcut 900 kelimenin kimlikleri ve sırası korunur', () {
     var existingWordCount = 0;
     for (final entry in existingIdSnapshots.entries) {
       final category = CategoryCatalog.findById(entry.key)!;
@@ -134,17 +152,17 @@ void main() {
       );
       existingWordCount += expectedIds.length;
     }
-    expect(existingWordCount, 720);
+    expect(existingWordCount, 900);
   });
 
   test('yeni kelime kimlikleri kararlı kategori öneklerini kullanır', () {
     for (final categoryId in [
-      'technology',
-      'hobbies',
-      'sports',
-      'music',
-      'movies_tv',
-      'books_reading',
+      'kitchen_cooking',
+      'bathroom_personal_care',
+      'garden',
+      'cleaning_chores',
+      'geography',
+      'holidays_celebrations',
     ]) {
       final category = CategoryCatalog.findById(categoryId)!;
       expect(category.isAvailable, isTrue);
@@ -153,6 +171,32 @@ void main() {
         isTrue,
         reason: categoryId,
       );
+    }
+  });
+
+  test('son 180 kelimede şablon örnek cümle bulunmaz', () {
+    const categoryIds = [
+      'kitchen_cooking',
+      'bathroom_personal_care',
+      'garden',
+      'cleaning_chores',
+      'geography',
+      'holidays_celebrations',
+    ];
+    final words = categoryIds
+        .map((id) => CategoryCatalog.findById(id)!)
+        .expand((category) => category.words)
+        .toList(growable: false);
+
+    expect(words, hasLength(180));
+    for (final word in words) {
+      expect(word.exampleSentence.trim(), isNotEmpty, reason: word.id);
+      expect(word.exampleTranslation.trim(), isNotEmpty, reason: word.id);
+      final example = '${word.exampleSentence} ${word.exampleTranslation}';
+      expect(example, isNot(contains('Today we learn')), reason: word.id);
+      expect(example, isNot(contains('the term')), reason: word.id);
+      expect(example, isNot(contains('terimini öğreniyoruz')), reason: word.id);
+      expect(example, isNot(contains('"')), reason: word.id);
     }
   });
 }

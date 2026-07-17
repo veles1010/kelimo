@@ -1,4 +1,10 @@
 import 'package:kelimo/data/animal_words.dart';
+import 'package:kelimo/data/bathroom_personal_care_words.dart';
+import 'package:kelimo/data/cleaning_chore_words.dart';
+import 'package:kelimo/data/garden_words.dart';
+import 'package:kelimo/data/geography_words.dart';
+import 'package:kelimo/data/holiday_celebration_words.dart';
+import 'package:kelimo/data/kitchen_cooking_words.dart';
 import 'package:kelimo/data/basic_verb_words.dart';
 import 'package:kelimo/data/book_reading_words.dart';
 import 'package:kelimo/data/body_words.dart';
@@ -267,7 +273,50 @@ abstract final class CategoryCatalog {
     music,
     moviesTv,
     booksReading,
+    kitchenCooking,
+    bathroomPersonalCare,
+    garden,
+    cleaningChores,
+    geography,
+    holidaysCelebrations,
   ];
+
+  static const kitchenCooking = LearningCategory(
+    id: 'kitchen_cooking',
+    title: 'Mutfak ve Yemek Yapma',
+    emoji: '🍳',
+    words: kitchenCookingWords,
+  );
+  static const bathroomPersonalCare = LearningCategory(
+    id: 'bathroom_personal_care',
+    title: 'Banyo ve Kişisel Bakım',
+    emoji: '🛁',
+    words: bathroomPersonalCareWords,
+  );
+  static const garden = LearningCategory(
+    id: 'garden',
+    title: 'Bahçe',
+    emoji: '🌻',
+    words: gardenWords,
+  );
+  static const cleaningChores = LearningCategory(
+    id: 'cleaning_chores',
+    title: 'Temizlik ve Ev İşleri',
+    emoji: '🧹',
+    words: cleaningChoreWords,
+  );
+  static const geography = LearningCategory(
+    id: 'geography',
+    title: 'Coğrafya',
+    emoji: '🌍',
+    words: geographyWords,
+  );
+  static const holidaysCelebrations = LearningCategory(
+    id: 'holidays_celebrations',
+    title: 'Tatiller ve Kutlamalar',
+    emoji: '🎉',
+    words: holidayCelebrationWords,
+  );
 
   static LearningCategory? findById(String id) {
     for (final category in categories) {

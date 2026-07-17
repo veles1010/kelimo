@@ -21,6 +21,7 @@ import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/services/interstitial_ad_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
+import 'package:kelimo/widgets/scale_down_single_line_text.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
@@ -635,12 +636,18 @@ class _GeneralProgressCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                Text(
-                  '${distribution.learnedCount} / '
-                  '${distribution.totalCount} kelime',
-                  style: textTheme.titleMedium?.copyWith(
-                    color: colorScheme.primary,
-                    fontWeight: FontWeight.bold,
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      '${distribution.learnedCount} / '
+                      '${distribution.totalCount} kelime',
+                      style: textTheme.titleMedium?.copyWith(
+                        color: colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -710,8 +717,9 @@ class _CategoryCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    ScaleDownSingleLineText(
                       category.title,
+                      padding: EdgeInsets.zero,
                       style: textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
