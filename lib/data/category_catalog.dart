@@ -5,17 +5,23 @@ import 'package:kelimo/data/city_place_words.dart';
 import 'package:kelimo/data/clothing_words.dart';
 import 'package:kelimo/data/color_words.dart';
 import 'package:kelimo/data/common_adjective_words.dart';
+import 'package:kelimo/data/communication_words.dart';
 import 'package:kelimo/data/daily_routine_words.dart';
 import 'package:kelimo/data/family_words.dart';
 import 'package:kelimo/data/feeling_words.dart';
 import 'package:kelimo/data/food_words.dart';
 import 'package:kelimo/data/health_words.dart';
 import 'package:kelimo/data/home_words.dart';
+import 'package:kelimo/data/hotel_words.dart';
+import 'package:kelimo/data/job_words.dart';
 import 'package:kelimo/data/nature_weather_words.dart';
 import 'package:kelimo/data/number_quantity_words.dart';
+import 'package:kelimo/data/restaurant_words.dart';
 import 'package:kelimo/data/school_words.dart';
+import 'package:kelimo/data/shopping_words.dart';
 import 'package:kelimo/data/transportation_words.dart';
 import 'package:kelimo/data/time_date_words.dart';
+import 'package:kelimo/data/travel_words.dart';
 import 'package:kelimo/models/learning_category.dart';
 
 abstract final class CategoryCatalog {
@@ -145,6 +151,48 @@ abstract final class CategoryCatalog {
     words: feelingWords,
   );
 
+  static const jobs = LearningCategory(
+    id: 'jobs',
+    title: 'Meslekler',
+    emoji: '💼',
+    words: jobWords,
+  );
+
+  static const shopping = LearningCategory(
+    id: 'shopping',
+    title: 'Alışveriş',
+    emoji: '🛍️',
+    words: shoppingWords,
+  );
+
+  static const restaurant = LearningCategory(
+    id: 'restaurant',
+    title: 'Restoran',
+    emoji: '🍽️',
+    words: restaurantWords,
+  );
+
+  static const travel = LearningCategory(
+    id: 'travel',
+    title: 'Seyahat',
+    emoji: '🧭',
+    words: travelWords,
+  );
+
+  static const hotel = LearningCategory(
+    id: 'hotel',
+    title: 'Otel',
+    emoji: '🏨',
+    words: hotelWords,
+  );
+
+  static const communication = LearningCategory(
+    id: 'communication',
+    title: 'İletişim',
+    emoji: '💬',
+    words: communicationWords,
+  );
+
   static const categories = <LearningCategory>[
     animals,
     foods,
@@ -164,6 +212,12 @@ abstract final class CategoryCatalog {
     basicVerbs,
     commonAdjectives,
     feelings,
+    jobs,
+    shopping,
+    restaurant,
+    travel,
+    hotel,
+    communication,
   ];
 
   static LearningCategory? findById(String id) {

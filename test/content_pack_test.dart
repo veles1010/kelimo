@@ -27,10 +27,22 @@ void main() {
         'health_health|health_doctor|health_nurse|health_hospital|health_pharmacy|health_medicine|health_patient|health_appointment|health_fever|health_cough|health_cold|health_headache|health_toothache|health_stomachache|health_sore_throat|health_pain|health_bandage|health_thermometer|health_rest|health_sleep|health_water|health_exercise|health_healthy|health_sick|health_injury|health_allergy|health_vitamin|health_mask|health_soap|health_toothbrush',
     'city_places':
         'city_places_city|city_places_street|city_places_avenue|city_places_square|city_places_park|city_places_hospital|city_places_school|city_places_library|city_places_museum|city_places_cinema|city_places_theater|city_places_restaurant|city_places_cafe|city_places_market|city_places_supermarket|city_places_bakery|city_places_bank|city_places_post_office|city_places_police_station|city_places_fire_station|city_places_bus_stop|city_places_train_station|city_places_airport|city_places_hotel|city_places_pharmacy|city_places_playground|city_places_shopping_center|city_places_mosque|city_places_church|city_places_bridge',
+    'nature_weather':
+        'nature_weather_nature|nature_weather_weather|nature_weather_sun|nature_weather_sky|nature_weather_cloud|nature_weather_rain|nature_weather_snow|nature_weather_wind|nature_weather_storm|nature_weather_thunder|nature_weather_lightning|nature_weather_rainbow|nature_weather_fog|nature_weather_ice|nature_weather_river|nature_weather_lake|nature_weather_sea|nature_weather_ocean|nature_weather_mountain|nature_weather_hill|nature_weather_forest|nature_weather_tree|nature_weather_flower|nature_weather_grass|nature_weather_leaf|nature_weather_rock|nature_weather_beach|nature_weather_island|nature_weather_desert|nature_weather_season',
+    'time_dates':
+        'time_dates_time|time_dates_second|time_dates_minute|time_dates_hour|time_dates_day|time_dates_week|time_dates_month|time_dates_year|time_dates_today|time_dates_tomorrow|time_dates_yesterday|time_dates_morning|time_dates_noon|time_dates_afternoon|time_dates_evening|time_dates_night|time_dates_midnight|time_dates_early|time_dates_late|time_dates_monday|time_dates_tuesday|time_dates_wednesday|time_dates_thursday|time_dates_friday|time_dates_saturday|time_dates_sunday|time_dates_calendar|time_dates_date|time_dates_birthday|time_dates_weekend',
+    'numbers_quantities':
+        'numbers_quantities_zero|numbers_quantities_one|numbers_quantities_two|numbers_quantities_three|numbers_quantities_four|numbers_quantities_five|numbers_quantities_six|numbers_quantities_seven|numbers_quantities_eight|numbers_quantities_nine|numbers_quantities_ten|numbers_quantities_eleven|numbers_quantities_twelve|numbers_quantities_thirteen|numbers_quantities_fourteen|numbers_quantities_fifteen|numbers_quantities_sixteen|numbers_quantities_seventeen|numbers_quantities_eighteen|numbers_quantities_nineteen|numbers_quantities_twenty|numbers_quantities_thirty|numbers_quantities_forty|numbers_quantities_fifty|numbers_quantities_hundred|numbers_quantities_many|numbers_quantities_few|numbers_quantities_all|numbers_quantities_none|numbers_quantities_half',
+    'basic_verbs':
+        'basic_verbs_be|basic_verbs_have|basic_verbs_do|basic_verbs_go|basic_verbs_come|basic_verbs_see|basic_verbs_hear|basic_verbs_say|basic_verbs_speak|basic_verbs_eat|basic_verbs_drink|basic_verbs_sleep|basic_verbs_wake|basic_verbs_sit|basic_verbs_stand|basic_verbs_walk|basic_verbs_run|basic_verbs_jump|basic_verbs_read|basic_verbs_write|basic_verbs_open|basic_verbs_close|basic_verbs_give|basic_verbs_take|basic_verbs_make|basic_verbs_play|basic_verbs_work|basic_verbs_study|basic_verbs_help|basic_verbs_wait',
+    'common_adjectives':
+        'common_adjectives_big|common_adjectives_small|common_adjectives_tall|common_adjectives_short|common_adjectives_long|common_adjectives_fast|common_adjectives_slow|common_adjectives_hot|common_adjectives_cold|common_adjectives_warm|common_adjectives_new|common_adjectives_old|common_adjectives_young|common_adjectives_good|common_adjectives_bad|common_adjectives_beautiful|common_adjectives_ugly|common_adjectives_easy|common_adjectives_difficult|common_adjectives_clean|common_adjectives_dirty|common_adjectives_full|common_adjectives_empty|common_adjectives_heavy|common_adjectives_light|common_adjectives_strong|common_adjectives_weak|common_adjectives_rich|common_adjectives_poor|common_adjectives_different',
+    'feelings':
+        'feelings_happy|feelings_sad|feelings_angry|feelings_afraid|feelings_surprised|feelings_excited|feelings_tired|feelings_bored|feelings_calm|feelings_worried|feelings_nervous|feelings_proud|feelings_shy|feelings_lonely|feelings_loved|feelings_comfortable|feelings_uncomfortable|feelings_hungry|feelings_thirsty|feelings_sleepy|feelings_sick|feelings_well|feelings_confused|feelings_curious|feelings_hopeful|feelings_disappointed|feelings_jealous|feelings_embarrassed|feelings_thankful|feelings_relaxed',
   };
 
-  test('içerik paketi 18 kategoride toplam 540 kelime içerir', () {
-    expect(CategoryCatalog.categories, hasLength(18));
+  test('içerik paketi 24 kategoride toplam 720 kelime içerir', () {
+    expect(CategoryCatalog.categories, hasLength(24));
     expect(CategoryCatalog.categories.map((category) => category.id), [
       'animals',
       'foods',
@@ -50,13 +62,19 @@ void main() {
       'basic_verbs',
       'common_adjectives',
       'feelings',
+      'jobs',
+      'shopping',
+      'restaurant',
+      'travel',
+      'hotel',
+      'communication',
     ]);
 
     final allWords = CategoryCatalog.categories
         .expand((category) => category.words)
         .toList(growable: false);
-    expect(allWords, hasLength(540));
-    expect(allWords.map((word) => word.id).toSet(), hasLength(540));
+    expect(allWords, hasLength(720));
+    expect(allWords.map((word) => word.id).toSet(), hasLength(720));
   });
 
   test(
@@ -86,7 +104,7 @@ void main() {
     },
   );
 
-  test('mevcut 360 kelimenin kimlikleri ve sırası korunur', () {
+  test('mevcut 540 kelimenin kimlikleri ve sırası korunur', () {
     var existingWordCount = 0;
     for (final entry in existingIdSnapshots.entries) {
       final category = CategoryCatalog.findById(entry.key)!;
@@ -98,17 +116,17 @@ void main() {
       );
       existingWordCount += expectedIds.length;
     }
-    expect(existingWordCount, 360);
+    expect(existingWordCount, 540);
   });
 
   test('yeni kelime kimlikleri kararlı kategori öneklerini kullanır', () {
     for (final categoryId in [
-      'nature_weather',
-      'time_dates',
-      'numbers_quantities',
-      'basic_verbs',
-      'common_adjectives',
-      'feelings',
+      'jobs',
+      'shopping',
+      'restaurant',
+      'travel',
+      'hotel',
+      'communication',
     ]) {
       final category = CategoryCatalog.findById(categoryId)!;
       expect(category.isAvailable, isTrue);
