@@ -1,5 +1,6 @@
 import 'package:kelimo/data/animal_words.dart';
 import 'package:kelimo/data/basic_verb_words.dart';
+import 'package:kelimo/data/book_reading_words.dart';
 import 'package:kelimo/data/body_words.dart';
 import 'package:kelimo/data/city_place_words.dart';
 import 'package:kelimo/data/clothing_words.dart';
@@ -13,12 +14,17 @@ import 'package:kelimo/data/food_words.dart';
 import 'package:kelimo/data/health_words.dart';
 import 'package:kelimo/data/home_words.dart';
 import 'package:kelimo/data/hotel_words.dart';
+import 'package:kelimo/data/hobby_words.dart';
 import 'package:kelimo/data/job_words.dart';
+import 'package:kelimo/data/movie_tv_words.dart';
+import 'package:kelimo/data/music_words.dart';
 import 'package:kelimo/data/nature_weather_words.dart';
 import 'package:kelimo/data/number_quantity_words.dart';
 import 'package:kelimo/data/restaurant_words.dart';
 import 'package:kelimo/data/school_words.dart';
 import 'package:kelimo/data/shopping_words.dart';
+import 'package:kelimo/data/sport_words.dart';
+import 'package:kelimo/data/technology_words.dart';
 import 'package:kelimo/data/transportation_words.dart';
 import 'package:kelimo/data/time_date_words.dart';
 import 'package:kelimo/data/travel_words.dart';
@@ -193,6 +199,43 @@ abstract final class CategoryCatalog {
     words: communicationWords,
   );
 
+  static const technology = LearningCategory(
+    id: 'technology',
+    title: 'Teknoloji',
+    emoji: '💻',
+    words: technologyWords,
+  );
+  static const hobbies = LearningCategory(
+    id: 'hobbies',
+    title: 'Hobiler',
+    emoji: '🎨',
+    words: hobbyWords,
+  );
+  static const sports = LearningCategory(
+    id: 'sports',
+    title: 'Spor',
+    emoji: '🏅',
+    words: sportWords,
+  );
+  static const music = LearningCategory(
+    id: 'music',
+    title: 'Müzik',
+    emoji: '🎵',
+    words: musicWords,
+  );
+  static const moviesTv = LearningCategory(
+    id: 'movies_tv',
+    title: 'Film ve Televizyon',
+    emoji: '🎬',
+    words: movieTvWords,
+  );
+  static const booksReading = LearningCategory(
+    id: 'books_reading',
+    title: 'Kitaplar ve Okuma',
+    emoji: '📚',
+    words: bookReadingWords,
+  );
+
   static const categories = <LearningCategory>[
     animals,
     foods,
@@ -218,6 +261,12 @@ abstract final class CategoryCatalog {
     travel,
     hotel,
     communication,
+    technology,
+    hobbies,
+    sports,
+    music,
+    moviesTv,
+    booksReading,
   ];
 
   static LearningCategory? findById(String id) {

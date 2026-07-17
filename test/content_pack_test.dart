@@ -39,10 +39,22 @@ void main() {
         'common_adjectives_big|common_adjectives_small|common_adjectives_tall|common_adjectives_short|common_adjectives_long|common_adjectives_fast|common_adjectives_slow|common_adjectives_hot|common_adjectives_cold|common_adjectives_warm|common_adjectives_new|common_adjectives_old|common_adjectives_young|common_adjectives_good|common_adjectives_bad|common_adjectives_beautiful|common_adjectives_ugly|common_adjectives_easy|common_adjectives_difficult|common_adjectives_clean|common_adjectives_dirty|common_adjectives_full|common_adjectives_empty|common_adjectives_heavy|common_adjectives_light|common_adjectives_strong|common_adjectives_weak|common_adjectives_rich|common_adjectives_poor|common_adjectives_different',
     'feelings':
         'feelings_happy|feelings_sad|feelings_angry|feelings_afraid|feelings_surprised|feelings_excited|feelings_tired|feelings_bored|feelings_calm|feelings_worried|feelings_nervous|feelings_proud|feelings_shy|feelings_lonely|feelings_loved|feelings_comfortable|feelings_uncomfortable|feelings_hungry|feelings_thirsty|feelings_sleepy|feelings_sick|feelings_well|feelings_confused|feelings_curious|feelings_hopeful|feelings_disappointed|feelings_jealous|feelings_embarrassed|feelings_thankful|feelings_relaxed',
+    'jobs':
+        'jobs_job|jobs_worker|jobs_farmer|jobs_chef|jobs_waiter|jobs_waitress|jobs_driver|jobs_pilot|jobs_engineer|jobs_architect|jobs_mechanic|jobs_electrician|jobs_plumber|jobs_carpenter|jobs_dentist|jobs_veterinarian|jobs_police_officer|jobs_firefighter|jobs_soldier|jobs_lawyer|jobs_judge|jobs_artist|jobs_musician|jobs_actor|jobs_photographer|jobs_scientist|jobs_programmer|jobs_hairdresser|jobs_tailor|jobs_cashier',
+    'shopping':
+        'shopping_shopping|shopping_store|shopping_customer|shopping_seller|shopping_price|shopping_money|shopping_coin|shopping_cash|shopping_banknote|shopping_wallet|shopping_basket|shopping_trolley|shopping_receipt|shopping_change|shopping_discount|shopping_sale|shopping_cost|shopping_checkout|shopping_product|shopping_item|shopping_shopping_list|shopping_choice|shopping_cheap|shopping_expensive|shopping_buy|shopping_pay|shopping_try_on|shopping_fit|shopping_cash_register|shopping_shopping_bag',
+    'restaurant':
+        'restaurant_menu|restaurant_order|restaurant_server|restaurant_table_reservation|restaurant_meal|restaurant_starter|restaurant_main_course|restaurant_dessert|restaurant_drink|restaurant_glass|restaurant_plate|restaurant_bowl|restaurant_fork|restaurant_knife|restaurant_spoon|restaurant_napkin|restaurant_bill|restaurant_tip|restaurant_service|restaurant_dish|restaurant_taste|restaurant_delicious|restaurant_spicy|restaurant_sweet|restaurant_salty|restaurant_sour|restaurant_fresh|restaurant_ready|restaurant_portion|restaurant_tray',
+    'travel':
+        'travel_travel|travel_journey|travel_trip|travel_tourist|travel_guide|travel_route|travel_direction|travel_north|travel_south|travel_east|travel_west|travel_left|travel_right|travel_straight_ahead|travel_turn|travel_distance|travel_destination|travel_departure|travel_arrival|travel_passport|travel_visa|travel_luggage|travel_suitcase|travel_backpack|travel_platform|travel_gate|travel_border|travel_abroad|travel_local|travel_lost',
+    'hotel':
+        'hotel_hotel|hotel_stay|hotel_reception|hotel_receptionist|hotel_lobby|hotel_guest|hotel_room_key|hotel_key_card|hotel_single_room|hotel_double_room|hotel_suite|hotel_pillow|hotel_blanket|hotel_towel|hotel_elevator|hotel_stairs|hotel_room_service|hotel_housekeeping|hotel_check_in|hotel_check_out|hotel_booking|hotel_vacancy|hotel_available|hotel_occupied|hotel_bell|hotel_porter|hotel_wake_up_call|hotel_laundry|hotel_minibar|hotel_wifi',
+    'communication':
+        'communication_communication|communication_message|communication_call|communication_phone|communication_mobile_phone|communication_telephone|communication_email|communication_letter|communication_postcard|communication_conversation|communication_chat|communication_voice|communication_sound|communication_word|communication_sentence|communication_language|communication_reply|communication_ask|communication_tell|communication_explain|communication_repeat|communication_understand|communication_mean|communication_spell|communication_listen|communication_talk|communication_text|communication_online|communication_offline|communication_signal',
   };
 
-  test('içerik paketi 24 kategoride toplam 720 kelime içerir', () {
-    expect(CategoryCatalog.categories, hasLength(24));
+  test('içerik paketi 30 kategoride toplam 900 kelime içerir', () {
+    expect(CategoryCatalog.categories, hasLength(30));
     expect(CategoryCatalog.categories.map((category) => category.id), [
       'animals',
       'foods',
@@ -68,13 +80,19 @@ void main() {
       'travel',
       'hotel',
       'communication',
+      'technology',
+      'hobbies',
+      'sports',
+      'music',
+      'movies_tv',
+      'books_reading',
     ]);
 
     final allWords = CategoryCatalog.categories
         .expand((category) => category.words)
         .toList(growable: false);
-    expect(allWords, hasLength(720));
-    expect(allWords.map((word) => word.id).toSet(), hasLength(720));
+    expect(allWords, hasLength(900));
+    expect(allWords.map((word) => word.id).toSet(), hasLength(900));
   });
 
   test(
@@ -104,7 +122,7 @@ void main() {
     },
   );
 
-  test('mevcut 540 kelimenin kimlikleri ve sırası korunur', () {
+  test('mevcut 720 kelimenin kimlikleri ve sırası korunur', () {
     var existingWordCount = 0;
     for (final entry in existingIdSnapshots.entries) {
       final category = CategoryCatalog.findById(entry.key)!;
@@ -116,17 +134,17 @@ void main() {
       );
       existingWordCount += expectedIds.length;
     }
-    expect(existingWordCount, 540);
+    expect(existingWordCount, 720);
   });
 
   test('yeni kelime kimlikleri kararlı kategori öneklerini kullanır', () {
     for (final categoryId in [
-      'jobs',
-      'shopping',
-      'restaurant',
-      'travel',
-      'hotel',
-      'communication',
+      'technology',
+      'hobbies',
+      'sports',
+      'music',
+      'movies_tv',
+      'books_reading',
     ]) {
       final category = CategoryCatalog.findById(categoryId)!;
       expect(category.isAvailable, isTrue);
