@@ -25,7 +25,9 @@ class RewardedBonusService extends ChangeNotifier {
 
   int get remainingCount => _state.remainingCount;
   bool get isExhausted => _state.isExhausted;
-  bool get isBusy => _isBusy || adService.isLoading;
+  bool get isBusy =>
+      _isBusy || adService.isLoading || adService.isWaitingForRetry;
+  Duration? get retryAfter => adService.retryAfter;
   bool get isAdReady => adService.isReady;
   bool get isEnabled => adService.isEnabled;
 

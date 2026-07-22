@@ -367,7 +367,9 @@ class _RewardedBonusCard extends StatelessWidget {
                       exhausted
                           ? 'Bugünkü bonuslarını topladın'
                           : service.isBusy
-                          ? 'Reklam hazırlanıyor…'
+                          ? service.retryAfter == null
+                                ? 'Reklam hazırlanıyor…'
+                                : 'Reklam kısa süre sonra yeniden denenecek'
                           : !enabled
                           ? 'Bonus bu sürümde kullanılamıyor'
                           : 'Reklam izle, +15 XP kazan',

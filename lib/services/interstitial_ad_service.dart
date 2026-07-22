@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:kelimo/models/ad_display_state.dart';
 import 'package:kelimo/repositories/ad_frequency_repository.dart';
+import 'package:kelimo/services/ad_load_backoff.dart';
 
 abstract class InterstitialAdService extends ChangeNotifier {
   bool get privacyOptionsRequired;
@@ -69,6 +70,8 @@ class GoogleInterstitialAdService extends InterstitialAdService {
   bool _isLoading = false;
   bool _isShowing = false;
   bool _isDisposed = false;
+  final AdLoadBackoff _backoff = AdLoadBackoff();
+  Timer? _retryTimer;
   Future<void>? _consentRequest;
   bool _mobileAdsInitialized = false;
 
@@ -183,7 +186,13 @@ class GoogleInterstitialAdService extends InterstitialAdService {
 
   @override
   Future<void> preload() async {
-    if (!_canRequestAds || _isLoading || _ad != null || _isDisposed) return;
+    if (!_canRequestAds ||
+        _isLoading ||
+        _ad != null ||
+        _isDisposed ||
+        _backoff.isWaiting) {
+      return;
+    }
     final adUnitId = _adUnitId;
     if (adUnitId == null) {
       debugPrint('Release interstitial Ad Unit ID yapılandırılmamış.');
@@ -201,15 +210,35 @@ class GoogleInterstitialAdService extends InterstitialAdService {
             return;
           }
           _ad = ad;
+          _backoff.recordSuccess();
           notifyListeners();
         },
         onAdFailedToLoad: (error) {
           _isLoading = false;
           debugPrint('Interstitial reklam yüklenemedi: $error');
           notifyListeners();
+          _scheduleRetryAfterFailure();
         },
       ),
     );
+  }
+
+  void _scheduleRetryAfterFailure() {
+    if (_isDisposed || !_canRequestAds || _retryTimer != null || _ad != null) {
+      return;
+    }
+    final delay = _backoff.recordFailure();
+    if (kDebugMode) {
+      debugPrint(
+        '[Ads] Interstitial next load attempt in ${delay.inSeconds} seconds',
+      );
+    }
+    notifyListeners();
+    _retryTimer = Timer(delay, () {
+      _retryTimer = null;
+      _backoff.clearWait();
+      if (!_isDisposed) unawaited(preload());
+    });
   }
 
   @override
@@ -334,6 +363,7 @@ class GoogleInterstitialAdService extends InterstitialAdService {
   @override
   void dispose() {
     _isDisposed = true;
+    _retryTimer?.cancel();
     final ad = _ad;
     _ad = null;
     if (ad != null) unawaited(ad.dispose());

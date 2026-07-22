@@ -8,6 +8,7 @@ import 'package:kelimo/models/xp_state.dart';
 import 'package:kelimo/repositories/settings_repository.dart';
 import 'package:kelimo/repositories/xp_repository.dart';
 import 'package:kelimo/screens/onboarding_screen.dart';
+import 'package:kelimo/services/ad_load_backoff.dart';
 import 'package:kelimo/services/rewarded_ad_service.dart';
 import 'package:kelimo/services/rewarded_bonus_service.dart';
 import 'package:kelimo/services/settings_service.dart';
@@ -438,10 +439,28 @@ void main() {
   });
 
   test('retry artan ve sınırlı gecikme kullanır', () {
-    expect(rewardedRetryDelay(0), const Duration(seconds: 1));
-    expect(rewardedRetryDelay(1), const Duration(seconds: 2));
-    expect(rewardedRetryDelay(2), const Duration(seconds: 4));
-    expect(rewardedRetryDelay(8), const Duration(seconds: 4));
+    expect(rewardedRetryDelay(0), const Duration(seconds: 15));
+    expect(rewardedRetryDelay(1), const Duration(seconds: 30));
+    expect(rewardedRetryDelay(2), const Duration(seconds: 60));
+    expect(rewardedRetryDelay(3), const Duration(seconds: 120));
+    expect(rewardedRetryDelay(8), const Duration(seconds: 300));
+  });
+
+  test('backoff eşzamanlı yeni isteği engeller ve başarıyla sıfırlanır', () {
+    var now = DateTime(2026, 7, 22, 12);
+    final backoff = AdLoadBackoff(now: () => now);
+
+    expect(backoff.isWaiting, isFalse);
+    expect(backoff.recordFailure(), const Duration(seconds: 15));
+    expect(backoff.isWaiting, isTrue);
+    expect(backoff.retryAfter, const Duration(seconds: 15));
+
+    now = now.add(const Duration(seconds: 15));
+    expect(backoff.isWaiting, isFalse);
+    expect(backoff.recordFailure(), const Duration(seconds: 30));
+    backoff.recordSuccess();
+    expect(backoff.isWaiting, isFalse);
+    expect(backoff.recordFailure(), const Duration(seconds: 15));
   });
 
   test(

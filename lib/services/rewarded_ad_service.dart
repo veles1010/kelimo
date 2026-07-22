@@ -4,12 +4,15 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:kelimo/models/rewarded_bonus.dart';
+import 'package:kelimo/services/ad_load_backoff.dart';
 import 'package:kelimo/services/interstitial_ad_service.dart';
 
 abstract class RewardedAdService extends ChangeNotifier {
   bool get isEnabled;
   bool get isLoading;
   bool get isReady;
+  bool get isWaitingForRetry => false;
+  Duration? get retryAfter => null;
 
   Future<void> initialize();
   Future<void> preload();
@@ -54,14 +57,7 @@ class RewardedLoadGate {
   void finish() => _isLoading = false;
 }
 
-Duration rewardedRetryDelay(int attempt) {
-  const delays = [
-    Duration(seconds: 1),
-    Duration(seconds: 2),
-    Duration(seconds: 4),
-  ];
-  return delays[attempt.clamp(0, delays.length - 1)];
-}
+Duration rewardedRetryDelay(int attempt) => retryDelayForFailure(attempt);
 
 String? resolveRewardedAdUnitId({
   required bool isRelease,
@@ -77,7 +73,8 @@ String? resolveRewardedAdUnitId({
 }
 
 class GoogleRewardedAdService extends RewardedAdService {
-  GoogleRewardedAdService(this._consentService);
+  GoogleRewardedAdService(InterstitialAdService consentService)
+    : this.withBackoff(consentService);
 
   static const androidTestRewardedAdUnitId =
       'ca-app-pub-3940256099942544/5224354917';
@@ -86,19 +83,30 @@ class GoogleRewardedAdService extends RewardedAdService {
 
   final InterstitialAdService _consentService;
   final RewardedLoadGate _loadGate = RewardedLoadGate();
+  final AdLoadBackoff _backoff;
   RewardedAd? _ad;
   bool _isShowing = false;
   bool _isDisposed = false;
   int _claimSequence = 0;
-  int _retryAttempt = 0;
   Timer? _retryTimer;
   Future<void>? _consentWait;
+
+  GoogleRewardedAdService.withBackoff(
+    this._consentService, {
+    AdLoadBackoff? backoff,
+  }) : _backoff = backoff ?? AdLoadBackoff();
 
   @override
   bool get isEnabled => _adUnitId != null;
 
   @override
   bool get isLoading => _loadGate.isLoading;
+
+  @override
+  bool get isWaitingForRetry => _backoff.isWaiting;
+
+  @override
+  Duration? get retryAfter => _backoff.retryAfter;
 
   @override
   bool get isReady => !_isShowing && _ad != null;
@@ -136,7 +144,7 @@ class GoogleRewardedAdService extends RewardedAdService {
 
   @override
   Future<void> preload() async {
-    if (_isDisposed || !isEnabled || _ad != null) {
+    if (_isDisposed || !isEnabled || _ad != null || _backoff.isWaiting) {
       return;
     }
     if (!_consentService.adsSdkReady) {
@@ -144,8 +152,6 @@ class GoogleRewardedAdService extends RewardedAdService {
       return;
     }
     if (!_loadGate.tryStart()) return;
-    _retryTimer?.cancel();
-    _retryTimer = null;
     final adUnitId = _adUnitId;
     if (adUnitId == null) {
       _loadGate.finish();
@@ -167,7 +173,7 @@ class GoogleRewardedAdService extends RewardedAdService {
         rewardedAdLoadCallback: RewardedAdLoadCallback(
           onAdLoaded: (ad) {
             _loadGate.finish();
-            _retryAttempt = 0;
+            _backoff.recordSuccess();
             if (_isDisposed) {
               unawaited(ad.dispose());
               return;
@@ -182,7 +188,7 @@ class GoogleRewardedAdService extends RewardedAdService {
             _loadGate.finish();
             _logLoadError(error);
             notifyListeners();
-            _scheduleRetry();
+            _scheduleRetryAfterFailure();
           },
         ),
       );
@@ -190,7 +196,7 @@ class GoogleRewardedAdService extends RewardedAdService {
       _loadGate.finish();
       debugPrint('[Ads] Rewarded load request failed: $error\n$stackTrace');
       notifyListeners();
-      _scheduleRetry();
+      _scheduleRetryAfterFailure();
     }
   }
 
@@ -248,7 +254,7 @@ class GoogleRewardedAdService extends RewardedAdService {
         _isShowing = false;
         finish(RewardedAdOutcome.failed);
         notifyListeners();
-        unawaited(preload());
+        _scheduleRetryAfterFailure();
       },
     );
     try {
@@ -265,7 +271,7 @@ class GoogleRewardedAdService extends RewardedAdService {
       _isShowing = false;
       finish(RewardedAdOutcome.failed);
       notifyListeners();
-      unawaited(preload());
+      _scheduleRetryAfterFailure();
     }
     return completer.future;
   }
@@ -284,18 +290,23 @@ class GoogleRewardedAdService extends RewardedAdService {
     );
   }
 
-  void _scheduleRetry() {
+  void _scheduleRetryAfterFailure() {
     if (_isDisposed ||
         !isEnabled ||
         !_consentService.adsSdkReady ||
-        _retryTimer != null ||
-        _retryAttempt >= 3) {
+        _retryTimer != null) {
       return;
     }
-    final delay = rewardedRetryDelay(_retryAttempt);
-    _retryAttempt++;
+    final delay = _backoff.recordFailure();
+    if (kDebugMode) {
+      debugPrint(
+        '[Ads] Rewarded next load attempt in ${delay.inSeconds} seconds',
+      );
+    }
+    notifyListeners();
     _retryTimer = Timer(delay, () {
       _retryTimer = null;
+      _backoff.clearWait();
       if (!_isDisposed) unawaited(preload());
     });
   }
