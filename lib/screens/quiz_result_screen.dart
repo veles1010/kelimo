@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:kelimo/services/interstitial_ad_service.dart';
+import 'package:kelimo/widgets/glass_surface.dart';
 
 int calculateQuizPercentage({required int correct, required int total}) {
   if (total <= 0) return 0;
@@ -103,92 +104,103 @@ class _QuizResultScreenState extends State<QuizResultScreen> {
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 32, 20, 32),
-          children: [
-            Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 680),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      '🎉',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 64),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Tebrikler!',
-                      textAlign: TextAlign.center,
-                      style: textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
+      backgroundColor: Colors.transparent,
+      body: GlassBackground(
+        child: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 32, 20, 32),
+            children: [
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 680),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        '🎉',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 64),
                       ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '${widget.categoryName} Quizi Tamamlandı',
-                      textAlign: TextAlign.center,
-                      style: textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 24),
-                    _ScoreCard(
-                      correctAnswerCount: widget.correctAnswerCount,
-                      totalQuestionCount: widget.totalQuestionCount,
-                      percentage: widget.successPercentage,
-                      starCount: starCount,
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      quizMotivation(widget.successPercentage),
-                      textAlign: TextAlign.center,
-                      style: textTheme.titleLarge?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    if (widget.xpAwarded > 0) ...[
                       const SizedBox(height: 12),
                       Text(
-                        '🏆 Kusursuz sonuç! +25 XP kazandın.',
+                        'Tebrikler!',
                         textAlign: TextAlign.center,
-                        style: textTheme.titleMedium?.copyWith(
-                          color: Colors.amber.shade800,
+                        style: textTheme.headlineMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
                       ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '${widget.categoryName} Quizi Tamamlandı',
+                        textAlign: TextAlign.center,
+                        style: textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 24),
+                      _ScoreCard(
+                        correctAnswerCount: widget.correctAnswerCount,
+                        totalQuestionCount: widget.totalQuestionCount,
+                        percentage: widget.successPercentage,
+                        starCount: starCount,
+                      ),
+                      const SizedBox(height: 20),
+                      Text(
+                        quizMotivation(widget.successPercentage),
+                        textAlign: TextAlign.center,
+                        style: textTheme.titleLarge?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (widget.xpAwarded > 0) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          '🏆 Kusursuz sonuç! +25 XP kazandın.',
+                          textAlign: TextAlign.center,
+                          style: textTheme.titleMedium?.copyWith(
+                            color: Colors.amber.shade800,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 24),
+                      _SummaryCards(
+                        xpAwarded: widget.xpAwarded,
+                        longestCorrectStreak: widget.longestCorrectStreak,
+                        elapsedDuration: widget.elapsedDuration,
+                      ),
+                      const SizedBox(height: 28),
+                      FilledButton(
+                        onPressed: _isLeaving ? null : widget.onRetry,
+                        child: const Text('Tekrar Çöz'),
+                      ),
+                      const SizedBox(height: 12),
+                      GlassSurface(
+                        enableBlur: false,
+                        showShadow: false,
+                        borderRadius: BorderRadius.circular(16),
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide.none,
+                          ),
+                          onPressed: _isLeaving
+                              ? null
+                              : () => _leave(widget.onReturnToCategory),
+                          child: const Text('Kategoriye Dön'),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: _isLeaving
+                            ? null
+                            : () => _leave(widget.onReturnHome),
+                        child: const Text('Ana Sayfa'),
+                      ),
                     ],
-                    const SizedBox(height: 24),
-                    _SummaryCards(
-                      xpAwarded: widget.xpAwarded,
-                      longestCorrectStreak: widget.longestCorrectStreak,
-                      elapsedDuration: widget.elapsedDuration,
-                    ),
-                    const SizedBox(height: 28),
-                    FilledButton(
-                      onPressed: _isLeaving ? null : widget.onRetry,
-                      child: const Text('Tekrar Çöz'),
-                    ),
-                    const SizedBox(height: 12),
-                    OutlinedButton(
-                      onPressed: _isLeaving
-                          ? null
-                          : () => _leave(widget.onReturnToCategory),
-                      child: const Text('Kategoriye Dön'),
-                    ),
-                    const SizedBox(height: 8),
-                    TextButton(
-                      onPressed: _isLeaving
-                          ? null
-                          : () => _leave(widget.onReturnHome),
-                      child: const Text('Ana Sayfa'),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -216,46 +228,63 @@ class _ScoreCard extends StatelessWidget {
         ? Colors.grey.shade600
         : Colors.grey.shade300;
 
-    return Card(
-      color: colorScheme.primaryContainer,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
-        child: Column(
-          children: [
-            Text(
-              '$correctAnswerCount / $totalQuestionCount',
-              style: textTheme.displayMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '%$percentage başarı',
-              style: textTheme.titleLarge?.copyWith(
-                color: colorScheme.primary,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 18),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                for (var index = 0; index < 5; index++)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 2),
-                    child: Icon(
-                      index < starCount
-                          ? Icons.star_rounded
-                          : Icons.star_outline_rounded,
-                      color: index < starCount
-                          ? Colors.amber.shade700
-                          : emptyStarColor,
-                      size: 36,
-                    ),
-                  ),
+    return GlassSurface(
+      enableBlur: false,
+      padding: EdgeInsets.zero,
+      child: Card(
+        color: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                colorScheme.primaryContainer,
+                colorScheme.surfaceContainerHigh,
               ],
             ),
-          ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+            child: Column(
+              children: [
+                Text(
+                  '$correctAnswerCount / $totalQuestionCount',
+                  style: textTheme.displayMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '%$percentage başarı',
+                  style: textTheme.titleLarge?.copyWith(
+                    color: colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    for (var index = 0; index < 5; index++)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        child: Icon(
+                          index < starCount
+                              ? Icons.star_rounded
+                              : Icons.star_outline_rounded,
+                          color: index < starCount
+                              ? Colors.amber.shade700
+                              : emptyStarColor,
+                          size: 36,
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -339,23 +368,30 @@ class _SummaryCard extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Icon(icon, color: colorScheme.primary),
-            const SizedBox(height: 8),
-            Text(label, style: textTheme.labelLarge),
-            const SizedBox(height: 2),
-            Text(
-              value,
-              textAlign: TextAlign.center,
-              style: textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold,
+    return GlassSurface(
+      enableBlur: false,
+      showShadow: false,
+      padding: EdgeInsets.zero,
+      child: Card(
+        color: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Icon(icon, color: colorScheme.primary),
+              const SizedBox(height: 8),
+              Text(label, style: textTheme.labelLarge),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                textAlign: TextAlign.center,
+                style: textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

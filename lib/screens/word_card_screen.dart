@@ -12,6 +12,7 @@ import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/widgets/learning_flashcard.dart';
 import 'package:kelimo/widgets/achievement_notification.dart';
+import 'package:kelimo/widgets/glass_surface.dart';
 
 class WordCardScreen extends StatefulWidget {
   WordCardScreen({
@@ -267,72 +268,77 @@ class _WordCardScreenState extends State<WordCardScreen>
   Widget build(BuildContext context) {
     final word = _learningEngine.currentWord;
 
-    return Scaffold(
-      appBar: AppBar(
-        leading: const BackButton(),
-        title: Text(widget.category.title),
+    return GlassBackground(
+      child: Scaffold(
         backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 24),
-            child: Center(
-              child: Text(
-                '${_learningEngine.currentWordNumber} / '
-                '${_learningEngine.totalWordCount}',
-              ),
-            ),
-          ),
-        ],
-      ),
-      body: SafeArea(
-        top: false,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-          children: [
-            Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 680),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    LearningFlashcard(
-                      animation: _flipAnimation,
-                      onTap: _flipCard,
-                      word: word,
-                    ),
-                    const SizedBox(height: 20),
-                    ValueListenableBuilder<bool>(
-                      valueListenable: _ttsService.isSpeaking,
-                      builder: (context, isSpeaking, child) {
-                        return LearningWordActions(
-                          isSpeaking: isSpeaking,
-                          isFavorite: _isFavorite,
-                          onListen: () => unawaited(_speakWord()),
-                          onFavorite: () => unawaited(_toggleFavorite()),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 28),
-                    LearningRatingSection(
-                      selectedRating: _selectedDifficulty,
-                      enabled: !_isEvaluating && !_learningEngine.isComplete,
-                      onSelected: (rating) => unawaited(_evaluateWord(rating)),
-                    ),
-                    const SizedBox(height: 28),
-                    _WordNavigation(
-                      onPrevious: !_learningEngine.canPrevious || _isEvaluating
-                          ? null
-                          : _showPreviousWord,
-                      onNext: !_learningEngine.canNext || _isEvaluating
-                          ? null
-                          : _showNextWord,
-                    ),
-                  ],
+        appBar: AppBar(
+          leading: const BackButton(),
+          title: Text(widget.category.title),
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 24),
+              child: Center(
+                child: Text(
+                  '${_learningEngine.currentWordNumber} / '
+                  '${_learningEngine.totalWordCount}',
                 ),
               ),
             ),
           ],
+        ),
+        body: SafeArea(
+          top: false,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+            children: [
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 680),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      LearningFlashcard(
+                        animation: _flipAnimation,
+                        onTap: _flipCard,
+                        word: word,
+                      ),
+                      const SizedBox(height: 20),
+                      ValueListenableBuilder<bool>(
+                        valueListenable: _ttsService.isSpeaking,
+                        builder: (context, isSpeaking, child) {
+                          return LearningWordActions(
+                            isSpeaking: isSpeaking,
+                            isFavorite: _isFavorite,
+                            onListen: () => unawaited(_speakWord()),
+                            onFavorite: () => unawaited(_toggleFavorite()),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 28),
+                      LearningRatingSection(
+                        selectedRating: _selectedDifficulty,
+                        enabled: !_isEvaluating && !_learningEngine.isComplete,
+                        onSelected: (rating) =>
+                            unawaited(_evaluateWord(rating)),
+                      ),
+                      const SizedBox(height: 28),
+                      _WordNavigation(
+                        onPrevious:
+                            !_learningEngine.canPrevious || _isEvaluating
+                            ? null
+                            : _showPreviousWord,
+                        onNext: !_learningEngine.canNext || _isEvaluating
+                            ? null
+                            : _showNextWord,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -350,10 +356,16 @@ class _WordNavigation extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: OutlinedButton.icon(
-            onPressed: onPrevious,
-            icon: const Icon(Icons.arrow_back_rounded),
-            label: const Text('Önceki'),
+          child: GlassSurface(
+            enableBlur: false,
+            showShadow: false,
+            borderRadius: BorderRadius.circular(16),
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(side: BorderSide.none),
+              onPressed: onPrevious,
+              icon: const Icon(Icons.arrow_back_rounded),
+              label: const Text('Önceki'),
+            ),
           ),
         ),
         const SizedBox(width: 12),

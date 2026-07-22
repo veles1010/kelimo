@@ -12,6 +12,7 @@ import 'package:kelimo/services/quiz_session_builder.dart';
 import 'package:kelimo/theme/app_theme.dart';
 import 'package:kelimo/widgets/scale_down_single_line_text.dart';
 import 'package:kelimo/widgets/achievement_notification.dart';
+import 'package:kelimo/widgets/glass_surface.dart';
 
 class CategoryQuizScreen extends StatefulWidget {
   CategoryQuizScreen({
@@ -191,65 +192,68 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
   Widget build(BuildContext context) {
     final options = _currentQuestion.options;
 
-    return Scaffold(
-      appBar: AppBar(
-        leading: const BackButton(),
-        title: Text('${widget.category.title} Quiz'),
+    return GlassBackground(
+      child: Scaffold(
         backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 24),
-            child: Center(
-              child: Text('Soru ${_questionIndex + 1} / $_questionCount'),
-            ),
-          ),
-        ],
-      ),
-      body: SafeArea(
-        top: false,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-          children: [
-            Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 680),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    LinearProgressIndicator(
-                      value: (_questionIndex + 1) / _questionCount,
-                      minHeight: 8,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    const SizedBox(height: 24),
-                    _QuestionCard(word: _currentWord),
-                    const SizedBox(height: 20),
-                    for (final option in options) ...[
-                      _AnswerOption(
-                        option: option,
-                        correctAnswer: _currentQuestion.correctAnswer,
-                        selectedAnswer: _selectedAnswer,
-                        onTap: () => _selectAnswer(option),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                    const SizedBox(height: 8),
-                    FilledButton(
-                      onPressed: _selectedAnswer == null || _isCompleting
-                          ? null
-                          : _continueQuiz,
-                      child: Text(
-                        _questionIndex == _questionCount - 1
-                            ? 'Sonucu Gör'
-                            : 'Sonraki Soru',
-                      ),
-                    ),
-                  ],
-                ),
+        appBar: AppBar(
+          leading: const BackButton(),
+          title: Text('${widget.category.title} Quiz'),
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 24),
+              child: Center(
+                child: Text('Soru ${_questionIndex + 1} / $_questionCount'),
               ),
             ),
           ],
+        ),
+        body: SafeArea(
+          top: false,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+            children: [
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 680),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      LinearProgressIndicator(
+                        value: (_questionIndex + 1) / _questionCount,
+                        minHeight: 8,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      const SizedBox(height: 24),
+                      _QuestionCard(word: _currentWord),
+                      const SizedBox(height: 20),
+                      for (final option in options) ...[
+                        _AnswerOption(
+                          option: option,
+                          correctAnswer: _currentQuestion.correctAnswer,
+                          selectedAnswer: _selectedAnswer,
+                          onTap: () => _selectAnswer(option),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      const SizedBox(height: 8),
+                      FilledButton(
+                        onPressed: _selectedAnswer == null || _isCompleting
+                            ? null
+                            : _continueQuiz,
+                        child: Text(
+                          _questionIndex == _questionCount - 1
+                              ? 'Sonucu Gör'
+                              : 'Sonraki Soru',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -264,30 +268,48 @@ class _QuestionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
 
-    return Card(
-      color: Theme.of(context).colorScheme.primaryContainer,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
-        child: Column(
-          children: [
-            Text(word.emoji, style: const TextStyle(fontSize: 48)),
-            const SizedBox(height: 12),
-            ScaleDownSingleLineText(
-              word.english.toUpperCase(),
-              key: ValueKey('quiz-question-${word.id}'),
-              style: textTheme.displaySmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.5,
-              ),
+    return GlassSurface(
+      enableBlur: false,
+      padding: EdgeInsets.zero,
+      child: Card(
+        color: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                colorScheme.primaryContainer,
+                colorScheme.surfaceContainerHigh,
+              ],
             ),
-            const SizedBox(height: 12),
-            Text(
-              'Doğru Türkçe karşılığı seç',
-              textAlign: TextAlign.center,
-              style: textTheme.titleMedium,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+            child: Column(
+              children: [
+                Text(word.emoji, style: const TextStyle(fontSize: 48)),
+                const SizedBox(height: 12),
+                ScaleDownSingleLineText(
+                  word.english.toUpperCase(),
+                  key: ValueKey('quiz-question-${word.id}'),
+                  style: textTheme.displaySmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Doğru Türkçe karşılığı seç',
+                  textAlign: TextAlign.center,
+                  style: textTheme.titleMedium,
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -335,36 +357,43 @@ class _AnswerOption extends StatelessWidget {
         ? colorScheme.error
         : colorScheme.outlineVariant;
 
-    return Material(
-      color: backgroundColor,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppDimensions.buttonRadius),
-        side: BorderSide(color: borderColor, width: 1.5),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        key: ValueKey('quiz-option-$option'),
-        onTap: isAnswered ? null : onTap,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 64),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    option,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: foregroundColor,
-                      fontWeight: FontWeight.w600,
+    return GlassSurface(
+      enableBlur: false,
+      showHighlight: !showCorrect && !showWrong,
+      showShadow: false,
+      borderRadius: BorderRadius.circular(AppDimensions.buttonRadius),
+      padding: EdgeInsets.zero,
+      child: Material(
+        color: showCorrect || showWrong ? backgroundColor : Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppDimensions.buttonRadius),
+          side: BorderSide(color: borderColor, width: 1.5),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          key: ValueKey('quiz-option-$option'),
+          onTap: isAnswered ? null : onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 64),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      option,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: foregroundColor,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
-                ),
-                if (showCorrect)
-                  Icon(Icons.check_circle_rounded, color: correctColor),
-                if (showWrong)
-                  Icon(Icons.cancel_rounded, color: colorScheme.error),
-              ],
+                  if (showCorrect)
+                    Icon(Icons.check_circle_rounded, color: correctColor),
+                  if (showWrong)
+                    Icon(Icons.cancel_rounded, color: colorScheme.error),
+                ],
+              ),
             ),
           ),
         ),

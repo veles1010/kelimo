@@ -3259,6 +3259,8 @@ void main() {
     await openLearningCenter(tester);
 
     expect(find.byType(LearningCenterScreen), findsOneWidget);
+    expect(find.byType(GlassBackground), findsOneWidget);
+    expect(find.byType(GlassSurface), findsWidgets);
     expect(find.text('Öğrenme Merkezi'), findsOneWidget);
     expect(find.text('Çalışma zamanı gelen kelimeler'), findsOneWidget);
     expect(find.text('Toplam kelime'), findsOneWidget);
@@ -3300,6 +3302,21 @@ void main() {
         matching: find.text('1080'),
       ),
       findsOneWidget,
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('learning-filter-all')),
+      240,
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .getBottomRight(find.byKey(const ValueKey('learning-filter-all')))
+          .dy,
+      lessThanOrEqualTo(
+        tester
+            .getTopLeft(find.byKey(const ValueKey('glass-bottom-navigation')))
+            .dy,
+      ),
     );
   });
 
@@ -3474,7 +3491,7 @@ void main() {
     tester,
   ) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.binding.setSurfaceSize(const Size(280, 650));
+    await tester.binding.setSurfaceSize(const Size(320, 650));
     final store = FakeWordProgressStore();
     final streakService = StreakService(repository: FakeDailyProgressStore());
     await streakService.initialize();
@@ -3486,6 +3503,12 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.light,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: const TextScaler.linear(1.5)),
+          child: child!,
+        ),
         home: LearningCenterScreen(
           service: LearningCenterService(wordProgressStore: store),
           wordProgressStore: store,
@@ -3498,8 +3521,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
 
-    await tester.ensureVisible(
+    await tester.scrollUntilVisible(
       find.byKey(const ValueKey('learning-filter-all')),
+      300,
     );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('learning-filter-all')));
@@ -4728,6 +4752,8 @@ void main() {
 
     expect(find.text('Yiyecekler'), findsOneWidget);
     expect(find.text('1 / 30'), findsOneWidget);
+    expect(find.byType(GlassBackground), findsOneWidget);
+    expect(find.byType(GlassSurface), findsWidgets);
     expect(find.text('APPLE'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('word-card')));
     await tester.pumpAndSettle();
@@ -5656,6 +5682,72 @@ void main() {
     expect(find.text('DOG'), findsOneWidget);
   });
 
+  testWidgets(
+    'Değerlendirme kapsülleri dar ekranda eşit, tam ve işlevsel kalır',
+    (tester) async {
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.binding.setSurfaceSize(const Size(320, 700));
+      final storage = FakeXpStorage();
+      final xpService = await createXpService(repository: FakeXpStore(storage));
+      addTearDown(xpService.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(1.5)),
+            child: child!,
+          ),
+          home: WordCardScreen(
+            category: CategoryCatalog.animals,
+            wordProgressStore: FakeWordProgressStore(),
+            xpService: xpService,
+            ttsService: EnglishTtsService(engine: FakeTtsEngine()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final easy = find.byKey(const ValueKey('learning-rating-easy'));
+      final again = find.byKey(const ValueKey('learning-rating-again'));
+      final hard = find.byKey(const ValueKey('learning-rating-hard'));
+      await tester.scrollUntilVisible(easy, 220);
+      await tester.pumpAndSettle();
+
+      expect(easy, findsOneWidget);
+      expect(again, findsOneWidget);
+      expect(hard, findsOneWidget);
+      final easySize = tester.getSize(easy);
+      final againSize = tester.getSize(again);
+      final hardSize = tester.getSize(hard);
+      expect(easySize.height, greaterThanOrEqualTo(52));
+      expect(againSize.height, greaterThanOrEqualTo(52));
+      expect(hardSize.height, greaterThanOrEqualTo(52));
+      expect(easySize.width, closeTo(againSize.width, 0.1));
+      expect(againSize.width, closeTo(hardSize.width, 0.1));
+      expect(find.text('Tekrar Et'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(easy);
+      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pumpAndSettle();
+      expect(xpService.totalXp, 5);
+
+      await tester.tap(again);
+      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pumpAndSettle();
+      expect(xpService.totalXp, 7);
+
+      await tester.tap(hard);
+      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pumpAndSettle();
+      expect(xpService.totalXp, 10);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('Quiz seçimi kilitlenir ve doğru cevap gösterilir', (
     tester,
   ) async {
@@ -5666,6 +5758,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Hayvanlar Quiz'), findsOneWidget);
+    expect(find.byType(GlassBackground), findsOneWidget);
+    expect(find.byType(GlassSurface), findsWidgets);
     expect(find.text('Soru 1 / 10'), findsOneWidget);
     expect(find.text('Doğru Türkçe karşılığı seç'), findsOneWidget);
     final firstWord = currentQuizWord(tester, animalWords);
@@ -5952,6 +6046,46 @@ void main() {
 
     expect(find.text('Renkler Quizi Tamamlandı'), findsOneWidget);
     expect(find.text('Hayvanlar Quizi Tamamlandı'), findsNothing);
+  });
+
+  testWidgets('Öğren akışı cam yüzeyleri koyu ve dar ekranda taşmaz', (
+    tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(320, 700));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.dark,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: const TextScaler.linear(1.3)),
+          child: child!,
+        ),
+        home: QuizResultScreen(
+          categoryName: 'Tatiller ve Kutlamalar',
+          correctAnswerCount: 8,
+          totalQuestionCount: 10,
+          successPercentage: 80,
+          xpAwarded: 0,
+          longestCorrectStreak: 3,
+          elapsedDuration: const Duration(seconds: 72),
+          onRetry: () {},
+          onReturnToCategory: () {},
+          onReturnHome: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(GlassBackground), findsOneWidget);
+    expect(find.byType(GlassSurface), findsWidgets);
+    expect(
+      find.text('Tatiller ve Kutlamalar Quizi Tamamlandı'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(
