@@ -8,6 +8,7 @@ import 'package:kelimo/repositories/achievement_repository.dart';
 import 'package:kelimo/screens/achievements_screen.dart';
 import 'package:kelimo/services/achievement_service.dart';
 import 'package:kelimo/widgets/achievement_notification.dart';
+import 'package:kelimo/widgets/glass_surface.dart';
 
 class _FakeAchievementStore implements AchievementStore {
   _FakeAchievementStore([Iterable<AchievementUnlock> initial = const []]) {
@@ -254,10 +255,11 @@ void main() {
     );
     expect(find.text('Kazanıldı • 16 Temmuz 2026'), findsOneWidget);
     expect(find.text('3 / 10'), findsOneWidget);
+    expect(find.byType(GlassBackground), findsOneWidget);
     expect(
       find.byWidgetPredicate(
         (widget) =>
-            widget is Card &&
+            widget is GlassSurface &&
             widget.key is ValueKey<String> &&
             (widget.key! as ValueKey<String>).value.startsWith('achievement-'),
       ),
@@ -310,7 +312,15 @@ void main() {
     await service.initialize();
 
     await tester.pumpWidget(
-      MaterialApp(home: AchievementsScreen(service: service)),
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: const TextScaler.linear(1.5)),
+          child: child!,
+        ),
+        home: AchievementsScreen(service: service),
+      ),
     );
     await tester.pumpAndSettle();
     await tester.drag(find.byType(ListView), const Offset(0, -500));

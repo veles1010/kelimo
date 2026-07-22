@@ -3548,6 +3548,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(SettingsScreen), findsOneWidget);
+    expect(find.byType(GlassBackground), findsOneWidget);
+    expect(find.byType(GlassSurface), findsWidgets);
     expect(find.text('Ayarlar'), findsWidgets);
     expect(find.text('Uygulama'), findsOneWidget);
     expect(find.text('Hakkında'), findsOneWidget);
@@ -3682,6 +3684,12 @@ void main() {
         theme: AppTheme.light,
         darkTheme: AppTheme.dark,
         themeMode: ThemeMode.dark,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: const TextScaler.linear(1.5)),
+          child: child!,
+        ),
         home: AboutScreen(
           appInfoProvider: FakeAppInfoProvider(),
           interstitialAdService: ads,
@@ -3694,6 +3702,7 @@ void main() {
       Theme.of(tester.element(find.byType(AboutScreen))).brightness,
       Brightness.dark,
     );
+    expect(find.byType(GlassBackground), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.tap(find.byKey(const ValueKey('about-open-source-licenses')));
     await tester.pumpAndSettle();
@@ -4095,6 +4104,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Tüm çalışmalarının güncel özeti'), findsOneWidget);
+      expect(find.byType(GlassBackground), findsOneWidget);
+      expect(find.byType(GlassSurface), findsWidgets);
       expect(find.text('Toplam XP'), findsOneWidget);
       expect(find.text('Başlanan kelime'), findsOneWidget);
       expect(find.text('Favori kelime'), findsOneWidget);
@@ -4108,12 +4119,42 @@ void main() {
     },
   );
 
+  testWidgets('İlerleme ekranı son quiz kaydını cam satırda gösterir', (
+    tester,
+  ) async {
+    final quizStorage = FakeQuizStorage()
+      ..attempts.add(
+        QuizAttempt(
+          id: 1,
+          categoryId: 'animals',
+          correctCount: 8,
+          totalQuestions: 10,
+          scorePercent: 80,
+          completedAt: DateTime(2026, 7, 20),
+          xpAwarded: 0,
+        ),
+      );
+    await pumpKelimoApp(tester, quizStorage: quizStorage);
+
+    await tester.tap(find.text('İlerleme'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Son quizler'), findsOneWidget);
+    expect(find.text('Hayvanlar'), findsWidgets);
+    expect(find.text('8 / 10 • %80 • 0 XP'), findsOneWidget);
+    expect(find.text('20 Temmuz 2026'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('İlerleme ekranı küçük boyutta taşma yapmaz', (tester) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     await tester.binding.setSurfaceSize(const Size(320, 568));
     await pumpKelimoApp(tester);
 
     await tester.tap(find.text('İlerleme'));
+    await tester.pumpAndSettle();
+    tester.platformDispatcher.textScaleFactorTestValue = 1.5;
     await tester.pumpAndSettle();
     await tester.drag(find.byType(ListView), const Offset(0, -500));
     await tester.pumpAndSettle();
