@@ -183,6 +183,7 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _interstitialAdService.setForeground(state == AppLifecycleState.resumed);
     if (state == AppLifecycleState.resumed) {
+      unawaited(_streakService.refresh());
       unawaited(_dailyReminderService.refreshSchedule());
     }
   }

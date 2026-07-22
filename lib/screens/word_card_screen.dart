@@ -128,8 +128,6 @@ class _WordCardScreenState extends State<WordCardScreen>
       _selectedDifficulty = rating;
       _isEvaluating = true;
     });
-    final dailyProgress = _streakService.recordEvaluation();
-
     await Future<void>.delayed(const Duration(milliseconds: 220));
     if (!mounted) return;
 
@@ -156,9 +154,11 @@ class _WordCardScreenState extends State<WordCardScreen>
     });
 
     var progressSaved = false;
+    var completedDailyGoal = false;
     try {
       await widget.wordProgressStore.saveLearningResult(learningResult);
       progressSaved = true;
+      completedDailyGoal = await _streakService.recordEvaluation();
       final xpSaved = await widget.xpService.addXp(
         xpRewardForRating(learningResult.rating),
       );
@@ -175,7 +175,6 @@ class _WordCardScreenState extends State<WordCardScreen>
       }
     }
 
-    final completedDailyGoal = await dailyProgress;
     if (completedDailyGoal && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

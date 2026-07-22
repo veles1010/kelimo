@@ -9,6 +9,7 @@ import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/services/interstitial_ad_service.dart';
 import 'package:kelimo/services/achievement_service.dart';
 import 'package:kelimo/services/quiz_session_builder.dart';
+import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 import 'package:kelimo/widgets/scale_down_single_line_text.dart';
 import 'package:kelimo/widgets/achievement_notification.dart';
@@ -24,6 +25,7 @@ class CategoryQuizScreen extends StatefulWidget {
     super.key,
     this.achievementService,
     this.interstitialAdService,
+    this.streakService,
   }) : now = now ?? DateTime.now,
        random = random ?? Random(),
        assert(category.words.length >= 4);
@@ -35,6 +37,7 @@ class CategoryQuizScreen extends StatefulWidget {
   final Random random;
   final AchievementService? achievementService;
   final InterstitialAdService? interstitialAdService;
+  final StreakService? streakService;
 
   @override
   State<CategoryQuizScreen> createState() => _CategoryQuizScreenState();
@@ -135,6 +138,7 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
         scorePercent: successPercentage,
       );
       widget.xpService.applyPersistedState(completion.xpState);
+      await widget.streakService?.refresh();
       await widget.interstitialAdService?.recordQuizCompleted();
       if (!mounted) return;
       final achievementService = widget.achievementService;
@@ -170,6 +174,7 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
                     now: widget.now,
                     random: widget.random,
                     interstitialAdService: widget.interstitialAdService,
+                    streakService: widget.streakService,
                   ),
                 ),
               );

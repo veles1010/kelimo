@@ -4,25 +4,24 @@ import 'package:flutter/foundation.dart';
 import 'package:kelimo/models/daily_progress.dart';
 import 'package:kelimo/repositories/daily_progress_repository.dart';
 import 'package:kelimo/services/settings_service.dart';
+import 'package:kelimo/services/streak_calculator.dart';
 
 class StreakService extends ChangeNotifier {
   StreakService({
     int dailyGoal = 5,
-    int initialStreak = 7,
     this.repository,
     this.settingsService,
     DateTime Function()? now,
   }) : _fallbackDailyGoal = dailyGoal,
-       _initialStreak = initialStreak,
        _now = now ?? DateTime.now,
        assert(dailyGoal > 0),
-       _currentStreak = initialStreak;
+       _currentStreak = 0;
 
   final int _fallbackDailyGoal;
   final DailyProgressStore? repository;
   final SettingsService? settingsService;
-  final int _initialStreak;
   final DateTime Function() _now;
+  final Set<DateTime> _inMemoryActivityTimes = {};
 
   int _todayCount = 0;
   int _currentStreak;
@@ -35,14 +34,15 @@ class StreakService extends ChangeNotifier {
   int get remainingForToday => math.max(0, dailyGoal - _todayCount);
 
   Future<void> initialize() async {
+    await refresh();
+  }
+
+  Future<void> refresh() async {
     final progressRepository = repository;
     if (progressRepository == null) return;
 
     try {
-      final snapshot = await progressRepository.loadToday(
-        initialStreak: _initialStreak,
-        now: _now(),
-      );
+      final snapshot = await progressRepository.loadToday(now: _now());
       _applySnapshot(snapshot);
       notifyListeners();
     } catch (error, stackTrace) {
@@ -57,7 +57,6 @@ class StreakService extends ChangeNotifier {
       try {
         final snapshot = await progressRepository.incrementReview(
           dailyGoal: dailyGoal,
-          initialStreak: _initialStreak,
           now: _now(),
         );
         _applySnapshot(snapshot);
@@ -72,12 +71,17 @@ class StreakService extends ChangeNotifier {
   }
 
   bool _recordInMemory() {
+    final now = _now();
     _todayCount++;
+    _inMemoryActivityTimes.add(now);
+    _currentStreak = const StreakCalculator().calculate(
+      _inMemoryActivityTimes,
+      now: now,
+    );
     var justCompleted = false;
 
     if (!_isTodayCompleted && _todayCount >= dailyGoal) {
       _isTodayCompleted = true;
-      _currentStreak++;
       justCompleted = true;
     }
 
@@ -95,6 +99,7 @@ class StreakService extends ChangeNotifier {
     _todayCount = 0;
     _currentStreak = 0;
     _isTodayCompleted = false;
+    _inMemoryActivityTimes.clear();
     notifyListeners();
   }
 }

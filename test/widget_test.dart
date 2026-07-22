@@ -37,6 +37,7 @@ import 'package:kelimo/screens/quiz_result_screen.dart';
 import 'package:kelimo/screens/about_screen.dart';
 import 'package:kelimo/screens/category_quiz_screen.dart';
 import 'package:kelimo/screens/category_screen.dart';
+import 'package:kelimo/screens/category_statistics_screen.dart';
 import 'package:kelimo/screens/category_selection_screen.dart';
 import 'package:kelimo/screens/home_screen.dart';
 import 'package:kelimo/screens/learning_center_screen.dart';
@@ -54,6 +55,7 @@ import 'package:kelimo/services/learning_engine.dart';
 import 'package:kelimo/services/learning_center_service.dart';
 import 'package:kelimo/services/notification_service.dart';
 import 'package:kelimo/services/streak_service.dart';
+import 'package:kelimo/services/streak_calculator.dart';
 import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/services/xp_service.dart';
@@ -404,7 +406,7 @@ WordProgress testWordProgress({
 
 class FakeDailyStorage {
   final Map<String, DailyProgress> dailyProgress = {};
-  StreakState streak = const StreakState(currentStreak: 7);
+  StreakState streak = const StreakState(currentStreak: 0);
 }
 
 class FakeDailyProgressStore implements DailyProgressStore {
@@ -414,11 +416,10 @@ class FakeDailyProgressStore implements DailyProgressStore {
   final FakeDailyStorage storage;
 
   @override
-  Future<DailyProgressSnapshot> loadToday({
-    int initialStreak = 7,
-    DateTime? now,
-  }) async {
-    final dateKey = localDateKey(now ?? DateTime.now());
+  Future<DailyProgressSnapshot> loadToday({DateTime? now}) async {
+    final currentTime = now ?? DateTime.now();
+    final dateKey = localDateKey(currentTime);
+    _refreshStreak(currentTime);
     return DailyProgressSnapshot(
       progress:
           storage.dailyProgress[dateKey] ?? DailyProgress.initial(dateKey),
@@ -429,7 +430,6 @@ class FakeDailyProgressStore implements DailyProgressStore {
   @override
   Future<DailyProgressSnapshot> incrementReview({
     required int dailyGoal,
-    int initialStreak = 7,
     DateTime? now,
   }) async {
     final date = (now ?? DateTime.now()).toLocal();
@@ -445,16 +445,27 @@ class FakeDailyProgressStore implements DailyProgressStore {
       streakAwarded: current.streakAwarded || justCompleted,
     );
     storage.dailyProgress[dateKey] = progress;
-    if (justCompleted) {
-      storage.streak = StreakState(
-        currentStreak: storage.streak.currentStreak + 1,
-        lastCompletedDate: DateTime(date.year, date.month, date.day),
-      );
-    }
+    _refreshStreak(date);
     return DailyProgressSnapshot(
       progress: progress,
       streak: storage.streak,
       justCompleted: justCompleted,
+    );
+  }
+
+  void _refreshStreak(DateTime now) {
+    final activityTimes = storage.dailyProgress.values
+        .where((progress) => progress.reviewCount > 0)
+        .map((progress) => parseLocalDateKey(progress.dateKey))
+        .whereType<DateTime>()
+        .toList();
+    const calculator = StreakCalculator();
+    storage.streak = StreakState(
+      currentStreak: calculator.calculate(activityTimes, now: now),
+      lastCompletedDate: calculator.latestValidActivity(
+        activityTimes,
+        now: now,
+      ),
     );
   }
 
@@ -1234,7 +1245,7 @@ void main() {
         totalQuestions: 10,
         scorePercent: 90,
       );
-      final streak = StreakService(initialStreak: 7);
+      final streak = StreakService();
       addTearDown(streak.dispose);
 
       final metrics = await AchievementMetricsLoader(
@@ -1248,7 +1259,7 @@ void main() {
       expect(metrics.favoriteWordCount, 2);
       expect(metrics.completedQuizCount, 2);
       expect(metrics.hasPerfectQuiz, isTrue);
-      expect(metrics.currentStreak, 7);
+      expect(metrics.currentStreak, 0);
     },
   );
 
@@ -1585,16 +1596,16 @@ void main() {
         await streak.recordEvaluation();
       }
       expect(streak.isTodayCompleted, isTrue);
-      expect(streak.currentStreak, 8);
+      expect(streak.currentStreak, 1);
       expect(await streak.recordEvaluation(), isFalse);
-      expect(streak.currentStreak, 8);
+      expect(streak.currentStreak, 1);
 
       now = DateTime(2026, 7, 17, 10);
       expect(await streak.recordEvaluation(), isFalse);
       expect(streak.dailyGoal, 10);
       expect(streak.todayCount, 1);
       expect(streak.remainingForToday, 9);
-      expect(streak.currentStreak, 8);
+      expect(streak.currentStreak, 2);
     },
   );
 
@@ -1987,7 +1998,7 @@ void main() {
 
       expect(service.todayCount, 0);
       expect(service.dailyGoal, 5);
-      expect(service.currentStreak, 7);
+      expect(service.currentStreak, 0);
       expect(service.isTodayCompleted, isFalse);
       expect(service.remainingForToday, 5);
 
@@ -1995,20 +2006,100 @@ void main() {
         expect(await service.recordEvaluation(), isFalse);
         expect(service.todayCount, count);
         expect(service.remainingForToday, service.dailyGoal - count);
-        expect(service.currentStreak, 7);
+        expect(service.currentStreak, 1);
       }
 
       expect(await service.recordEvaluation(), isTrue);
       expect(service.todayCount, 5);
       expect(service.remainingForToday, 0);
       expect(service.isTodayCompleted, isTrue);
-      expect(service.currentStreak, 8);
+      expect(service.currentStreak, 1);
 
       expect(await service.recordEvaluation(), isFalse);
       expect(await service.recordEvaluation(), isFalse);
       expect(service.todayCount, 7);
       expect(service.remainingForToday, 0);
-      expect(service.currentStreak, 8);
+      expect(service.currentStreak, 1);
+    },
+  );
+
+  test('Temiz seri sıfırdan başlar ve aynı gün yalnızca bir olur', () async {
+    final storage = FakeDailyStorage();
+    final service = StreakService(
+      repository: FakeDailyProgressStore(storage),
+      now: () => DateTime(2026, 7, 22, 12),
+    );
+    addTearDown(service.dispose);
+    await service.initialize();
+
+    expect(service.currentStreak, 0);
+    for (var index = 0; index < 7; index++) {
+      await service.recordEvaluation();
+    }
+    expect(service.todayCount, 7);
+    expect(service.currentStreak, 1);
+
+    service.resetAfterDataClear();
+    expect(service.currentStreak, 0);
+    expect(service.todayCount, 0);
+  });
+
+  testWidgets(
+    'Ana ekran, ilerleme ve başarımlar aynı seri kaynağını kullanır',
+    (tester) async {
+      final now = DateTime(2026, 7, 22, 12);
+      final storage = FakeDailyStorage();
+      storage.dailyProgress[localDateKey(now)] = DailyProgress(
+        dateKey: localDateKey(now),
+        reviewCount: 3,
+        isGoalCompleted: false,
+        streakAwarded: false,
+      );
+      final yesterday = DateTime(2026, 7, 21, 12);
+      storage.dailyProgress[localDateKey(yesterday)] = DailyProgress(
+        dateKey: localDateKey(yesterday),
+        reviewCount: 2,
+        isGoalCompleted: false,
+        streakAwarded: false,
+      );
+      final streakService = StreakService(
+        repository: FakeDailyProgressStore(storage),
+        now: () => now,
+      );
+      final xpService = await createXpService();
+      final wordStore = FakeWordProgressStore();
+      final quizStore = FakeQuizStore(FakeQuizStorage(), FakeXpStorage());
+      final statisticsService = createStatisticsService(
+        streakService: streakService,
+        xpService: xpService,
+        wordProgressStore: wordStore,
+        quizStore: quizStore,
+      );
+      addTearDown(streakService.dispose);
+      addTearDown(xpService.dispose);
+      addTearDown(statisticsService.dispose);
+      await streakService.initialize();
+      await statisticsService.refresh();
+      final metrics = await AchievementMetricsLoader(
+        wordProgressStore: wordStore,
+        quizStore: quizStore,
+        streakService: streakService,
+      ).load();
+      final home = await createTestHomeScreen(
+        streakService: streakService,
+        xpService: xpService,
+        statisticsService: statisticsService,
+      );
+      addTearDown(home.settingsService.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(theme: AppTheme.light, home: home.screen),
+      );
+
+      expect(streakService.currentStreak, 2);
+      expect(statisticsService.statistics!.currentStreak, 2);
+      expect(metrics.currentStreak, 2);
+      expect(find.text('2 gün'), findsOneWidget);
     },
   );
 
@@ -2033,12 +2124,12 @@ void main() {
 
       expect(recreatedService.todayCount, 3);
       expect(recreatedService.remainingForToday, 2);
-      expect(recreatedService.currentStreak, 7);
+      expect(recreatedService.currentStreak, 1);
       expect(recreatedService.isTodayCompleted, isFalse);
 
       await recreatedService.recordEvaluation();
       expect(await recreatedService.recordEvaluation(), isTrue);
-      expect(recreatedService.currentStreak, 8);
+      expect(recreatedService.currentStreak, 1);
     },
   );
 
@@ -2273,11 +2364,11 @@ void main() {
     await tester.pump(const Duration(milliseconds: 250));
 
     expect(
-      find.text('🔥 Günlük hedef tamamlandı! Serin 8 güne çıktı.'),
+      find.text('🔥 Günlük hedef tamamlandı! Serin 1 güne çıktı.'),
       findsOneWidget,
     );
     expect(streakService.todayCount, 1);
-    expect(streakService.currentStreak, 8);
+    expect(streakService.currentStreak, 1);
   });
 
   testWidgets('Tüm kelimeler Kolay seçilince kategori tamamlanır', (
@@ -2705,7 +2796,7 @@ void main() {
   });
 
   test('İstatistikler boş veride güvenli başlangıç değerleri üretir', () async {
-    final streakService = StreakService(initialStreak: 0);
+    final streakService = StreakService();
     final xpService = await createXpService();
     final statisticsService = createStatisticsService(
       streakService: streakService,
@@ -2807,7 +2898,7 @@ void main() {
           completedAt: DateTime(2026, 7, index + 1),
         );
       }
-      final streakService = StreakService(initialStreak: 3);
+      final streakService = StreakService();
       for (var count = 0; count < 4; count++) {
         await streakService.recordEvaluation();
       }
@@ -3148,7 +3239,7 @@ void main() {
     expect(find.text('Seviye 1'), findsOneWidget);
     expect(find.text('0 / 1000 XP'), findsOneWidget);
     expect(find.text('Günlük Seri'), findsOneWidget);
-    expect(find.text('7 gün'), findsOneWidget);
+    expect(find.text('0 gün'), findsOneWidget);
     expect(find.text('Günlük Görev'), findsOneWidget);
     expect(find.text('0 / 5'), findsOneWidget);
     expect(find.text('Bugün 5 kelime değerlendir'), findsOneWidget);
@@ -3345,6 +3436,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(LearningWordListScreen), findsOneWidget);
+    expect(find.byType(GlassBackground), findsOneWidget);
     expect(find.text('Tüm Kelimeler'), findsOneWidget);
     expect(find.text('Dog'), findsOneWidget);
     expect(find.text('Köpek'), findsOneWidget);
@@ -3359,6 +3451,29 @@ void main() {
     expect(find.text('Öğrenildi'), findsOneWidget);
     expect(find.text('hard'), findsNothing);
     expect(find.text('easy'), findsNothing);
+    expect(find.byType(BackdropFilter), findsNothing);
+  });
+
+  testWidgets('Kelime listesinde favori değişikliği anında yenilenir', (
+    tester,
+  ) async {
+    final store = FakeWordProgressStore({
+      'dog': testWordProgress(wordId: 'dog', isFavorite: true),
+    });
+    await pumpKelimoApp(tester, wordProgressStore: store);
+    await openLearningCenter(tester);
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('learning-filter-favorites')),
+    );
+    await tester.tap(find.byKey(const ValueKey('learning-filter-favorites')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('learning-word-dog')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('favorite-dog')));
+    await tester.pumpAndSettle();
+
+    expect(store.progressFor('dog').isFavorite, isFalse);
+    expect(find.text('Henüz favori kelimen yok.'), findsOneWidget);
   });
 
   testWidgets('Öğrenme Merkezi boş filtre mesajlarını gösterir', (
@@ -3386,6 +3501,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(entry.$1));
       await tester.pumpAndSettle();
+      expect(find.byType(GlassBackground), findsOneWidget);
       expect(find.text(entry.$2), findsOneWidget);
       await tester.pageBack();
       await tester.pumpAndSettle();
@@ -3502,7 +3618,7 @@ void main() {
     addTearDown(settingsService.dispose);
     await tester.pumpWidget(
       MaterialApp(
-        theme: AppTheme.light,
+        theme: AppTheme.dark,
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(
             context,
@@ -4190,7 +4306,7 @@ void main() {
     );
 
     expect(find.text('🔥 8 günlük seri'), findsNothing);
-    expect(find.text('8 gün'), findsOneWidget);
+    expect(find.text('1 gün'), findsOneWidget);
     expect(find.text('5 / 5'), findsOneWidget);
     expect(find.text('Günlük hedef tamamlandı'), findsOneWidget);
   });
@@ -4768,9 +4884,9 @@ void main() {
     expect(find.text('Öğrenmeye Başla'), findsOneWidget);
     expect(find.text('Quiz Çöz'), findsOneWidget);
     expect(find.text('İstatistik'), findsOneWidget);
-    expect(find.text('Son çalışmalar'), findsOneWidget);
-    expect(find.text('Dog'), findsOneWidget);
-    expect(find.text('Köpek'), findsOneWidget);
+    expect(find.text('Son çalışmalar'), findsNothing);
+    expect(find.text('Dog'), findsNothing);
+    expect(find.text('Köpek'), findsNothing);
     expect(find.byType(BackButton), findsOneWidget);
   });
 
@@ -4785,8 +4901,8 @@ void main() {
     expect(find.text('30 kelime'), findsOneWidget);
     expect(find.text('0 / 30 kelime'), findsOneWidget);
     expect(find.text('%0 tamamlandı'), findsOneWidget);
-    expect(find.text('Apple'), findsOneWidget);
-    expect(find.text('Elma'), findsOneWidget);
+    expect(find.text('Apple'), findsNothing);
+    expect(find.text('Elma'), findsNothing);
 
     await tester.tap(find.text('Öğrenmeye Başla'));
     await tester.pumpAndSettle();
@@ -5247,8 +5363,8 @@ void main() {
     expect(find.text('30 kelime'), findsOneWidget);
     expect(find.text('0 / 30 kelime'), findsOneWidget);
     expect(find.text('%0 tamamlandı'), findsOneWidget);
-    expect(find.text('Red'), findsOneWidget);
-    expect(find.text('Kırmızı'), findsOneWidget);
+    expect(find.text('Red'), findsNothing);
+    expect(find.text('Kırmızı'), findsNothing);
 
     await tester.tap(find.text('Öğrenmeye Başla'));
     await tester.pumpAndSettle();
@@ -5313,7 +5429,7 @@ void main() {
     expect(find.text('30 kelime'), findsOneWidget);
     expect(find.text('0 / 30 kelime'), findsOneWidget);
     expect(find.text('%0 tamamlandı'), findsOneWidget);
-    expect(find.text('House'), findsOneWidget);
+    expect(find.text('House'), findsNothing);
 
     await tester.tap(find.text('Öğrenmeye Başla'));
     await tester.pumpAndSettle();
@@ -5393,7 +5509,7 @@ void main() {
     expect(find.text('30 kelime'), findsOneWidget);
     expect(find.text('0 / 30 kelime'), findsOneWidget);
     expect(find.text('%0 tamamlandı'), findsOneWidget);
-    expect(find.text('Family'), findsOneWidget);
+    expect(find.text('Family'), findsNothing);
 
     await tester.tap(find.text('Öğrenmeye Başla'));
     await tester.pumpAndSettle();
@@ -5489,7 +5605,7 @@ void main() {
     expect(find.text('30 kelime'), findsOneWidget);
     expect(find.text('0 / 30 kelime'), findsOneWidget);
     expect(find.text('%0 tamamlandı'), findsOneWidget);
-    expect(find.text('Car'), findsOneWidget);
+    expect(find.text('Car'), findsNothing);
 
     await tester.tap(find.text('Öğrenmeye Başla'));
     await tester.pumpAndSettle();
@@ -5672,14 +5788,55 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Hayvanlar İstatistikleri'), findsOneWidget);
+    expect(find.byType(GlassBackground), findsOneWidget);
     expect(find.text('Hayvanlar performansı'), findsOneWidget);
     expect(find.text('Toplam kelime'), findsOneWidget);
     expect(find.text('Değerlendirilen'), findsOneWidget);
     expect(find.text('Öğrenilen'), findsOneWidget);
-    expect(find.text('Ortalama mastery'), findsOneWidget);
+    expect(find.text('Ortalama hâkimiyet'), findsOneWidget);
     expect(find.text('Tamamlanan quiz'), findsOneWidget);
     expect(find.text('En yüksek skor'), findsOneWidget);
     expect(find.text('Ortalama quiz'), findsOneWidget);
+    final masteryProgress = tester.widget<LinearProgressIndicator>(
+      find.descendant(
+        of: find.byKey(const ValueKey('average-mastery-card')),
+        matching: find.byType(LinearProgressIndicator),
+      ),
+    );
+    expect(masteryProgress.value, 0);
+  });
+
+  testWidgets('Kategori istatistikleri koyu ve dar ekranda taşmaz', (
+    tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(320, 700));
+    final streakService = StreakService();
+    final xpService = await createXpService();
+    final statisticsService = createStatisticsService(
+      streakService: streakService,
+      xpService: xpService,
+    );
+    addTearDown(streakService.dispose);
+    addTearDown(xpService.dispose);
+    addTearDown(statisticsService.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.dark,
+        home: MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(1.5)),
+          child: CategoryStatisticsScreen(
+            category: CategoryCatalog.holidaysCelebrations,
+            statisticsService: statisticsService,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(GlassBackground), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('Öğrenmeye Başla ilk kelime kartını açar ve kart çevrilir', (

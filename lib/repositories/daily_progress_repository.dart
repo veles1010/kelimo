@@ -1,53 +1,48 @@
 import 'package:flutter/foundation.dart';
 import 'package:kelimo/data/local/database_service.dart';
 import 'package:kelimo/models/daily_progress.dart';
+import 'package:kelimo/services/streak_calculator.dart';
 import 'package:sqflite/sqflite.dart';
 
 abstract interface class DailyProgressStore {
-  Future<DailyProgressSnapshot> loadToday({
-    int initialStreak = 7,
-    DateTime? now,
-  });
+  Future<DailyProgressSnapshot> loadToday({DateTime? now});
   Future<DailyProgressSnapshot> incrementReview({
     required int dailyGoal,
-    int initialStreak = 7,
     DateTime? now,
   });
   Future<void> saveStreak(StreakState streak);
 }
 
 class DailyProgressRepository implements DailyProgressStore {
-  DailyProgressRepository(this._databaseService);
+  DailyProgressRepository(
+    this._databaseService, {
+    this.streakCalculator = const StreakCalculator(),
+  });
 
   final DatabaseService _databaseService;
+  final StreakCalculator streakCalculator;
 
   @override
-  Future<DailyProgressSnapshot> loadToday({
-    int initialStreak = 7,
-    DateTime? now,
-  }) async {
+  Future<DailyProgressSnapshot> loadToday({DateTime? now}) async {
     try {
       final database = await _databaseService.database;
-      final dateKey = localDateKey(now ?? DateTime.now());
+      final currentTime = now ?? DateTime.now();
+      final dateKey = localDateKey(currentTime);
       final dailyRows = await database.query(
         'daily_progress',
         where: 'date_key = ?',
         whereArgs: [dateKey],
         limit: 1,
       );
-      final streakRows = await database.query(
-        'streak_state',
-        where: 'id = 1',
-        limit: 1,
-      );
+      final activityTimes = await _loadActivityTimes(database);
+      final streak = _streakFromActivities(activityTimes, now: currentTime);
+      await _saveStreak(database, streak);
 
       return DailyProgressSnapshot(
         progress: dailyRows.isEmpty
             ? DailyProgress.initial(dateKey)
             : DailyProgress.fromMap(dailyRows.first),
-        streak: streakRows.isEmpty
-            ? StreakState(currentStreak: initialStreak)
-            : StreakState.fromMap(streakRows.first),
+        streak: streak,
       );
     } catch (error, stackTrace) {
       debugPrint('Günlük ilerleme yüklenemedi: $error\n$stackTrace');
@@ -58,7 +53,6 @@ class DailyProgressRepository implements DailyProgressStore {
   @override
   Future<DailyProgressSnapshot> incrementReview({
     required int dailyGoal,
-    int initialStreak = 7,
     DateTime? now,
   }) async {
     final reviewDate = (now ?? DateTime.now()).toLocal();
@@ -72,18 +66,9 @@ class DailyProgressRepository implements DailyProgressStore {
           whereArgs: [dateKey],
           limit: 1,
         );
-        final streakRows = await transaction.query(
-          'streak_state',
-          where: 'id = 1',
-          limit: 1,
-        );
-
         final currentProgress = dailyRows.isEmpty
             ? DailyProgress.initial(dateKey)
             : DailyProgress.fromMap(dailyRows.first);
-        final currentStreak = streakRows.isEmpty
-            ? StreakState(currentStreak: initialStreak)
-            : StreakState.fromMap(streakRows.first);
         final reviewCount = currentProgress.reviewCount + 1;
         final justCompleted =
             !currentProgress.isGoalCompleted && reviewCount >= dailyGoal;
@@ -93,26 +78,14 @@ class DailyProgressRepository implements DailyProgressStore {
           isGoalCompleted: currentProgress.isGoalCompleted || justCompleted,
           streakAwarded: currentProgress.streakAwarded || justCompleted,
         );
-        final streak = justCompleted
-            ? StreakState(
-                currentStreak: currentStreak.currentStreak + 1,
-                lastCompletedDate: DateTime(
-                  reviewDate.year,
-                  reviewDate.month,
-                  reviewDate.day,
-                ),
-              )
-            : currentStreak;
-
         await transaction.insert(
           'daily_progress',
           progress.toMap(),
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
-        await transaction.insert('streak_state', {
-          'id': 1,
-          ...streak.toMap(),
-        }, conflictAlgorithm: ConflictAlgorithm.replace);
+        final activityTimes = await _loadActivityTimes(transaction);
+        final streak = _streakFromActivities(activityTimes, now: reviewDate);
+        await _saveStreak(transaction, streak);
 
         return DailyProgressSnapshot(
           progress: progress,
@@ -138,5 +111,47 @@ class DailyProgressRepository implements DailyProgressStore {
       debugPrint('Seri bilgisi kaydedilemedi: $error\n$stackTrace');
       rethrow;
     }
+  }
+
+  Future<List<DateTime>> _loadActivityTimes(DatabaseExecutor database) async {
+    final dailyRows = await database.query(
+      'daily_progress',
+      columns: ['date_key'],
+      where: 'review_count > 0',
+    );
+    final quizRows = await database.query(
+      'quiz_attempts',
+      columns: ['completed_at'],
+    );
+
+    return [
+      for (final row in dailyRows)
+        ?parseLocalDateKey(row['date_key'] as String?),
+      for (final row in quizRows)
+        ?DateTime.tryParse(row['completed_at'] as String? ?? ''),
+    ];
+  }
+
+  StreakState _streakFromActivities(
+    List<DateTime> activityTimes, {
+    required DateTime now,
+  }) {
+    return StreakState(
+      currentStreak: streakCalculator.calculate(activityTimes, now: now),
+      lastCompletedDate: streakCalculator.latestValidActivity(
+        activityTimes,
+        now: now,
+      ),
+    );
+  }
+
+  Future<void> _saveStreak(
+    DatabaseExecutor database,
+    StreakState streak,
+  ) async {
+    await database.insert('streak_state', {
+      'id': 1,
+      ...streak.toMap(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 }

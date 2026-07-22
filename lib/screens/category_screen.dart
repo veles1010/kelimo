@@ -139,6 +139,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
                                 achievementService: widget.achievementService,
                                 interstitialAdService:
                                     widget.interstitialAdService,
+                                streakService: streakService,
                               ),
                             ),
                           );
@@ -160,8 +161,6 @@ class _CategoryScreenState extends State<CategoryScreen> {
                           );
                         },
                       ),
-                      const SizedBox(height: 32),
-                      _RecentStudies(category: widget.category),
                     ],
                   ),
                 ),
@@ -373,73 +372,6 @@ class _ActionCard extends StatelessWidget {
               : InkWell(onTap: onTap, child: content),
         ),
       ),
-    );
-  }
-}
-
-class _RecentStudies extends StatelessWidget {
-  const _RecentStudies({required this.category});
-
-  final LearningCategory category;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Son çalışmalar',
-          style: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 12),
-        GlassSurface(
-          enableBlur: false,
-          showShadow: false,
-          padding: EdgeInsets.zero,
-          child: Card(
-            color: Colors.transparent,
-            surfaceTintColor: Colors.transparent,
-            child: Padding(
-              padding: AppDimensions.cardPadding,
-              child: Column(
-                children: [
-                  for (final (index, word)
-                      in category.words.take(3).indexed) ...[
-                    if (index > 0) const Divider(height: 24),
-                    _WordRow(english: word.english, turkish: word.turkish),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _WordRow extends StatelessWidget {
-  const _WordRow({required this.english, required this.turkish});
-
-  final String english;
-  final String turkish;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            english,
-            style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-          ),
-        ),
-        Text(turkish, style: textTheme.titleMedium),
-      ],
     );
   }
 }
