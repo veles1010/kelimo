@@ -61,6 +61,7 @@ import 'package:kelimo/services/interstitial_ad_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 import 'package:kelimo/utils/turkish_case.dart';
 import 'package:kelimo/widgets/scale_down_single_line_text.dart';
+import 'package:kelimo/widgets/glass_surface.dart';
 
 class NoShuffleRandom implements Random {
   @override
@@ -4503,6 +4504,12 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.light,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: const TextScaler.linear(1.5)),
+          child: child!,
+        ),
         home: CategorySelectionScreen(snapshot: snapshot),
       ),
     );
@@ -4516,8 +4523,135 @@ void main() {
     );
     expect(first, findsOneWidget);
     expect(second, findsOneWidget);
+    final layout = find.byKey(const ValueKey('recent-categories-layout'));
+    expect(layout, findsOneWidget);
+    expect(
+      find.descendant(of: layout, matching: find.byType(ListView)),
+      findsNothing,
+    );
     expect(tester.getTopLeft(first).dx, greaterThanOrEqualTo(20));
     expect(tester.getTopRight(second).dx, lessThanOrEqualTo(300));
+    expect(
+      tester.getSize(first).width,
+      closeTo(tester.getSize(second).width, 0.1),
+    );
+    expect(tester.getSize(first).height, inInclusiveRange(82, 92));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('tek son çalışılan kategori iki sütun genişliğinde kalır', (
+    tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(320, 568));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: const CategorySelectionScreen(
+          snapshot: CategoryHubSnapshot(
+            progressByCategoryId: {},
+            recentCategories: [CategoryCatalog.holidaysCelebrations],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final card = find.byKey(
+      const ValueKey('recent-category-holidays_celebrations'),
+    );
+    expect(card, findsOneWidget);
+    expect(tester.getTopLeft(card).dx, greaterThanOrEqualTo(20));
+    expect(tester.getSize(card).width, lessThan(150));
+    expect(tester.getTopRight(card).dx, lessThan(170));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('GlassSurface açık ve koyu temada güvenli oluşturulur', (
+    tester,
+  ) async {
+    for (final theme in [AppTheme.light, AppTheme.dark]) {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: theme,
+          home: Scaffold(
+            body: GlassBackground(
+              child: Center(
+                child: GlassSurface(
+                  key: const ValueKey('test-glass-surface'),
+                  child: const Text('Cam yüzey'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byKey(const ValueKey('test-glass-surface')), findsOneWidget);
+      expect(find.byType(BackdropFilter), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: const GlassSurface(
+          enableBlur: false,
+          child: Text('Performanslı yüzey'),
+        ),
+      ),
+    );
+    expect(find.byType(BackdropFilter), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('cam alt navigasyon mevcut sekme davranışını korur', (
+    tester,
+  ) async {
+    await pumpKelimoApp(tester);
+
+    expect(
+      find.byKey(const ValueKey('glass-bottom-navigation')),
+      findsOneWidget,
+    );
+    expect(find.text('Devam Et'), findsOneWidget);
+    expect(find.text('Tüm Kategorileri Gör · 36'), findsOneWidget);
+
+    await tester.tap(find.text('Öğren'));
+    await tester.pumpAndSettle();
+    expect(find.text('Öğrenme Merkezi'), findsOneWidget);
+
+    await tester.tap(find.text('Ana Sayfa'));
+    await tester.pumpAndSettle();
+    expect(find.text('Merhaba!'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Kategori Seç cam katmanı koyu temada aramayı korur', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.dark,
+        home: const CategorySelectionScreen(
+          snapshot: CategoryHubSnapshot(
+            progressByCategoryId: {},
+            recentCategories: [],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('category-glass-header')), findsOneWidget);
+    expect(find.byKey(const ValueKey('category-glass-search')), findsOneWidget);
+    await tester.enterText(find.byType(SearchBar), 'Coğrafya');
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('category-grid-geography')),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 

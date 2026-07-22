@@ -24,6 +24,7 @@ import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/services/interstitial_ad_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
+import 'package:kelimo/widgets/glass_surface.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
@@ -164,95 +165,75 @@ class _HomeScreenState extends State<HomeScreen> {
           dailyReminderService: widget.dailyReminderService,
           interstitialAdService: widget.interstitialAdService,
         ),
-        _ => SafeArea(
-          bottom: false,
-          child: CustomScrollView(
-            slivers: [
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
-                sliver: SliverToBoxAdapter(
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 960),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const _Greeting(),
-                          const SizedBox(height: 20),
-                          FutureBuilder<CategoryHubSnapshot>(
-                            future: _categorySnapshot,
-                            builder: (context, snapshot) {
-                              final data = snapshot.data;
-                              if (data == null &&
-                                  snapshot.connectionState !=
-                                      ConnectionState.done) {
-                                return const _CategoryHubLoadingCard();
-                              }
-                              final safeData =
-                                  data ??
-                                  const CategoryHubSnapshot(
-                                    progressByCategoryId: {},
-                                    recentCategories: [],
-                                  );
-                              return _HomeCategoryHub(
-                                snapshot: safeData,
-                                onContinue: (category) {
-                                  if (category == null) {
-                                    _showCategorySelection(safeData);
-                                  } else {
-                                    _openCategory(category);
-                                  }
-                                },
-                                onShowAll: () =>
-                                    _showCategorySelection(safeData),
-                              );
-                            },
-                          ),
-                          const SizedBox(height: 20),
-                          _ProgressCards(
-                            streakService: streakService,
-                            xpService: xpService,
-                            statisticsService: widget.statisticsService,
-                          ),
-                        ],
+        _ => GlassBackground(
+          child: SafeArea(
+            bottom: false,
+            child: CustomScrollView(
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
+                  sliver: SliverToBoxAdapter(
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 960),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const _Greeting(),
+                            const SizedBox(height: 20),
+                            FutureBuilder<CategoryHubSnapshot>(
+                              future: _categorySnapshot,
+                              builder: (context, snapshot) {
+                                final data = snapshot.data;
+                                if (data == null &&
+                                    snapshot.connectionState !=
+                                        ConnectionState.done) {
+                                  return const _CategoryHubLoadingCard();
+                                }
+                                final safeData =
+                                    data ??
+                                    const CategoryHubSnapshot(
+                                      progressByCategoryId: {},
+                                      recentCategories: [],
+                                    );
+                                return _HomeCategoryHub(
+                                  snapshot: safeData,
+                                  onContinue: (category) {
+                                    if (category == null) {
+                                      _showCategorySelection(safeData);
+                                    } else {
+                                      _openCategory(category);
+                                    }
+                                  },
+                                  onShowAll: () =>
+                                      _showCategorySelection(safeData),
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 20),
+                            _ProgressCards(
+                              streakService: streakService,
+                              xpService: xpService,
+                              statisticsService: widget.statisticsService,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       },
-      bottomNavigationBar: NavigationBar(
+      bottomNavigationBar: _GlassBottomNavigation(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (index) {
           if (index >= 0 && index <= 3) {
             setState(() => _selectedIndex = index);
           }
         },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home_rounded),
-            label: 'Ana Sayfa',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.school_outlined),
-            selectedIcon: Icon(Icons.school_rounded),
-            label: 'Öğren',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.bar_chart_outlined),
-            selectedIcon: Icon(Icons.bar_chart_rounded),
-            label: 'İlerleme',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings_rounded),
-            label: 'Ayarlar',
-          ),
-        ],
       ),
     );
   }
@@ -324,7 +305,7 @@ class _LevelCard extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    return Card(
+    return _GlassCard(
       child: Padding(
         padding: AppDimensions.cardPadding,
         child: Column(
@@ -434,7 +415,7 @@ class _DailyStreakCard extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    return Card(
+    return _GlassCard(
       child: Padding(
         padding: AppDimensions.cardPadding,
         child: Row(
@@ -497,7 +478,7 @@ class _DailyTaskCard extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final displayedCount = todayCount > dailyGoal ? dailyGoal : todayCount;
 
-    return Card(
+    return _GlassCard(
       child: Padding(
         padding: AppDimensions.cardPadding,
         child: Column(
@@ -568,7 +549,7 @@ class _GeneralProgressCard extends StatelessWidget {
     final statistics = statisticsService.statistics;
 
     if (statisticsService.isLoading && statistics == null) {
-      return Card(
+      return _GlassCard(
         child: Padding(
           padding: AppDimensions.cardPadding,
           child: Column(
@@ -600,7 +581,7 @@ class _GeneralProgressCard extends StatelessWidget {
         );
     final progress = distribution.ratioFor(distribution.learnedCount);
 
-    return Card(
+    return _GlassCard(
       child: Padding(
         padding: AppDimensions.cardPadding,
         child: Column(
@@ -684,94 +665,111 @@ class _HomeCategoryHub extends StatelessWidget {
           style: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
-        Card(
-          child: Padding(
-            padding: AppDimensions.cardPadding,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 52,
-                      height: 52,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Text(
-                        category?.emoji ?? '📚',
-                        style: const TextStyle(fontSize: 28),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            category?.title ?? 'İlk kategorini seç',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            category == null
-                                ? 'Öğrenmeye başlamak için bir kategori seç'
-                                : '$learned / $total kelime',
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (category != null)
-                      Text(
-                        '%$percentage',
-                        style: textTheme.labelLarge?.copyWith(
-                          color: colorScheme.primary,
-                          fontWeight: FontWeight.bold,
+        GlassSurface(
+          enableBlur: true,
+          padding: EdgeInsets.zero,
+          child: Card(
+            color: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
+            child: Padding(
+              padding: AppDimensions.cardPadding,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 52,
+                        height: 52,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text(
+                          category?.emoji ?? '📚',
+                          style: const TextStyle(fontSize: 28),
                         ),
                       ),
-                  ],
-                ),
-                if (category != null) ...[
-                  const SizedBox(height: 16),
-                  LinearProgressIndicator(value: progress, minHeight: 7),
-                ],
-                const SizedBox(height: 16),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: FilledButton.icon(
-                    onPressed: () => onContinue(category),
-                    icon: const Icon(Icons.play_arrow_rounded),
-                    label: const Text('Devam Et'),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              category?.title ?? 'İlk kategorini seç',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              category == null
+                                  ? 'Öğrenmeye başlamak için bir kategori seç'
+                                  : '$learned / $total kelime',
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (category != null)
+                        Text(
+                          '%$percentage',
+                          style: textTheme.labelLarge?.copyWith(
+                            color: colorScheme.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                    ],
                   ),
-                ),
-              ],
+                  if (category != null) ...[
+                    const SizedBox(height: 16),
+                    LinearProgressIndicator(value: progress, minHeight: 7),
+                  ],
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.icon(
+                      onPressed: () => onContinue(category),
+                      icon: const Icon(Icons.play_arrow_rounded),
+                      label: const Text('Devam Et'),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
         const SizedBox(height: 12),
-        OutlinedButton(
+        GlassSurface(
           key: const ValueKey('all-categories-button'),
-          onPressed: onShowAll,
-          style: OutlinedButton.styleFrom(
-            minimumSize: const Size.fromHeight(54),
-            alignment: Alignment.centerLeft,
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Tüm Kategorileri Gör · ${CategoryCatalog.categories.length}',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+          enableBlur: true,
+          borderRadius: BorderRadius.circular(18),
+          child: Semantics(
+            button: true,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(18),
+              onTap: onShowAll,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 54),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Tüm Kategorileri Gör · '
+                          '${CategoryCatalog.categories.length}',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      const Icon(Icons.arrow_forward_rounded),
+                    ],
+                  ),
                 ),
               ),
-              const Icon(Icons.arrow_forward_rounded),
-            ],
+            ),
           ),
         ),
       ],
@@ -794,7 +792,8 @@ class _CategoryHubLoadingCard extends StatelessWidget {
           ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
-        const Card(
+        const _GlassCard(
+          enableBlur: true,
           child: Padding(
             padding: AppDimensions.cardPadding,
             child: Column(
@@ -808,6 +807,79 @@ class _CategoryHubLoadingCard extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _GlassCard extends StatelessWidget {
+  const _GlassCard({required this.child, this.enableBlur = false});
+
+  final Widget child;
+  final bool enableBlur;
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassSurface(
+      enableBlur: enableBlur,
+      padding: EdgeInsets.zero,
+      child: Card(
+        color: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        child: child,
+      ),
+    );
+  }
+}
+
+class _GlassBottomNavigation extends StatelessWidget {
+  const _GlassBottomNavigation({
+    required this.selectedIndex,
+    required this.onDestinationSelected,
+  });
+
+  final int selectedIndex;
+  final ValueChanged<int> onDestinationSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.fromLTRB(12, 4, 12, 10),
+      child: GlassSurface(
+        key: const ValueKey('glass-bottom-navigation'),
+        borderRadius: BorderRadius.circular(30),
+        blurSigma: 18,
+        padding: EdgeInsets.zero,
+        child: NavigationBar(
+          height: 70,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          selectedIndex: selectedIndex,
+          onDestinationSelected: onDestinationSelected,
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.home_outlined),
+              selectedIcon: Icon(Icons.home_rounded),
+              label: 'Ana Sayfa',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.school_outlined),
+              selectedIcon: Icon(Icons.school_rounded),
+              label: 'Öğren',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.bar_chart_outlined),
+              selectedIcon: Icon(Icons.bar_chart_rounded),
+              label: 'İlerleme',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.settings_outlined),
+              selectedIcon: Icon(Icons.settings_rounded),
+              label: 'Ayarlar',
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
