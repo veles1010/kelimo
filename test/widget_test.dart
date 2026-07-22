@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kelimo/data/animal_words.dart';
 import 'package:kelimo/data/achievement_catalog.dart';
@@ -13,6 +14,7 @@ import 'package:kelimo/data/home_words.dart';
 import 'package:kelimo/data/transportation_words.dart';
 import 'package:kelimo/data/local/database_service.dart';
 import 'package:kelimo/main.dart';
+import 'package:kelimo/models/category_hub_snapshot.dart';
 import 'package:kelimo/models/daily_progress.dart';
 import 'package:kelimo/models/achievement.dart';
 import 'package:kelimo/models/app_settings.dart';
@@ -35,6 +37,7 @@ import 'package:kelimo/screens/quiz_result_screen.dart';
 import 'package:kelimo/screens/about_screen.dart';
 import 'package:kelimo/screens/category_quiz_screen.dart';
 import 'package:kelimo/screens/category_screen.dart';
+import 'package:kelimo/screens/category_selection_screen.dart';
 import 'package:kelimo/screens/home_screen.dart';
 import 'package:kelimo/screens/learning_center_screen.dart';
 import 'package:kelimo/screens/learning_word_list_screen.dart';
@@ -876,41 +879,57 @@ Future<void> pumpKelimoApp(
   await tester.pumpAndSettle();
 }
 
-Future<void> openAnimalsCategory(WidgetTester tester) async {
-  await tester.scrollUntilVisible(find.text('Hayvanlar'), 300);
-  await tester.tap(find.text('Hayvanlar'));
+Future<void> openCategorySelection(WidgetTester tester) async {
+  final button = find.byKey(const ValueKey('all-categories-button'));
+  await tester.scrollUntilVisible(button, 300);
+  await tester.ensureVisible(button);
+  await tester.pumpAndSettle();
+  await tester.tap(button);
   await tester.pumpAndSettle();
 }
 
-Future<void> openFoodsCategory(WidgetTester tester) async {
-  await tester.scrollUntilVisible(find.text('Yiyecekler'), 300);
-  await tester.tap(find.text('Yiyecekler'));
+Future<void> openCategoryByTitle(WidgetTester tester, String title) async {
+  await openCategorySelection(tester);
+  final category = CategoryCatalog.categories.firstWhere(
+    (category) => category.title == title,
+  );
+  final card = await scrollCategoryGridTo(tester, category.id);
+  await tester.tap(card);
   await tester.pumpAndSettle();
 }
 
-Future<void> openColorsCategory(WidgetTester tester) async {
-  await tester.scrollUntilVisible(find.text('Renkler'), 300);
-  await tester.tap(find.text('Renkler'));
-  await tester.pumpAndSettle();
+Future<Finder> scrollCategoryGridTo(
+  WidgetTester tester,
+  String categoryId,
+) async {
+  final card = find.byKey(ValueKey('category-grid-$categoryId'));
+  final scrollable = find
+      .descendant(
+        of: find.byType(CategorySelectionScreen),
+        matching: find.byType(Scrollable),
+      )
+      .first;
+  await tester.scrollUntilVisible(card, 250, scrollable: scrollable);
+  return card;
 }
 
-Future<void> openHomeCategory(WidgetTester tester) async {
-  await tester.scrollUntilVisible(find.text('Ev'), 300);
-  await tester.tap(find.text('Ev'));
-  await tester.pumpAndSettle();
-}
+Future<void> openAnimalsCategory(WidgetTester tester) =>
+    openCategoryByTitle(tester, 'Hayvanlar');
 
-Future<void> openFamilyCategory(WidgetTester tester) async {
-  await tester.scrollUntilVisible(find.text('Aile'), 300);
-  await tester.tap(find.text('Aile'));
-  await tester.pumpAndSettle();
-}
+Future<void> openFoodsCategory(WidgetTester tester) =>
+    openCategoryByTitle(tester, 'Yiyecekler');
 
-Future<void> openTransportationCategory(WidgetTester tester) async {
-  await tester.scrollUntilVisible(find.text('Ulaşım'), 300);
-  await tester.tap(find.text('Ulaşım'));
-  await tester.pumpAndSettle();
-}
+Future<void> openColorsCategory(WidgetTester tester) =>
+    openCategoryByTitle(tester, 'Renkler');
+
+Future<void> openHomeCategory(WidgetTester tester) =>
+    openCategoryByTitle(tester, 'Ev');
+
+Future<void> openFamilyCategory(WidgetTester tester) =>
+    openCategoryByTitle(tester, 'Aile');
+
+Future<void> openTransportationCategory(WidgetTester tester) =>
+    openCategoryByTitle(tester, 'Ulaşım');
 
 Future<void> openLearningCenter(WidgetTester tester) async {
   await tester.tap(find.text('Öğren'));
@@ -2724,6 +2743,20 @@ void main() {
     expect(generalProgressDescription(distribution), 'Henüz kelime bulunmuyor');
   });
 
+  test('Genel ilerleme öğrenilen kelime varken motive edici mesaj üretir', () {
+    const distribution = WordLearningDistribution(
+      totalCount: 1080,
+      newCount: 1069,
+      learningCount: 0,
+      learnedCount: 11,
+    );
+
+    expect(
+      generalProgressDescription(distribution),
+      'Harika, 11 kelimede ilerleme kaydettin!',
+    );
+  });
+
   test(
     'İstatistikler kelime dağılımı, quiz sırası ve kategori değerlerini hesaplar',
     () async {
@@ -3101,6 +3134,10 @@ void main() {
 
     expect(find.text('Merhaba!'), findsOneWidget);
     expect(find.text('Bugün öğrenmeye hazır mısın?'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Kaldığın yerden devam et')).dy,
+      lessThan(tester.getTopLeft(find.text('Genel ilerleme')).dy),
+    );
     expect(find.text('Genel ilerleme'), findsOneWidget);
     expect(find.text('0 / 1080 kelime'), findsOneWidget);
     expect(find.text('Henüz öğrenmeye başlamadın'), findsOneWidget);
@@ -3115,10 +3152,86 @@ void main() {
     expect(find.text('0 / 5'), findsOneWidget);
     expect(find.text('Bugün 5 kelime değerlendir'), findsOneWidget);
     expect(find.byType(LinearProgressIndicator), findsNWidgets(3));
-    await tester.scrollUntilVisible(find.text('Kategoriler'), 300);
-    expect(find.text('Kategoriler'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Kaldığın yerden devam et'), 300);
+    expect(find.text('Kaldığın yerden devam et'), findsOneWidget);
+    expect(find.text('İlk kategorini seç'), findsOneWidget);
+    expect(find.text('Devam Et'), findsOneWidget);
+    expect(find.text('Tüm Kategorileri Gör · 36'), findsOneWidget);
     expect(find.byType(NavigationBar), findsOneWidget);
   });
+
+  testWidgets('kategori seçim ekranı açılır ve arama listeyi filtreler', (
+    tester,
+  ) async {
+    await pumpKelimoApp(tester);
+    await openCategorySelection(tester);
+
+    expect(find.byType(CategorySelectionScreen), findsOneWidget);
+    expect(find.text('Kategori Seç'), findsOneWidget);
+
+    await tester.enterText(find.byType(SearchBar), 'Coğrafya');
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('category-grid-geography')),
+      findsOneWidget,
+    );
+    expect(find.text('Hayvanlar'), findsNothing);
+    expect(find.text('Arama Sonuçları'), findsOneWidget);
+  });
+
+  testWidgets(
+    'ana ekran quiz geçmişindeki son kategoriyi devam kartında gösterir',
+    (tester) async {
+      final quizStorage = FakeQuizStorage();
+      final xpStorage = FakeXpStorage();
+      final quizStore = FakeQuizStore(quizStorage, xpStorage);
+      await quizStore.saveCompletedQuiz(
+        categoryId: 'foods',
+        correctCount: 8,
+        totalQuestions: 10,
+        scorePercent: 80,
+        completedAt: DateTime.utc(2026, 7, 20),
+      );
+      final wordStore = FakeWordProgressStore({
+        animalWords.first.id: testWordProgress(
+          wordId: animalWords.first.id,
+          mastery: 'easy',
+          repetitionCount: 1,
+        ),
+      });
+      final streakService = StreakService(repository: FakeDailyProgressStore());
+      final xpService = await createXpService();
+      await streakService.initialize();
+      final statisticsService = createStatisticsService(
+        streakService: streakService,
+        xpService: xpService,
+        wordProgressStore: wordStore,
+        quizStore: quizStore,
+      );
+      final home = await createTestHomeScreen(
+        streakService: streakService,
+        xpService: xpService,
+        statisticsService: statisticsService,
+        wordProgressStore: wordStore,
+        quizStore: quizStore,
+      );
+      addTearDown(streakService.dispose);
+      addTearDown(xpService.dispose);
+      addTearDown(statisticsService.dispose);
+      addTearDown(home.settingsService.dispose);
+
+      await tester.pumpWidget(MaterialApp(home: home.screen));
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(
+        find.text('Kaldığın yerden devam et'),
+        300,
+      );
+      expect(find.text('Yiyecekler'), findsOneWidget);
+      expect(find.text('0 / 30 kelime'), findsOneWidget);
+    },
+  );
 
   testWidgets('Öğrenme Merkezi dört gerçek çalışma kartını gösterir', (
     tester,
@@ -4043,7 +4156,7 @@ void main() {
     expect(find.text('Seviye 2'), findsOneWidget);
     expect(find.text('5 / 1000 XP'), findsOneWidget);
     final levelProgress = tester.widget<LinearProgressIndicator>(
-      find.byType(LinearProgressIndicator).at(1),
+      find.byKey(const ValueKey('level-progress')),
     );
     expect(levelProgress.value, 0.005);
   });
@@ -4079,71 +4192,50 @@ void main() {
       expect(find.text('52 / 5'), findsNothing);
       expect(find.text('Günlük hedef tamamlandı'), findsOneWidget);
 
-      final taskProgress = tester
-          .widgetList<LinearProgressIndicator>(
-            find.byType(LinearProgressIndicator),
-          )
-          .last;
+      final taskProgress = tester.widget<LinearProgressIndicator>(
+        find.byKey(const ValueKey('daily-task-progress')),
+      );
       expect(taskProgress.value, 1.0);
     },
   );
 
-  testWidgets('otuz altı kategori kartı ve içerikleri bulunur', (tester) async {
-    await pumpKelimoApp(tester);
+  testWidgets(
+    'ana ekrandaki uzun liste yerine kategori seçimi 36 kartı gösterir',
+    (tester) async {
+      await pumpKelimoApp(tester);
+      expect(find.text('Hayvanlar'), findsNothing);
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('all-categories-button')),
+        300,
+      );
+      expect(find.text('Tüm Kategorileri Gör · 36'), findsOneWidget);
 
-    for (final category in [
-      'Hayvanlar',
-      'Yiyecekler',
-      'Renkler',
-      'Ev',
-      'Aile',
-      'Ulaşım',
-      'Günlük Rutinler',
-      'Okul',
-      'Giysiler',
-      'Vücut',
-      'Sağlık',
-      'Şehir ve Mekânlar',
-      'Doğa ve Hava Durumu',
-      'Zaman ve Tarihler',
-      'Sayılar ve Miktarlar',
-      'Temel Fiiller',
-      'Yaygın Sıfatlar',
-      'Duygular',
-      'Meslekler',
-      'Alışveriş',
-      'Restoran',
-      'Seyahat',
-      'Otel',
-      'İletişim',
-      'Teknoloji',
-      'Hobiler',
-      'Spor',
-      'Müzik',
-      'Film ve Televizyon',
-      'Kitaplar ve Okuma',
-      'Mutfak ve Yemek Yapma',
-      'Banyo ve Kişisel Bakım',
-      'Bahçe',
-      'Temizlik ve Ev İşleri',
-      'Coğrafya',
-      'Tatiller ve Kutlamalar',
-    ]) {
-      await tester.scrollUntilVisible(find.text(category), 200);
-      expect(find.text(category), findsOneWidget);
-    }
-  });
+      await openCategorySelection(tester);
+      expect(find.byType(CategorySelectionScreen), findsOneWidget);
+
+      expect(
+        find.byKey(const ValueKey('category-grid-animals')),
+        findsOneWidget,
+      );
+      final lastCategory = await scrollCategoryGridTo(
+        tester,
+        'holidays_celebrations',
+      );
+      expect(lastCategory, findsOneWidget);
+    },
+  );
 
   testWidgets('Gerçek kategoriler mock yüzde veya Yakında göstermez', (
     tester,
   ) async {
     await pumpKelimoApp(tester);
+    await openCategorySelection(tester);
 
     for (final mockPercentage in ['%45', '%60', '%50', '%20']) {
       expect(find.text(mockPercentage), findsNothing);
     }
 
-    await tester.scrollUntilVisible(find.text('Ulaşım'), 300);
+    await scrollCategoryGridTo(tester, 'transportation');
     expect(find.text('Yakında'), findsNothing);
   });
 
@@ -4151,7 +4243,8 @@ void main() {
     'Yeni kategori ortak kart, flashcard, quiz ve istatistik akışını kullanır',
     (tester) async {
       await pumpKelimoApp(tester);
-      await tester.scrollUntilVisible(find.text('Günlük Rutinler'), 300);
+      await openCategorySelection(tester);
+      await scrollCategoryGridTo(tester, 'daily_routines');
 
       final categoryCard = find.ancestor(
         of: find.text('Günlük Rutinler'),
@@ -4202,7 +4295,8 @@ void main() {
     'İkinci paket kategorisi ortak karttan flashcard quiz ve istatistiğe gider',
     (tester) async {
       await pumpKelimoApp(tester);
-      await tester.scrollUntilVisible(find.text('Doğa ve Hava Durumu'), 300);
+      await openCategorySelection(tester);
+      await scrollCategoryGridTo(tester, 'nature_weather');
 
       final categoryCard = find.ancestor(
         of: find.text('Doğa ve Hava Durumu'),
@@ -4255,7 +4349,8 @@ void main() {
     'Üçüncü paket kategorisi ortak karttan flashcard quiz ve istatistiğe gider',
     (tester) async {
       await pumpKelimoApp(tester);
-      await tester.scrollUntilVisible(find.text('Meslekler'), 300);
+      await openCategorySelection(tester);
+      await scrollCategoryGridTo(tester, 'jobs');
 
       final categoryCard = find.ancestor(
         of: find.text('Meslekler'),
@@ -4306,7 +4401,8 @@ void main() {
 
   testWidgets('Dördüncü paket ortak kategori akışını kullanır', (tester) async {
     await pumpKelimoApp(tester);
-    await tester.scrollUntilVisible(find.text('Teknoloji'), 300);
+    await openCategorySelection(tester);
+    await scrollCategoryGridTo(tester, 'technology');
     final card = find.ancestor(
       of: find.text('Teknoloji'),
       matching: find.byType(Card),
@@ -4341,7 +4437,8 @@ void main() {
 
   testWidgets('Son paket ortak kategori akışını kullanır', (tester) async {
     await pumpKelimoApp(tester);
-    await tester.scrollUntilVisible(find.text('Mutfak ve Yemek Yapma'), 300);
+    await openCategorySelection(tester);
+    await scrollCategoryGridTo(tester, 'kitchen_cooking');
     final card = find.ancestor(
       of: find.text('Mutfak ve Yemek Yapma'),
       matching: find.byType(Card),
@@ -4374,18 +4471,53 @@ void main() {
     expect(find.text('Mutfak ve Yemek Yapma İstatistikleri'), findsOneWidget);
   });
 
-  testWidgets('Otuz altı kategori kartı küçük iPhone genişliğinde taşmaz', (
+  testWidgets('Kategori seçimi küçük iPhone genişliğinde taşmaz', (
     tester,
   ) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.binding.setSurfaceSize(const Size(320, 568));
     await pumpKelimoApp(tester);
+    await openCategorySelection(tester);
 
-    await tester.scrollUntilVisible(find.text('Tatiller ve Kutlamalar'), 300);
+    await scrollCategoryGridTo(tester, 'holidays_celebrations');
     await tester.pumpAndSettle();
 
     expect(find.text('Tatiller ve Kutlamalar'), findsOneWidget);
     expect(find.text('Yakında'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('iki son çalışılan kategori dar ekranda birlikte sığar', (
+    tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(320, 568));
+    final snapshot = CategoryHubSnapshot(
+      progressByCategoryId: const {},
+      recentCategories: [
+        CategoryCatalog.holidaysCelebrations,
+        CategoryCatalog.bathroomPersonalCare,
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: CategorySelectionScreen(snapshot: snapshot),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final first = find.byKey(
+      const ValueKey('recent-category-holidays_celebrations'),
+    );
+    final second = find.byKey(
+      const ValueKey('recent-category-bathroom_personal_care'),
+    );
+    expect(first, findsOneWidget);
+    expect(second, findsOneWidget);
+    expect(tester.getTopLeft(first).dx, greaterThanOrEqualTo(20));
+    expect(tester.getTopRight(second).dx, lessThanOrEqualTo(300));
     expect(tester.takeException(), isNull);
   });
 
@@ -4401,6 +4533,26 @@ void main() {
     expect(app.darkTheme?.scaffoldBackgroundColor, AppColors.darkBackground);
     expect(app.theme?.colorScheme.primary, AppColors.turquoise);
     expect(app.theme?.colorScheme.secondary, AppColors.warmOrange);
+    expect(
+      AppTheme.light.appBarTheme.systemOverlayStyle?.statusBarIconBrightness,
+      Brightness.dark,
+    );
+    expect(
+      AppTheme.dark.appBarTheme.systemOverlayStyle?.statusBarIconBrightness,
+      Brightness.light,
+    );
+
+    final overlayStyles = tester
+        .widgetList<AnnotatedRegion<SystemUiOverlayStyle>>(
+          find.byType(AnnotatedRegion<SystemUiOverlayStyle>),
+        )
+        .map((region) => region.value);
+    expect(
+      overlayStyles.any(
+        (style) => style.statusBarIconBrightness == Brightness.dark,
+      ),
+      isTrue,
+    );
   });
 
   testWidgets('Hayvanlar kartı kategori detay ekranını açar', (tester) async {
@@ -5016,7 +5168,8 @@ void main() {
     tester,
   ) async {
     await pumpKelimoApp(tester);
-    await tester.scrollUntilVisible(find.text('Aile'), 300);
+    await openCategorySelection(tester);
+    await scrollCategoryGridTo(tester, 'family');
 
     final familyCard = find.ancestor(
       of: find.text('Aile'),
@@ -5032,7 +5185,8 @@ void main() {
       findsNothing,
     );
 
-    await openFamilyCategory(tester);
+    await tester.tap(familyCard);
+    await tester.pumpAndSettle();
     expect(find.byType(CategoryScreen), findsOneWidget);
     expect(find.text('Aile'), findsWidgets);
     expect(find.text('30 kelime'), findsOneWidget);
@@ -5110,7 +5264,8 @@ void main() {
     tester,
   ) async {
     await pumpKelimoApp(tester);
-    await tester.scrollUntilVisible(find.text('Ulaşım'), 300);
+    await openCategorySelection(tester);
+    await scrollCategoryGridTo(tester, 'transportation');
 
     final transportationCard = find.ancestor(
       of: find.text('Ulaşım'),
@@ -5126,7 +5281,8 @@ void main() {
       findsNothing,
     );
 
-    await openTransportationCategory(tester);
+    await tester.tap(transportationCard);
+    await tester.pumpAndSettle();
     expect(find.byType(CategoryScreen), findsOneWidget);
     expect(find.text('Ulaşım'), findsOneWidget);
     expect(find.text('30 kelime'), findsOneWidget);
@@ -5230,10 +5386,14 @@ void main() {
       );
       expect(generalProgress.value, 22 / 1080);
 
-      await tester.scrollUntilVisible(find.text('Hayvanlar'), 300);
+      await tester.scrollUntilVisible(
+        find.text('Kaldığın yerden devam et'),
+        300,
+      );
+      expect(find.text('Hayvanlar'), findsOneWidget);
       expect(find.text('%73'), findsOneWidget);
 
-      await tester.tap(find.text('Hayvanlar'));
+      await tester.tap(find.text('Devam Et'));
       await tester.pumpAndSettle();
       expect(find.text('22 / 30 kelime'), findsOneWidget);
       expect(find.text('%73 tamamlandı'), findsOneWidget);
@@ -5292,7 +5452,11 @@ void main() {
 
       await tester.pageBack();
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('Hayvanlar'), 300);
+      await tester.scrollUntilVisible(
+        find.text('Kaldığın yerden devam et'),
+        300,
+      );
+      expect(find.text('Hayvanlar'), findsOneWidget);
       expect(find.text('%3'), findsOneWidget);
     },
   );

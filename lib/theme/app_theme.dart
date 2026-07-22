@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 abstract final class AppColors {
   static const turquoise = Color(0xFF159D9A);
@@ -14,6 +15,12 @@ abstract final class AppDimensions {
 }
 
 abstract final class AppTheme {
+  static SystemUiOverlayStyle systemUiOverlayStyle(Brightness brightness) =>
+      (brightness == Brightness.dark
+              ? SystemUiOverlayStyle.light
+              : SystemUiOverlayStyle.dark)
+          .copyWith(statusBarColor: Colors.transparent);
+
   static ThemeData get light => _createTheme(
     brightness: Brightness.light,
     background: AppColors.lightBackground,
@@ -79,6 +86,7 @@ abstract final class AppTheme {
         backgroundColor: background,
         foregroundColor: onBackground,
         surfaceTintColor: Colors.transparent,
+        systemOverlayStyle: systemUiOverlayStyle(brightness),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(

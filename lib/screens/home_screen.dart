@@ -2,17 +2,20 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:kelimo/data/category_catalog.dart';
+import 'package:kelimo/models/category_hub_snapshot.dart';
 import 'package:kelimo/models/learning_category.dart';
 import 'package:kelimo/models/progress_statistics.dart';
 import 'package:kelimo/repositories/quiz_repository.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/screens/category_screen.dart';
+import 'package:kelimo/screens/category_selection_screen.dart';
 import 'package:kelimo/screens/learning_center_screen.dart';
 import 'package:kelimo/screens/progress_screen.dart';
 import 'package:kelimo/screens/settings_screen.dart';
 import 'package:kelimo/services/data_management_service.dart';
 import 'package:kelimo/services/achievement_service.dart';
 import 'package:kelimo/services/app_navigation_controller.dart';
+import 'package:kelimo/services/category_hub_service.dart';
 import 'package:kelimo/services/daily_reminder_service.dart';
 import 'package:kelimo/services/learning_center_service.dart';
 import 'package:kelimo/services/statistics_service.dart';
@@ -21,7 +24,6 @@ import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/services/interstitial_ad_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
-import 'package:kelimo/widgets/scale_down_single_line_text.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
@@ -59,7 +61,8 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
-  late Map<String, Future<CategoryProgressStatistics>> _categoryProgress;
+  late Future<CategoryHubSnapshot> _categorySnapshot;
+  late final CategoryHubService _categoryHubService;
   late final LearningCenterService _learningCenterService;
 
   @override
@@ -68,11 +71,16 @@ class _HomeScreenState extends State<HomeScreen> {
     _learningCenterService =
         widget.learningCenterService ??
         LearningCenterService(wordProgressStore: widget.wordProgressStore);
+    _categoryHubService = CategoryHubService(
+      wordProgressStore: widget.wordProgressStore,
+      quizStore: widget.quizStore,
+      statisticsService: widget.statisticsService,
+    );
     widget.dataManagementService.addListener(_handleDataReset);
     widget.navigationController?.addListener(_handleNavigationRequest);
     _handleNavigationRequest();
     unawaited(widget.statisticsService.refresh());
-    _categoryProgress = _loadCategoryProgress();
+    _categorySnapshot = _categoryHubService.load();
   }
 
   void _handleDataReset() {
@@ -93,19 +101,40 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  Map<String, Future<CategoryProgressStatistics>> _loadCategoryProgress() {
-    return {
-      for (final category in CategoryCatalog.categories)
-        if (category.isAvailable)
-          category.id: widget.statisticsService.loadCategory(category.id),
-    };
-  }
-
   void _reloadCategoryProgress() {
     unawaited(widget.statisticsService.refresh());
     setState(() {
-      _categoryProgress = _loadCategoryProgress();
+      _categorySnapshot = _categoryHubService.load();
     });
+  }
+
+  Future<void> _openCategory(LearningCategory category) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CategoryScreen(
+          category: category,
+          streakService: widget.streakService,
+          wordProgressStore: widget.wordProgressStore,
+          xpService: widget.xpService,
+          quizStore: widget.quizStore,
+          statisticsService: widget.statisticsService,
+          settingsService: widget.settingsService,
+          achievementService: widget.achievementService,
+          dailyReminderService: widget.dailyReminderService,
+          interstitialAdService: widget.interstitialAdService,
+        ),
+      ),
+    );
+    if (mounted) _reloadCategoryProgress();
+  }
+
+  Future<void> _showCategorySelection(CategoryHubSnapshot snapshot) async {
+    final category = await Navigator.of(context).push<LearningCategory>(
+      MaterialPageRoute(
+        builder: (_) => CategorySelectionScreen(snapshot: snapshot),
+      ),
+    );
+    if (category != null && mounted) await _openCategory(category);
   }
 
   @override
@@ -113,7 +142,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final streakService = widget.streakService;
     final wordProgressStore = widget.wordProgressStore;
     final xpService = widget.xpService;
-    final quizStore = widget.quizStore;
 
     return Scaffold(
       body: switch (_selectedIndex) {
@@ -138,128 +166,61 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         _ => SafeArea(
           bottom: false,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final columnCount = constraints.maxWidth >= 700 ? 2 : 1;
-
-              return CustomScrollView(
-                slivers: [
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
-                    sliver: SliverToBoxAdapter(
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 960),
-                          child: _HeaderAndProgress(
+          child: CustomScrollView(
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
+                sliver: SliverToBoxAdapter(
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 960),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const _Greeting(),
+                          const SizedBox(height: 20),
+                          FutureBuilder<CategoryHubSnapshot>(
+                            future: _categorySnapshot,
+                            builder: (context, snapshot) {
+                              final data = snapshot.data;
+                              if (data == null &&
+                                  snapshot.connectionState !=
+                                      ConnectionState.done) {
+                                return const _CategoryHubLoadingCard();
+                              }
+                              final safeData =
+                                  data ??
+                                  const CategoryHubSnapshot(
+                                    progressByCategoryId: {},
+                                    recentCategories: [],
+                                  );
+                              return _HomeCategoryHub(
+                                snapshot: safeData,
+                                onContinue: (category) {
+                                  if (category == null) {
+                                    _showCategorySelection(safeData);
+                                  } else {
+                                    _openCategory(category);
+                                  }
+                                },
+                                onShowAll: () =>
+                                    _showCategorySelection(safeData),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 20),
+                          _ProgressCards(
                             streakService: streakService,
                             xpService: xpService,
                             statisticsService: widget.statisticsService,
                           ),
-                        ),
+                        ],
                       ),
                     ),
                   ),
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-                    sliver: SliverToBoxAdapter(
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 960),
-                          child: Text(
-                            'Kategoriler',
-                            style: Theme.of(context).textTheme.headlineSmall
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-                    sliver: SliverLayoutBuilder(
-                      builder: (context, constraints) {
-                        final gridWidth = constraints.crossAxisExtent.clamp(
-                          0.0,
-                          960.0,
-                        );
-
-                        return SliverPadding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal:
-                                (constraints.crossAxisExtent - gridWidth) / 2,
-                          ),
-                          sliver: SliverGrid(
-                            gridDelegate:
-                                SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: columnCount,
-                                  mainAxisExtent: 164,
-                                  crossAxisSpacing: 16,
-                                  mainAxisSpacing: 16,
-                                ),
-                            delegate: SliverChildListDelegate.fixed([
-                              for (final category in CategoryCatalog.categories)
-                                if (category.isAvailable)
-                                  FutureBuilder<CategoryProgressStatistics>(
-                                    future: _categoryProgress[category.id],
-                                    builder: (context, snapshot) {
-                                      final statistics = snapshot.data;
-                                      final total =
-                                          statistics?.totalWordCount ??
-                                          category.words.length;
-                                      final learned =
-                                          statistics?.learnedWordCount ?? 0;
-
-                                      return _CategoryCard(
-                                        category: category,
-                                        wordCount: total,
-                                        progress: total == 0
-                                            ? 0
-                                            : learned / total,
-                                        onTap: () async {
-                                          await Navigator.of(context).push(
-                                            MaterialPageRoute<void>(
-                                              builder: (_) => CategoryScreen(
-                                                category: category,
-                                                streakService: streakService,
-                                                wordProgressStore:
-                                                    wordProgressStore,
-                                                xpService: xpService,
-                                                quizStore: quizStore,
-                                                statisticsService:
-                                                    widget.statisticsService,
-                                                settingsService:
-                                                    widget.settingsService,
-                                                achievementService:
-                                                    widget.achievementService,
-                                                dailyReminderService:
-                                                    widget.dailyReminderService,
-                                                interstitialAdService: widget
-                                                    .interstitialAdService,
-                                              ),
-                                            ),
-                                          );
-                                          if (mounted) {
-                                            _reloadCategoryProgress();
-                                          }
-                                        },
-                                      );
-                                    },
-                                  )
-                                else
-                                  _CategoryCard(
-                                    category: category,
-                                    wordCount: 0,
-                                    progress: null,
-                                  ),
-                            ]),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              );
-            },
+                ),
+              ),
+            ],
           ),
         ),
       },
@@ -297,8 +258,31 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class _HeaderAndProgress extends StatelessWidget {
-  const _HeaderAndProgress({
+class _Greeting extends StatelessWidget {
+  const _Greeting();
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Merhaba!',
+          style: textTheme.headlineMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text('Bugün öğrenmeye hazır mısın?', style: textTheme.titleMedium),
+      ],
+    );
+  }
+}
+
+class _ProgressCards extends StatelessWidget {
+  const _ProgressCards({
     required this.streakService,
     required this.xpService,
     required this.statisticsService,
@@ -310,8 +294,6 @@ class _HeaderAndProgress extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-
     return AnimatedBuilder(
       animation: Listenable.merge([
         streakService,
@@ -321,15 +303,6 @@ class _HeaderAndProgress extends StatelessWidget {
       builder: (context, child) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Merhaba!',
-            style: textTheme.headlineMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text('Bugün öğrenmeye hazır mısın?', style: textTheme.titleMedium),
-          const SizedBox(height: 24),
           _GeneralProgressCard(statisticsService: statisticsService),
           const SizedBox(height: 16),
           _LevelCard(xpService: xpService),
@@ -400,6 +373,7 @@ class _LevelCard extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             LinearProgressIndicator(
+              key: const ValueKey('level-progress'),
               value: xpService.progress,
               minHeight: 10,
               borderRadius: BorderRadius.circular(5),
@@ -557,7 +531,10 @@ class _DailyTaskCard extends StatelessWidget {
                   : 'Bugün $dailyGoal kelime değerlendir',
             ),
             const SizedBox(height: 10),
-            LinearProgressIndicator(value: displayedCount / dailyGoal),
+            LinearProgressIndicator(
+              key: const ValueKey('daily-task-progress'),
+              value: displayedCount / dailyGoal,
+            ),
           ],
         ),
       ),
@@ -572,6 +549,9 @@ String generalProgressDescription(WordLearningDistribution distribution) {
   }
   if (distribution.learningCount > 0) {
     return '${distribution.learningCount} kelime öğreniliyor';
+  }
+  if (distribution.learnedCount > 0) {
+    return 'Harika, ${distribution.learnedCount} kelimede ilerleme kaydettin!';
   }
   return 'Henüz öğrenmeye başlamadın';
 }
@@ -672,82 +652,162 @@ class _GeneralProgressCard extends StatelessWidget {
   }
 }
 
-class _CategoryCard extends StatelessWidget {
-  const _CategoryCard({
-    required this.category,
-    required this.wordCount,
-    required this.progress,
-    this.onTap,
+class _HomeCategoryHub extends StatelessWidget {
+  const _HomeCategoryHub({
+    required this.snapshot,
+    required this.onContinue,
+    required this.onShowAll,
   });
 
-  final LearningCategory category;
-  final int wordCount;
-  final double? progress;
-  final VoidCallback? onTap;
+  final CategoryHubSnapshot snapshot;
+  final ValueChanged<LearningCategory?> onContinue;
+  final VoidCallback onShowAll;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final percentage = progress == null ? null : (progress! * 100).round();
+    final category = snapshot.lastCategory;
+    final statistics = category == null
+        ? null
+        : snapshot.progressFor(category.id);
+    final total = statistics?.totalWordCount ?? category?.words.length ?? 0;
+    final learned = statistics?.learnedWordCount ?? 0;
+    final progress = total == 0 ? 0.0 : learned / total;
+    final percentage = (progress * 100).round();
 
-    final content = Padding(
-      padding: AppDimensions.cardPadding,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Text(
-                  category.emoji,
-                  style: const TextStyle(fontSize: 24),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Kaldığın yerden devam et',
+          style: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          child: Padding(
+            padding: AppDimensions.cardPadding,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    ScaleDownSingleLineText(
-                      category.title,
-                      padding: EdgeInsets.zero,
-                      style: textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
+                    Container(
+                      width: 52,
+                      height: 52,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Text(
+                        category?.emoji ?? '📚',
+                        style: const TextStyle(fontSize: 28),
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(progress == null ? 'Yakında' : '$wordCount kelime'),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            category?.title ?? 'İlk kategorini seç',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            category == null
+                                ? 'Öğrenmeye başlamak için bir kategori seç'
+                                : '$learned / $total kelime',
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (category != null)
+                      Text(
+                        '%$percentage',
+                        style: textTheme.labelLarge?.copyWith(
+                          color: colorScheme.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                   ],
                 ),
-              ),
-              if (percentage != null)
-                Text(
-                  '%$percentage',
-                  style: textTheme.labelLarge?.copyWith(
-                    color: colorScheme.primary,
-                    fontWeight: FontWeight.bold,
+                if (category != null) ...[
+                  const SizedBox(height: 16),
+                  LinearProgressIndicator(value: progress, minHeight: 7),
+                ],
+                const SizedBox(height: 16),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: FilledButton.icon(
+                    onPressed: () => onContinue(category),
+                    icon: const Icon(Icons.play_arrow_rounded),
+                    label: const Text('Devam Et'),
                   ),
                 ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton(
+          key: const ValueKey('all-categories-button'),
+          onPressed: onShowAll,
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size.fromHeight(54),
+            alignment: Alignment.centerLeft,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Tüm Kategorileri Gör · ${CategoryCatalog.categories.length}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              const Icon(Icons.arrow_forward_rounded),
             ],
           ),
-          const Spacer(),
-          if (progress != null) LinearProgressIndicator(value: progress),
-        ],
-      ),
+        ),
+      ],
     );
+  }
+}
 
-    return Card(
-      clipBehavior: onTap == null ? Clip.none : Clip.antiAlias,
-      child: onTap == null ? content : InkWell(onTap: onTap, child: content),
+class _CategoryHubLoadingCard extends StatelessWidget {
+  const _CategoryHubLoadingCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Kaldığın yerden devam et',
+          style: Theme.of(
+            context,
+          ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        const Card(
+          child: Padding(
+            padding: AppDimensions.cardPadding,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                LinearProgressIndicator(),
+                SizedBox(height: 14),
+                Text('Kategoriler yükleniyor...'),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

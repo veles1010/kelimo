@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:kelimo/data/local/database_service.dart';
 import 'package:kelimo/repositories/daily_progress_repository.dart';
 import 'package:kelimo/repositories/achievement_repository.dart';
@@ -215,6 +216,10 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
         theme: AppTheme.light,
         darkTheme: AppTheme.dark,
         themeMode: _settingsService.materialThemeMode,
+        builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
+          value: AppTheme.systemUiOverlayStyle(Theme.of(context).brightness),
+          child: child!,
+        ),
         home: FutureBuilder<void>(
           future: _initialization,
           builder: (context, snapshot) {
