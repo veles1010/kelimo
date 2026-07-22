@@ -17,7 +17,11 @@ abstract interface class SettingsStore {
   });
 }
 
-class SettingsRepository implements SettingsStore {
+abstract interface class OnboardingSettingsStore {
+  Future<void> setOnboardingCompleted(bool completed);
+}
+
+class SettingsRepository implements SettingsStore, OnboardingSettingsStore {
   SettingsRepository(this._databaseService);
 
   static const dailyGoalKey = 'daily_goal';
@@ -28,6 +32,7 @@ class SettingsRepository implements SettingsStore {
   static const reminderHourKey = 'reminder_hour';
   static const reminderMinuteKey = 'reminder_minute';
   static const themeModeKey = 'theme_mode';
+  static const onboardingCompletedKey = 'onboarding_completed';
 
   final DatabaseService _databaseService;
 
@@ -46,6 +51,7 @@ class SettingsRepository implements SettingsStore {
           values[reminderMinuteKey],
         ),
         themeMode: ThemePreference.fromStorage(values[themeModeKey]),
+        onboardingCompleted: values[onboardingCompletedKey] != 'false',
       );
     } catch (error, stackTrace) {
       debugPrint('Ayarlar yüklenemedi: $error\n$stackTrace');
@@ -98,6 +104,11 @@ class SettingsRepository implements SettingsStore {
   }
 
   @override
+  Future<void> setOnboardingCompleted(bool completed) {
+    return _writeValue(onboardingCompletedKey, '$completed');
+  }
+
+  @override
   Future<void> resetToDefaults() async {
     final database = await _databaseService.database;
     await database.transaction((transaction) async {
@@ -113,7 +124,7 @@ class SettingsRepository implements SettingsStore {
           themeModeKey,
         ],
       );
-      await _writeDefaults(transaction);
+      await _writeDefaults(transaction, includeOnboarding: false);
     });
   }
 
@@ -171,11 +182,18 @@ class SettingsRepository implements SettingsStore {
     }
   }
 
-  static Future<void> writeDefaults(DatabaseExecutor database) {
-    return _writeDefaults(database);
+  static Future<void> writeDefaults(
+    DatabaseExecutor database, {
+    bool onboardingCompleted = true,
+  }) {
+    return _writeDefaults(database, onboardingCompleted: onboardingCompleted);
   }
 
-  static Future<void> _writeDefaults(DatabaseExecutor database) async {
+  static Future<void> _writeDefaults(
+    DatabaseExecutor database, {
+    bool includeOnboarding = true,
+    bool onboardingCompleted = true,
+  }) async {
     final now = DateTime.now().toIso8601String();
     await _upsert(
       database,
@@ -183,6 +201,14 @@ class SettingsRepository implements SettingsStore {
       '${AppSettings.defaults.dailyGoal}',
       updatedAt: now,
     );
+    if (includeOnboarding) {
+      await _upsert(
+        database,
+        onboardingCompletedKey,
+        '$onboardingCompleted',
+        updatedAt: now,
+      );
+    }
     await _upsert(
       database,
       speechRateKey,

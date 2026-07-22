@@ -23,6 +23,7 @@ class SettingsService extends ChangeNotifier {
   int get reminderHour => _settings.reminderHour;
   int get reminderMinute => _settings.reminderMinute;
   ThemePreference get themeMode => _settings.themeMode;
+  bool get onboardingCompleted => _settings.onboardingCompleted;
   ThemeMode get materialThemeMode => switch (themeMode) {
     ThemePreference.system => ThemeMode.system,
     ThemePreference.light => ThemeMode.light,
@@ -78,6 +79,15 @@ class SettingsService extends ChangeNotifier {
   Future<void> setThemeMode(ThemePreference themeMode) async {
     await repository.setThemeMode(themeMode);
     _settings = _settings.copyWith(themeMode: themeMode);
+    notifyListeners();
+  }
+
+  Future<void> completeOnboarding() async {
+    if (_settings.onboardingCompleted) return;
+    if (repository case final OnboardingSettingsStore store) {
+      await store.setOnboardingCompleted(true);
+    }
+    _settings = _settings.copyWith(onboardingCompleted: true);
     notifyListeners();
   }
 

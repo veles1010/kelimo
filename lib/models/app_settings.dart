@@ -43,6 +43,7 @@ class AppSettings {
     required this.reminderHour,
     required this.reminderMinute,
     required this.themeMode,
+    this.onboardingCompleted = true,
   });
 
   static const allowedDailyGoals = {5, 10, 15, 20};
@@ -53,6 +54,7 @@ class AppSettings {
     reminderHour: 20,
     reminderMinute: 0,
     themeMode: ThemePreference.system,
+    onboardingCompleted: true,
   );
 
   final int dailyGoal;
@@ -61,6 +63,7 @@ class AppSettings {
   final int reminderHour;
   final int reminderMinute;
   final ThemePreference themeMode;
+  final bool onboardingCompleted;
 
   AppSettings copyWith({
     int? dailyGoal,
@@ -69,6 +72,7 @@ class AppSettings {
     int? reminderHour,
     int? reminderMinute,
     ThemePreference? themeMode,
+    bool? onboardingCompleted,
   }) {
     return AppSettings(
       dailyGoal: dailyGoal ?? this.dailyGoal,
@@ -77,6 +81,7 @@ class AppSettings {
       reminderHour: reminderHour ?? this.reminderHour,
       reminderMinute: reminderMinute ?? this.reminderMinute,
       themeMode: themeMode ?? this.themeMode,
+      onboardingCompleted: onboardingCompleted ?? this.onboardingCompleted,
     );
   }
 

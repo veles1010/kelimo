@@ -6,7 +6,15 @@ import 'package:sqflite/sqflite.dart';
 
 class DatabaseService {
   static const databaseName = 'kelimo.db';
-  static const databaseVersion = 7;
+  static const databaseVersion = 8;
+  static const createRewardedXpClaimsTableSql = '''
+    CREATE TABLE IF NOT EXISTS rewarded_xp_claims (
+      claim_id TEXT PRIMARY KEY,
+      date_key TEXT NOT NULL,
+      awarded_xp INTEGER NOT NULL,
+      awarded_at TEXT NOT NULL
+    )
+  ''';
   static const createCategoryUnlocksTableSql = '''
     CREATE TABLE IF NOT EXISTS category_unlocks (
       category_id TEXT PRIMARY KEY,
@@ -91,6 +99,9 @@ class DatabaseService {
     if (version >= 5) await _migrateVersion4To5(database);
     if (version >= 6) await _migrateVersion5To6(database);
     if (version >= 7) await _migrateVersion6To7(database);
+    if (version >= 8) {
+      await _migrateVersion7To8(database, isNewInstall: true);
+    }
   }
 
   Future<void> _createVersion1(Database database) async {
@@ -146,6 +157,9 @@ class DatabaseService {
     }
     if (oldVersion < 7 && newVersion >= 7) {
       await _migrateVersion6To7(database);
+    }
+    if (oldVersion < 8 && newVersion >= 8) {
+      await _migrateVersion7To8(database, isNewInstall: false);
     }
   }
 
@@ -272,6 +286,18 @@ class DatabaseService {
         'consumes_credit': 0,
       }, conflictAlgorithm: ConflictAlgorithm.ignore);
     }
+  }
+
+  Future<void> _migrateVersion7To8(
+    Database database, {
+    required bool isNewInstall,
+  }) async {
+    await database.execute(createRewardedXpClaimsTableSql);
+    await database.insert('app_settings', {
+      'key': 'onboarding_completed',
+      'value': isNewInstall ? 'false' : 'true',
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
   }
 }
 

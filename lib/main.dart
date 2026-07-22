@@ -25,6 +25,9 @@ import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/services/interstitial_ad_service.dart';
 import 'package:kelimo/services/category_access_service.dart';
+import 'package:kelimo/services/rewarded_ad_service.dart';
+import 'package:kelimo/services/rewarded_bonus_service.dart';
+import 'package:kelimo/screens/onboarding_screen.dart';
 import 'package:kelimo/theme/app_theme.dart';
 
 void main() {
@@ -45,6 +48,7 @@ class KelimoApp extends StatefulWidget {
     this.navigationController,
     this.interstitialAdService,
     this.categoryUnlockStore,
+    this.rewardedAdService,
   });
 
   final WordProgressStore? wordProgressStore;
@@ -58,6 +62,7 @@ class KelimoApp extends StatefulWidget {
   final AppNavigationController? navigationController;
   final InterstitialAdService? interstitialAdService;
   final CategoryUnlockStore? categoryUnlockStore;
+  final RewardedAdService? rewardedAdService;
 
   @override
   State<KelimoApp> createState() => _KelimoAppState();
@@ -81,10 +86,12 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
   late final bool _ownsNavigationController;
   late final InterstitialAdService _interstitialAdService;
   late final CategoryAccessService _categoryAccessService;
+  late final RewardedBonusService _rewardedBonusService;
   late final bool _ownsInterstitialAdService;
   late final StreamSubscription<String> _notificationPayloadSubscription;
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   late final Future<void> _initialization;
+  bool _adsInitialized = false;
 
   @override
   void initState() {
@@ -102,9 +109,8 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
       repository: _dailyProgressStore,
       settingsService: _settingsService,
     );
-    _xpService = XpService(
-      repository: widget.xpStore ?? XpRepository(databaseService),
-    );
+    final xpStore = widget.xpStore ?? XpRepository(databaseService);
+    _xpService = XpService(repository: xpStore);
     _quizStore = widget.quizStore ?? QuizRepository(databaseService);
     _categoryAccessService = CategoryAccessService(
       repository:
@@ -137,6 +143,19 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
     _interstitialAdService =
         widget.interstitialAdService ??
         GoogleInterstitialAdService(AdFrequencyRepository(databaseService));
+    final rewardedAdService =
+        widget.rewardedAdService ??
+        (widget.xpStore == null
+            ? GoogleRewardedAdService(_interstitialAdService)
+            : DisabledRewardedAdService());
+    final rewardedXpStore = xpStore is RewardedXpStore
+        ? xpStore as RewardedXpStore
+        : MemoryRewardedXpStore();
+    _rewardedBonusService = RewardedBonusService(
+      repository: rewardedXpStore,
+      adService: rewardedAdService,
+      xpService: _xpService,
+    );
     _ownsNavigationController = widget.navigationController == null;
     _navigationController =
         widget.navigationController ?? AppNavigationController();
@@ -163,6 +182,7 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
       achievementService: _achievementService,
       dailyReminderService: _dailyReminderService,
       categoryAccessService: _categoryAccessService,
+      rewardedBonusService: _rewardedBonusService,
     );
     _initialization = _initializePersistence();
   }
@@ -184,7 +204,11 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
     await _categoryAccessService.initialize();
     await _achievementService.initialize();
     await _dailyReminderService.initialize();
-    await _interstitialAdService.initialize();
+    if (_settingsService.onboardingCompleted) {
+      await _initializeAdsOnce();
+    } else {
+      await _rewardedBonusService.refresh();
+    }
     try {
       _navigationController.handlePayload(
         await _dailyReminderService.getLaunchPayload(),
@@ -196,12 +220,26 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _initializeAdsOnce() async {
+    if (_adsInitialized) return;
+    _adsInitialized = true;
+    await _interstitialAdService.initialize();
+    await _rewardedBonusService.initialize();
+  }
+
+  Future<void> _completeInitialOnboarding() async {
+    await _settingsService.completeOnboarding();
+    unawaited(_initializeAdsOnce());
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _interstitialAdService.setForeground(state == AppLifecycleState.resumed);
     if (state == AppLifecycleState.resumed) {
       unawaited(_streakService.refresh());
       unawaited(_dailyReminderService.refreshSchedule());
+      unawaited(_rewardedBonusService.refresh());
+      unawaited(_rewardedBonusService.adService.preload());
     }
   }
 
@@ -212,6 +250,7 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
     _streakService.dispose();
     _xpService.dispose();
     _categoryAccessService.dispose();
+    _rewardedBonusService.dispose();
     _statisticsService.dispose();
     _settingsService.dispose();
     _dataManagementService.dispose();
@@ -247,6 +286,9 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
                 body: Center(child: CircularProgressIndicator()),
               );
             }
+            if (!_settingsService.onboardingCompleted) {
+              return OnboardingScreen(onComplete: _completeInitialOnboarding);
+            }
             return HomeScreen(
               streakService: _streakService,
               wordProgressStore: _wordProgressStore,
@@ -261,6 +303,7 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
               navigationController: _navigationController,
               interstitialAdService: _interstitialAdService,
               categoryAccessService: _categoryAccessService,
+              rewardedBonusService: _rewardedBonusService,
             );
           },
         ),

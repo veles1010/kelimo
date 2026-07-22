@@ -23,6 +23,7 @@ class SettingsScreen extends StatefulWidget {
     this.dailyReminderService,
     this.interstitialAdService,
     this.appInfoProvider,
+    this.onShowOnboarding,
     super.key,
   });
 
@@ -32,6 +33,7 @@ class SettingsScreen extends StatefulWidget {
   final DailyReminderService? dailyReminderService;
   final InterstitialAdService? interstitialAdService;
   final AppInfoProvider? appInfoProvider;
+  final VoidCallback? onShowOnboarding;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -364,6 +366,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 onTap: _openAbout,
                               ),
                             ),
+                            if (widget.onShowOnboarding != null) ...[
+                              const Divider(height: 1),
+                              Semantics(
+                                button: true,
+                                label: 'Başlangıç rehberini yeniden göster',
+                                child: ListTile(
+                                  key: const ValueKey('show-onboarding-guide'),
+                                  contentPadding: EdgeInsets.zero,
+                                  leading: const Icon(
+                                    Icons.auto_stories_outlined,
+                                  ),
+                                  title: const Text(
+                                    'Başlangıç rehberini göster',
+                                  ),
+                                  trailing: const Icon(
+                                    Icons.chevron_right_rounded,
+                                  ),
+                                  onTap: widget.onShowOnboarding,
+                                ),
+                              ),
+                            ],
                             const Divider(height: 1),
                             Semantics(
                               button: true,

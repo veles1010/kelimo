@@ -12,6 +12,8 @@ import 'package:kelimo/screens/category_selection_screen.dart';
 import 'package:kelimo/screens/learning_center_screen.dart';
 import 'package:kelimo/screens/progress_screen.dart';
 import 'package:kelimo/screens/settings_screen.dart';
+import 'package:kelimo/screens/onboarding_screen.dart';
+import 'package:kelimo/models/rewarded_bonus.dart';
 import 'package:kelimo/services/data_management_service.dart';
 import 'package:kelimo/services/achievement_service.dart';
 import 'package:kelimo/services/app_navigation_controller.dart';
@@ -24,6 +26,7 @@ import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/services/interstitial_ad_service.dart';
 import 'package:kelimo/services/category_access_service.dart';
+import 'package:kelimo/services/rewarded_bonus_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 import 'package:kelimo/widgets/glass_surface.dart';
 
@@ -42,6 +45,7 @@ class HomeScreen extends StatefulWidget {
     this.navigationController,
     this.interstitialAdService,
     this.categoryAccessService,
+    this.rewardedBonusService,
     super.key,
   });
 
@@ -58,6 +62,7 @@ class HomeScreen extends StatefulWidget {
   final AppNavigationController? navigationController;
   final InterstitialAdService? interstitialAdService;
   final CategoryAccessService? categoryAccessService;
+  final RewardedBonusService? rewardedBonusService;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -154,6 +159,19 @@ class _HomeScreenState extends State<HomeScreen> {
     if (category != null && mounted) await _openCategory(category);
   }
 
+  Future<void> _showOnboarding() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => OnboardingScreen(
+          onComplete: () async {
+            await widget.settingsService.completeOnboarding();
+            if (mounted) Navigator.of(context).pop();
+          },
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final streakService = widget.streakService;
@@ -182,6 +200,7 @@ class _HomeScreenState extends State<HomeScreen> {
           dataManagementService: widget.dataManagementService,
           dailyReminderService: widget.dailyReminderService,
           interstitialAdService: widget.interstitialAdService,
+          onShowOnboarding: _showOnboarding,
         ),
         _ => GlassBackground(
           child: SafeArea(
@@ -230,6 +249,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                 );
                               },
                             ),
+                            if (widget.rewardedBonusService != null) ...[
+                              const SizedBox(height: 16),
+                              _RewardedBonusCard(
+                                service: widget.rewardedBonusService!,
+                              ),
+                            ],
                             const SizedBox(height: 20),
                             _ProgressCards(
                               streakService: streakService,
@@ -255,6 +280,127 @@ class _HomeScreenState extends State<HomeScreen> {
           }
         },
       ),
+    );
+  }
+}
+
+class _RewardedBonusCard extends StatelessWidget {
+  const _RewardedBonusCard({required this.service});
+
+  final RewardedBonusService service;
+
+  Future<void> _watch(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Günlük XP Bonusu'),
+        content: const Text('Reklamı tamamladığında +15 XP kazanırsın.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Reklamı izle'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    final result = await service.watchAd();
+    if (!context.mounted) return;
+    final message = switch (result) {
+      RewardedBonusResult.awarded => '+15 XP kazandın!',
+      RewardedBonusResult.exhausted => 'Bugünkü bonuslarını topladın',
+      RewardedBonusResult.unavailable =>
+        'Reklam şu anda hazır değil. Daha sonra tekrar dene.',
+      RewardedBonusResult.dismissed => 'Reklam tamamlanmadı, XP değişmedi.',
+      RewardedBonusResult.failed => 'Bonus şu anda verilemedi.',
+    };
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: service,
+      builder: (context, _) {
+        final colors = Theme.of(context).colorScheme;
+        final exhausted = service.isExhausted;
+        final enabled = service.isEnabled;
+        return GlassSurface(
+          key: const ValueKey('daily-xp-bonus-card'),
+          enableBlur: false,
+          borderRadius: BorderRadius.circular(22),
+          padding: const EdgeInsets.all(18),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: colors.secondaryContainer,
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Icon(
+                  Icons.ondemand_video_rounded,
+                  color: colors.secondary,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Günlük XP Bonusu',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      exhausted
+                          ? 'Bugünkü bonuslarını topladın'
+                          : service.isBusy
+                          ? 'Reklam hazırlanıyor…'
+                          : !enabled
+                          ? 'Bonus bu sürümde kullanılamıyor'
+                          : 'Reklam izle, +15 XP kazan',
+                    ),
+                    if (!exhausted && enabled) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        'Bugün ${service.remainingCount} hakkın kaldı',
+                        style: Theme.of(context).textTheme.labelMedium,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              if (service.isBusy)
+                const SizedBox.square(
+                  dimension: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2.5),
+                )
+              else
+                IconButton.filledTonal(
+                  key: const ValueKey('watch-rewarded-ad'),
+                  tooltip: 'Reklam izleyerek 15 XP kazan',
+                  onPressed: exhausted || !enabled
+                      ? null
+                      : () => _watch(context),
+                  icon: const Icon(Icons.play_arrow_rounded),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

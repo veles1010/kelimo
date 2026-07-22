@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:kelimo/data/local/database_service.dart';
 import 'package:kelimo/models/xp_state.dart';
+import 'package:kelimo/models/rewarded_bonus.dart';
 import 'package:kelimo/services/learning_engine.dart';
 import 'package:sqflite/sqflite.dart';
 
@@ -21,7 +22,15 @@ abstract interface class XpAwardStore {
   });
 }
 
-class XpRepository implements XpStore, XpAwardStore {
+abstract interface class RewardedXpStore {
+  Future<RewardedBonusState> loadRewardedBonusState(DateTime localNow);
+  Future<RewardedBonusClaim> claimRewardedBonus({
+    required String claimId,
+    required DateTime awardedAt,
+  });
+}
+
+class XpRepository implements XpStore, XpAwardStore, RewardedXpStore {
   XpRepository(this._databaseService);
 
   final DatabaseService _databaseService;
@@ -142,6 +151,95 @@ class XpRepository implements XpStore, XpAwardStore {
   }
 
   @override
+  Future<RewardedBonusState> loadRewardedBonusState(DateTime localNow) async {
+    final dateKey = _localDateKey(localNow);
+    final database = await _databaseService.database;
+    final count = Sqflite.firstIntValue(
+      await database.rawQuery(
+        'SELECT COUNT(*) FROM rewarded_xp_claims WHERE date_key = ?',
+        [dateKey],
+      ),
+    );
+    return RewardedBonusState(dateKey: dateKey, usedCount: count ?? 0);
+  }
+
+  @override
+  Future<RewardedBonusClaim> claimRewardedBonus({
+    required String claimId,
+    required DateTime awardedAt,
+  }) async {
+    if (claimId.trim().isEmpty) throw ArgumentError.value(claimId, 'claimId');
+    final localAwardedAt = awardedAt.toLocal();
+    final dateKey = _localDateKey(localAwardedAt);
+    final database = await _databaseService.database;
+    final claim = await database.transaction((transaction) async {
+      final usedCount =
+          Sqflite.firstIntValue(
+            await transaction.rawQuery(
+              'SELECT COUNT(*) FROM rewarded_xp_claims WHERE date_key = ?',
+              [dateKey],
+            ),
+          ) ??
+          0;
+      final xpRows = await transaction.query(
+        'xp_state',
+        where: 'id = 1',
+        limit: 1,
+      );
+      final currentXp = xpRows.isEmpty
+          ? XpState.initial()
+          : XpState.fromMap(xpRows.first);
+      if (usedCount >= RewardedBonusState.dailyLimit) {
+        return RewardedBonusClaim(
+          wasAwarded: false,
+          xpState: currentXp,
+          bonusState: RewardedBonusState(
+            dateKey: dateKey,
+            usedCount: usedCount,
+          ),
+        );
+      }
+
+      final inserted = await transaction.insert('rewarded_xp_claims', {
+        'claim_id': claimId,
+        'date_key': dateKey,
+        'awarded_xp': RewardedBonusState.xpPerReward,
+        'awarded_at': awardedAt.toUtc().toIso8601String(),
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
+      if (inserted == 0) {
+        return RewardedBonusClaim(
+          wasAwarded: false,
+          xpState: currentXp,
+          bonusState: RewardedBonusState(
+            dateKey: dateKey,
+            usedCount: usedCount,
+          ),
+        );
+      }
+
+      final nextXp = XpState(
+        totalXp: currentXp.totalXp + RewardedBonusState.xpPerReward,
+        updatedAt: awardedAt,
+      );
+      await transaction.insert(
+        'xp_state',
+        nextXp.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      return RewardedBonusClaim(
+        wasAwarded: true,
+        xpState: nextXp,
+        bonusState: RewardedBonusState(
+          dateKey: dateKey,
+          usedCount: usedCount + 1,
+        ),
+      );
+    });
+    _state = claim.xpState;
+    return claim;
+  }
+
+  @override
   Future<void> resetXp() async {
     final reset = XpState.initial();
     try {
@@ -164,4 +262,54 @@ String _localDateKey(DateTime value) {
   return '${local.year.toString().padLeft(4, '0')}-'
       '${local.month.toString().padLeft(2, '0')}-'
       '${local.day.toString().padLeft(2, '0')}';
+}
+
+class MemoryRewardedXpStore implements RewardedXpStore {
+  MemoryRewardedXpStore({XpState? initialXp})
+    : _xpState = initialXp ?? XpState.initial();
+
+  XpState _xpState;
+  final Map<String, ({String dateKey, int amount})> _claims = {};
+
+  @override
+  Future<RewardedBonusState> loadRewardedBonusState(DateTime localNow) async {
+    final dateKey = _localDateKey(localNow);
+    return RewardedBonusState(
+      dateKey: dateKey,
+      usedCount: _claims.values
+          .where((claim) => claim.dateKey == dateKey)
+          .length,
+    );
+  }
+
+  @override
+  Future<RewardedBonusClaim> claimRewardedBonus({
+    required String claimId,
+    required DateTime awardedAt,
+  }) async {
+    final state = await loadRewardedBonusState(awardedAt);
+    if (_claims.containsKey(claimId) || state.isExhausted) {
+      return RewardedBonusClaim(
+        wasAwarded: false,
+        xpState: _xpState,
+        bonusState: state,
+      );
+    }
+    _claims[claimId] = (
+      dateKey: state.dateKey,
+      amount: RewardedBonusState.xpPerReward,
+    );
+    _xpState = XpState(
+      totalXp: _xpState.totalXp + RewardedBonusState.xpPerReward,
+      updatedAt: awardedAt,
+    );
+    return RewardedBonusClaim(
+      wasAwarded: true,
+      xpState: _xpState,
+      bonusState: RewardedBonusState(
+        dateKey: state.dateKey,
+        usedCount: state.usedCount + 1,
+      ),
+    );
+  }
 }

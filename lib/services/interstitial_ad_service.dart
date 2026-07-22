@@ -9,6 +9,8 @@ import 'package:kelimo/repositories/ad_frequency_repository.dart';
 abstract class InterstitialAdService extends ChangeNotifier {
   bool get privacyOptionsRequired;
   bool get canShow;
+  bool get canRequestAds => false;
+  bool get adsSdkReady => canRequestAds;
 
   Future<void> initialize();
   Future<void> requestConsentIfNeeded();
@@ -61,14 +63,23 @@ class GoogleInterstitialAdService extends InterstitialAdService {
   AdDisplayState _state = AdDisplayState.initial;
   InterstitialAd? _ad;
   bool _canRequestAds = false;
+  bool _adsSdkReady = false;
   bool _privacyOptionsRequired = false;
   bool _isForeground = true;
   bool _isLoading = false;
   bool _isShowing = false;
   bool _isDisposed = false;
+  Future<void>? _consentRequest;
+  bool _mobileAdsInitialized = false;
 
   @override
   bool get privacyOptionsRequired => _privacyOptionsRequired;
+
+  @override
+  bool get canRequestAds => _canRequestAds;
+
+  @override
+  bool get adsSdkReady => _adsSdkReady;
 
   @override
   bool get canShow =>
@@ -93,14 +104,30 @@ class GoogleInterstitialAdService extends InterstitialAdService {
 
   @override
   Future<void> requestConsentIfNeeded() async {
+    final activeRequest = _consentRequest;
+    if (activeRequest != null) return activeRequest;
+    final request = _requestConsentIfNeeded();
+    _consentRequest = request;
+    try {
+      await request;
+    } finally {
+      if (identical(_consentRequest, request)) _consentRequest = null;
+    }
+  }
+
+  Future<void> _requestConsentIfNeeded() async {
+    if (kDebugMode) debugPrint('[Ads] Consent initialization started');
     final updateCompleter = Completer<void>();
     ConsentInformation.instance.requestConsentInfoUpdate(
       ConsentRequestParameters(),
-      updateCompleter.complete,
+      () {
+        if (kDebugMode) debugPrint('[Ads] Consent initialization completed');
+        updateCompleter.complete();
+      },
       (error) {
         debugPrint(
-          'Consent bilgisi güncellenemedi: ${error.errorCode} '
-          '${error.message}',
+          '[Ads] Consent initialization failed: code=${error.errorCode}, '
+          'message=${error.message}',
         );
         updateCompleter.complete();
       },
@@ -111,7 +138,7 @@ class GoogleInterstitialAdService extends InterstitialAdService {
     await ConsentForm.loadAndShowConsentFormIfRequired((error) {
       if (error != null) {
         debugPrint(
-          'Consent formu gösterilemedi: ${error.errorCode} ${error.message}',
+          '[Ads] Consent form failed: code=${error.errorCode} ${error.message}',
         );
       }
       formCompleter.complete();
@@ -127,12 +154,30 @@ class GoogleInterstitialAdService extends InterstitialAdService {
           await ConsentInformation.instance
               .getPrivacyOptionsRequirementStatus() ==
           PrivacyOptionsRequirementStatus.required;
+      if (kDebugMode) {
+        debugPrint('[Ads] Consent status: canRequestAds=$_canRequestAds');
+        debugPrint(
+          '[Ads] Privacy options requirement status: '
+          '${_privacyOptionsRequired ? 'required' : 'not_required'}',
+        );
+        debugPrint('[Ads] canRequestAds: $_canRequestAds');
+      }
+      if (!_canRequestAds) {
+        _adsSdkReady = false;
+        notifyListeners();
+        return;
+      }
+      if (!_mobileAdsInitialized) {
+        if (kDebugMode) debugPrint('[Ads] MobileAds initialization started');
+        await MobileAds.instance.initialize();
+        _mobileAdsInitialized = true;
+        if (kDebugMode) debugPrint('[Ads] MobileAds initialization completed');
+      }
+      _adsSdkReady = true;
       notifyListeners();
-      if (!_canRequestAds) return;
-      await MobileAds.instance.initialize();
       await preload();
     } catch (error, stackTrace) {
-      debugPrint('Consent durumu okunamadı: $error\n$stackTrace');
+      debugPrint('[Ads] Consent state read failed: $error\n$stackTrace');
     }
   }
 

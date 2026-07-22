@@ -27,6 +27,7 @@ import 'package:kelimo/models/word_progress.dart';
 import 'package:kelimo/models/xp_state.dart';
 import 'package:kelimo/models/ad_display_state.dart';
 import 'package:kelimo/models/category_unlock.dart';
+import 'package:kelimo/models/rewarded_bonus.dart';
 import 'package:kelimo/repositories/daily_progress_repository.dart';
 import 'package:kelimo/repositories/achievement_repository.dart';
 import 'package:kelimo/repositories/data_reset_repository.dart';
@@ -62,6 +63,7 @@ import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/services/interstitial_ad_service.dart';
+import 'package:kelimo/services/rewarded_ad_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 import 'package:kelimo/utils/turkish_case.dart';
 import 'package:kelimo/widgets/scale_down_single_line_text.dart';
@@ -260,6 +262,12 @@ class FakeInterstitialAdService extends InterstitialAdService {
   bool get privacyOptionsRequired => privacyRequired;
 
   @override
+  bool get canRequestAds => consentAllowed;
+
+  @override
+  bool get adsSdkReady => consentAllowed;
+
+  @override
   bool get canShow => policy.isEligible(
     state: storage.state,
     now: now(),
@@ -323,6 +331,33 @@ class FakeInterstitialAdService extends InterstitialAdService {
   void setForeground(bool isForeground) {
     foreground = isForeground;
     notifyListeners();
+  }
+}
+
+class FakeRewardedAdService extends RewardedAdService {
+  bool ready = true;
+  bool enabled = true;
+  bool loading = false;
+  int showCalls = 0;
+  RewardedAdResult result = const RewardedAdResult(
+    outcome: RewardedAdOutcome.rewarded,
+    claimId: 'widget-reward',
+  );
+
+  @override
+  bool get isEnabled => enabled;
+  @override
+  bool get isLoading => loading;
+  @override
+  bool get isReady => ready;
+  @override
+  Future<void> initialize() async {}
+  @override
+  Future<void> preload() async {}
+  @override
+  Future<RewardedAdResult> show() async {
+    showCalls++;
+    return result;
   }
 }
 
@@ -614,7 +649,7 @@ class FakeSettingsStorage {
   final Map<String, String> values = {};
 }
 
-class FakeSettingsStore implements SettingsStore {
+class FakeSettingsStore implements SettingsStore, OnboardingSettingsStore {
   FakeSettingsStore([FakeSettingsStorage? storage])
     : storage = storage ?? FakeSettingsStorage();
 
@@ -641,6 +676,8 @@ class FakeSettingsStore implements SettingsStore {
       themeMode: ThemePreference.fromStorage(
         storage.values[SettingsRepository.themeModeKey],
       ),
+      onboardingCompleted:
+          storage.values[SettingsRepository.onboardingCompletedKey] != 'false',
     );
   }
 
@@ -703,6 +740,11 @@ class FakeSettingsStore implements SettingsStore {
   @override
   Future<void> setThemeMode(ThemePreference themeMode) async {
     storage.values[SettingsRepository.themeModeKey] = themeMode.storageValue;
+  }
+
+  @override
+  Future<void> setOnboardingCompleted(bool completed) async {
+    storage.values[SettingsRepository.onboardingCompletedKey] = '$completed';
   }
 }
 
@@ -858,6 +900,7 @@ Future<void> pumpKelimoApp(
   NotificationService? notificationService,
   AppNavigationController? navigationController,
   InterstitialAdService? interstitialAdService,
+  RewardedAdService? rewardedAdService,
 }) async {
   final sharedXpStorage = xpStorage ?? FakeXpStorage();
   final notifications = notificationService ?? FakeNotificationService();
@@ -888,6 +931,7 @@ Future<void> pumpKelimoApp(
       notificationService: notifications,
       navigationController: navigationController,
       interstitialAdService: ads,
+      rewardedAdService: rewardedAdService,
       categoryUnlockStore: MemoryCategoryUnlockStore(
         CategoryCatalog.categories.map(
           (category) => CategoryUnlock(
@@ -1165,8 +1209,8 @@ void main() {
     expect(restored.updatedAt, updatedAt);
   });
 
-  test('Veritabanı şema sürümü kategori kilitleri migration ile 7 olur', () {
-    expect(DatabaseService.databaseVersion, 7);
+  test('Veritabanı şema sürümü onboarding ve bonus migration ile 8 olur', () {
+    expect(DatabaseService.databaseVersion, 8);
     expect(
       DatabaseService.createAppSettingsTableSql,
       contains('CREATE TABLE IF NOT EXISTS app_settings'),
@@ -1218,6 +1262,7 @@ void main() {
       'category_unlocks',
       'word_xp_claims',
       'quiz_xp_claims',
+      'rewarded_xp_claims',
     ]);
     expect(
       DatabaseService.createCategoryUnlocksTableSql,
@@ -1230,6 +1275,10 @@ void main() {
     expect(
       DatabaseService.createQuizXpClaimsTableSql,
       contains('PRIMARY KEY (category_id, date_key)'),
+    );
+    expect(
+      DatabaseService.createRewardedXpClaimsTableSql,
+      contains('claim_id TEXT PRIMARY KEY'),
     );
   });
 
@@ -1385,7 +1434,7 @@ void main() {
       expect(storage.values[SettingsRepository.reminderEnabledKey], 'true');
       expect(storage.values[SettingsRepository.reminderHourKey], '8');
       expect(storage.values[SettingsRepository.reminderMinuteKey], '35');
-      expect(DatabaseService.databaseVersion, 7);
+      expect(DatabaseService.databaseVersion, 8);
     },
   );
 
@@ -3753,6 +3802,31 @@ void main() {
     }
   });
 
+  testWidgets('temiz kurulum rehberi bir kez gösterir ve ayarlardan açılır', (
+    tester,
+  ) async {
+    final storage = FakeSettingsStorage()
+      ..values[SettingsRepository.onboardingCompletedKey] = 'false';
+    await pumpKelimoApp(tester, settingsStorage: storage);
+    expect(find.text('Her gün birkaç kelime'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('onboarding-skip')));
+    await tester.pumpAndSettle();
+    expect(storage.values[SettingsRepository.onboardingCompletedKey], 'true');
+    expect(find.text('Merhaba!'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await pumpKelimoApp(tester, settingsStorage: storage);
+    expect(find.text('Her gün birkaç kelime'), findsNothing);
+
+    await tester.tap(find.text('Ayarlar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('show-onboarding-guide')));
+    await tester.pumpAndSettle();
+    expect(find.text('Her gün birkaç kelime'), findsOneWidget);
+  });
+
   testWidgets('Ayarlar üç tema seçeneğini anında uygular', (tester) async {
     final storage = FakeSettingsStorage();
     await pumpKelimoApp(tester, settingsStorage: storage);
@@ -3779,6 +3853,8 @@ void main() {
     );
     expect(storage.values[SettingsRepository.themeModeKey], 'dark');
 
+    await tester.ensureVisible(find.byKey(const ValueKey('theme-mode-dark')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('theme-mode-dark')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Açık'));
@@ -4367,6 +4443,36 @@ void main() {
       find.byKey(const ValueKey('level-progress')),
     );
     expect(levelProgress.value, 0.005);
+  });
+
+  testWidgets('günlük XP bonus kartı onay sonrası ödülü anında gösterir', (
+    tester,
+  ) async {
+    final xpStorage = FakeXpStorage();
+    final rewardedAds = FakeRewardedAdService();
+    await pumpKelimoApp(
+      tester,
+      xpStorage: xpStorage,
+      rewardedAdService: rewardedAds,
+    );
+
+    final card = find.byKey(const ValueKey('daily-xp-bonus-card'));
+    await tester.scrollUntilVisible(card, 250);
+    expect(find.text('Günlük XP Bonusu'), findsOneWidget);
+    expect(find.text('Bugün 2 hakkın kaldı'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('watch-rewarded-ad')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Reklamı tamamladığında +15 XP kazanırsın.'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Reklamı izle'));
+    await tester.pumpAndSettle();
+
+    expect(rewardedAds.showCalls, 1);
+    expect(xpStorage.state.totalXp, 15);
+    expect(find.text('+15 XP kazandın!'), findsOneWidget);
+    expect(find.text('Bugün 1 hakkın kaldı'), findsOneWidget);
   });
 
   testWidgets(

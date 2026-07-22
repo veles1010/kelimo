@@ -1,4 +1,5 @@
 #include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"
 #include "Generated.xcconfig"
-ADMOB_IOS_APP_ID=ca-app-pub-3940256099942544~1458002511
+# Supply ADMOB_IOS_APP_ID from the release/CI Xcode build settings.
+# Google sample App IDs must never ship in a release build.
 ADMOB_APP_ID=$(ADMOB_IOS_APP_ID)

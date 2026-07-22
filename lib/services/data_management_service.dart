@@ -9,6 +9,7 @@ import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/services/category_access_service.dart';
+import 'package:kelimo/services/rewarded_bonus_service.dart';
 
 class DataManagementService extends ChangeNotifier {
   DataManagementService({
@@ -22,6 +23,7 @@ class DataManagementService extends ChangeNotifier {
     this.achievementService,
     this.dailyReminderService,
     this.categoryAccessService,
+    this.rewardedBonusService,
   });
 
   final DataResetStore repository;
@@ -34,6 +36,7 @@ class DataManagementService extends ChangeNotifier {
   final AchievementService? achievementService;
   final DailyReminderService? dailyReminderService;
   final CategoryAccessService? categoryAccessService;
+  final RewardedBonusService? rewardedBonusService;
 
   Future<void> resetLearningData() => _reset(resetSettings: false);
 
@@ -47,6 +50,7 @@ class DataManagementService extends ChangeNotifier {
     xpService.resetAfterDataClear();
     achievementService?.resetAfterDataClear();
     await categoryAccessService?.resetAfterDataClear();
+    rewardedBonusService?.resetAfterDataClear();
     if (resetSettings) await settingsService.reload();
     await statisticsService.refresh();
     if (resetSettings) {
