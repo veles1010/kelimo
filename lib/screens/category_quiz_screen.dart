@@ -14,6 +14,7 @@ import 'package:kelimo/theme/app_theme.dart';
 import 'package:kelimo/widgets/scale_down_single_line_text.dart';
 import 'package:kelimo/widgets/achievement_notification.dart';
 import 'package:kelimo/widgets/glass_surface.dart';
+import 'package:kelimo/services/category_access_service.dart';
 
 class CategoryQuizScreen extends StatefulWidget {
   CategoryQuizScreen({
@@ -26,6 +27,7 @@ class CategoryQuizScreen extends StatefulWidget {
     this.achievementService,
     this.interstitialAdService,
     this.streakService,
+    this.categoryAccessService,
   }) : now = now ?? DateTime.now,
        random = random ?? Random(),
        assert(category.words.length >= 4);
@@ -38,6 +40,7 @@ class CategoryQuizScreen extends StatefulWidget {
   final AchievementService? achievementService;
   final InterstitialAdService? interstitialAdService;
   final StreakService? streakService;
+  final CategoryAccessService? categoryAccessService;
 
   @override
   State<CategoryQuizScreen> createState() => _CategoryQuizScreenState();
@@ -175,6 +178,7 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
                     random: widget.random,
                     interstitialAdService: widget.interstitialAdService,
                     streakService: widget.streakService,
+                    categoryAccessService: widget.categoryAccessService,
                   ),
                 ),
               );
@@ -195,6 +199,12 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final access = widget.categoryAccessService;
+    if (access != null && !access.canOpen(widget.category)) {
+      return const Scaffold(
+        body: Center(child: Text('Bu kategori henüz kilitli.')),
+      );
+    }
     final options = _currentQuestion.options;
 
     return GlassBackground(

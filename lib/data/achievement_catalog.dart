@@ -98,6 +98,14 @@ abstract final class AchievementCatalog {
       target: 30,
       type: AchievementType.streak,
     ),
+    Achievement(
+      id: 'mosaic_master',
+      title: 'Kelimo Ustası',
+      description: 'Gizli Mozaik’in 1080 parçasını keşfet.',
+      emoji: '🖼️',
+      target: 1080,
+      type: AchievementType.mosaicCompletion,
+    ),
   ];
 
   static Achievement? findById(String id) {

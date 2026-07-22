@@ -84,8 +84,8 @@ AchievementService _service({
 }
 
 void main() {
-  test('Başarım kataloğu sabit 12 tanımı ve kimlikleri korur', () {
-    expect(AchievementCatalog.achievements, hasLength(12));
+  test('Başarım kataloğu sabit 13 tanımı ve kimlikleri korur', () {
+    expect(AchievementCatalog.achievements, hasLength(13));
     expect(AchievementCatalog.achievements.map((item) => item.id), [
       'first_step',
       'review_master',
@@ -99,6 +99,7 @@ void main() {
       'streak_3',
       'streak_7',
       'streak_30',
+      'mosaic_master',
     ]);
   });
 
@@ -112,6 +113,7 @@ void main() {
           AchievementType.completedQuizzes => _metrics(quizzes: value),
           AchievementType.perfectQuiz => _metrics(perfect: value == 1),
           AchievementType.streak => _metrics(streak: value),
+          AchievementType.mosaicCompletion => _metrics(learned: value),
         };
       }
 
@@ -135,13 +137,13 @@ void main() {
   });
 
   test(
-    'Tüm gerçek eşikler karşılandığında 12 başarım bir kez açılır',
+    'Tüm gerçek eşikler karşılandığında 13 başarım bir kez açılır',
     () async {
       final store = _FakeAchievementStore();
       final source = _MutableMetricsSource(
         _metrics(
           reviews: 10,
-          learned: 100,
+          learned: 1080,
           favorites: 5,
           quizzes: 10,
           perfect: true,
@@ -153,10 +155,10 @@ void main() {
       final first = await service.evaluate();
       final second = await service.evaluate();
 
-      expect(first, hasLength(12));
+      expect(first, hasLength(13));
       expect(second, isEmpty);
-      expect(store.records, hasLength(12));
-      expect(store.unlockCalls, 12);
+      expect(store.records, hasLength(13));
+      expect(store.unlockCalls, 13);
     },
   );
 
@@ -228,7 +230,7 @@ void main() {
     expect(restored.unlockedAt.isUtc, isTrue);
   });
 
-  testWidgets('Başarımlar ekranı 12 kart, gerçek ilerleme ve tarih gösterir', (
+  testWidgets('Başarımlar ekranı 13 kart, gerçek ilerleme ve tarih gösterir', (
     tester,
   ) async {
     final unlockDate = DateTime.utc(2026, 7, 16);
@@ -244,7 +246,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('1 / 12'), findsOneWidget);
+    expect(find.text('1 / 13'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('achievement-first_step')),
       findsOneWidget,
@@ -263,7 +265,7 @@ void main() {
             widget.key is ValueKey<String> &&
             (widget.key! as ValueKey<String>).value.startsWith('achievement-'),
       ),
-      findsNWidgets(12),
+      findsNWidgets(13),
     );
     expect(tester.takeException(), isNull);
   });

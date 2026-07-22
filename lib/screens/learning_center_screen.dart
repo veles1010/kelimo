@@ -10,6 +10,7 @@ import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 import 'package:kelimo/widgets/glass_surface.dart';
+import 'package:kelimo/services/category_access_service.dart';
 
 class LearningCenterScreen extends StatefulWidget {
   const LearningCenterScreen({
@@ -21,6 +22,7 @@ class LearningCenterScreen extends StatefulWidget {
     super.key,
     this.achievementService,
     this.dailyReminderService,
+    this.categoryAccessService,
   });
 
   final LearningCenterService service;
@@ -30,6 +32,7 @@ class LearningCenterScreen extends StatefulWidget {
   final SettingsService settingsService;
   final AchievementService? achievementService;
   final DailyReminderService? dailyReminderService;
+  final CategoryAccessService? categoryAccessService;
 
   @override
   State<LearningCenterScreen> createState() => _LearningCenterScreenState();
@@ -60,6 +63,7 @@ class _LearningCenterScreenState extends State<LearningCenterScreen> {
           settingsService: widget.settingsService,
           achievementService: widget.achievementService,
           dailyReminderService: widget.dailyReminderService,
+          categoryAccessService: widget.categoryAccessService,
         ),
       ),
     );

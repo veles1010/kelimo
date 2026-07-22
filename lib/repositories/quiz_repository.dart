@@ -30,9 +30,11 @@ abstract interface class QuizStore {
 }
 
 class QuizRepository implements QuizStore {
-  QuizRepository(this._databaseService);
+  QuizRepository(this._databaseService, {DateTime Function()? now})
+    : _now = now ?? DateTime.now;
 
   final DatabaseService _databaseService;
+  final DateTime Function() _now;
 
   @override
   Future<QuizCompletion> saveCompletedQuiz({
@@ -42,19 +44,30 @@ class QuizRepository implements QuizStore {
     required int scorePercent,
     DateTime? completedAt,
   }) async {
-    final xpAwarded = quizXpForScore(scorePercent);
-    final attempt = QuizAttempt(
-      categoryId: categoryId,
-      correctCount: correctCount,
-      totalQuestions: totalQuestions,
-      scorePercent: scorePercent,
-      completedAt: completedAt ?? DateTime.now(),
-      xpAwarded: xpAwarded,
-    );
+    final possibleXp = quizXpForScore(scorePercent);
+    final completionDate = completedAt ?? _now();
 
     try {
       final database = await _databaseService.database;
       return database.transaction((transaction) async {
+        var xpAwarded = 0;
+        if (possibleXp > 0) {
+          final claimId = await transaction.insert('quiz_xp_claims', {
+            'category_id': categoryId,
+            'date_key': _localDateKey(completionDate),
+            'awarded_xp': possibleXp,
+            'awarded_at': completionDate.toUtc().toIso8601String(),
+          }, conflictAlgorithm: ConflictAlgorithm.ignore);
+          if (claimId != 0) xpAwarded = possibleXp;
+        }
+        final attempt = QuizAttempt(
+          categoryId: categoryId,
+          correctCount: correctCount,
+          totalQuestions: totalQuestions,
+          scorePercent: scorePercent,
+          completedAt: completionDate,
+          xpAwarded: xpAwarded,
+        );
         final xpRows = await transaction.query(
           'xp_state',
           where: 'id = 1',
@@ -65,7 +78,7 @@ class QuizRepository implements QuizStore {
             : XpState.fromMap(xpRows.first);
         final updatedXp = XpState(
           totalXp: currentXp.totalXp + xpAwarded,
-          updatedAt: DateTime.now(),
+          updatedAt: completionDate,
         );
 
         if (xpAwarded > 0 || xpRows.isEmpty) {
@@ -188,4 +201,11 @@ class QuizRepository implements QuizStore {
   void clearCachedData() {
     // QuizRepository reads attempts directly from SQLite and has no cache.
   }
+}
+
+String _localDateKey(DateTime value) {
+  final local = value.toLocal();
+  return '${local.year.toString().padLeft(4, '0')}-'
+      '${local.month.toString().padLeft(2, '0')}-'
+      '${local.day.toString().padLeft(2, '0')}';
 }

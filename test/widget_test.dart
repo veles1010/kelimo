@@ -26,6 +26,7 @@ import 'package:kelimo/models/word.dart';
 import 'package:kelimo/models/word_progress.dart';
 import 'package:kelimo/models/xp_state.dart';
 import 'package:kelimo/models/ad_display_state.dart';
+import 'package:kelimo/models/category_unlock.dart';
 import 'package:kelimo/repositories/daily_progress_repository.dart';
 import 'package:kelimo/repositories/achievement_repository.dart';
 import 'package:kelimo/repositories/data_reset_repository.dart';
@@ -33,6 +34,7 @@ import 'package:kelimo/repositories/quiz_repository.dart';
 import 'package:kelimo/repositories/settings_repository.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/repositories/xp_repository.dart';
+import 'package:kelimo/repositories/category_unlock_repository.dart';
 import 'package:kelimo/screens/quiz_result_screen.dart';
 import 'package:kelimo/screens/about_screen.dart';
 import 'package:kelimo/screens/category_quiz_screen.dart';
@@ -886,6 +888,15 @@ Future<void> pumpKelimoApp(
       notificationService: notifications,
       navigationController: navigationController,
       interstitialAdService: ads,
+      categoryUnlockStore: MemoryCategoryUnlockStore(
+        CategoryCatalog.categories.map(
+          (category) => CategoryUnlock(
+            categoryId: category.id,
+            unlockedAt: DateTime.utc(2026, 7, 16),
+            consumesCredit: false,
+          ),
+        ),
+      ),
     ),
   );
   await tester.pumpAndSettle();
@@ -1154,8 +1165,8 @@ void main() {
     expect(restored.updatedAt, updatedAt);
   });
 
-  test('Veritabanı şema sürümü başarımlar migration ile 6 olur', () {
-    expect(DatabaseService.databaseVersion, 6);
+  test('Veritabanı şema sürümü kategori kilitleri migration ile 7 olur', () {
+    expect(DatabaseService.databaseVersion, 7);
     expect(
       DatabaseService.createAppSettingsTableSql,
       contains('CREATE TABLE IF NOT EXISTS app_settings'),
@@ -1204,7 +1215,22 @@ void main() {
       'streak_state',
       'xp_state',
       'achievement_unlocks',
+      'category_unlocks',
+      'word_xp_claims',
+      'quiz_xp_claims',
     ]);
+    expect(
+      DatabaseService.createCategoryUnlocksTableSql,
+      contains('category_id TEXT PRIMARY KEY'),
+    );
+    expect(
+      DatabaseService.createWordXpClaimsTableSql,
+      contains('PRIMARY KEY (word_id, date_key)'),
+    );
+    expect(
+      DatabaseService.createQuizXpClaimsTableSql,
+      contains('PRIMARY KEY (category_id, date_key)'),
+    );
   });
 
   test(
@@ -1359,7 +1385,7 @@ void main() {
       expect(storage.values[SettingsRepository.reminderEnabledKey], 'true');
       expect(storage.values[SettingsRepository.reminderHourKey], '8');
       expect(storage.values[SettingsRepository.reminderMinuteKey], '35');
-      expect(DatabaseService.databaseVersion, 6);
+      expect(DatabaseService.databaseVersion, 7);
     },
   );
 
@@ -4228,7 +4254,7 @@ void main() {
       expect(find.text('Tamamlanan quiz'), findsOneWidget);
       expect(find.text('Quiz başarısı'), findsOneWidget);
       expect(find.text('Başarımlar'), findsOneWidget);
-      expect(find.text('12 / 12 rozet'), findsOneWidget);
+      expect(find.text('13 / 13 rozet'), findsOneWidget);
       expect(find.text('Yeni'), findsOneWidget);
       expect(find.text('1080 • %100'), findsOneWidget);
       expect(find.text('Henüz tamamlanmış bir quiz yok.'), findsOneWidget);

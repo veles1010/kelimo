@@ -11,6 +11,7 @@ import 'package:kelimo/repositories/settings_repository.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/repositories/xp_repository.dart';
 import 'package:kelimo/repositories/ad_frequency_repository.dart';
+import 'package:kelimo/repositories/category_unlock_repository.dart';
 import 'package:kelimo/screens/home_screen.dart';
 import 'package:kelimo/services/data_management_service.dart';
 import 'package:kelimo/services/achievement_service.dart';
@@ -23,6 +24,7 @@ import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/services/interstitial_ad_service.dart';
+import 'package:kelimo/services/category_access_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 
 void main() {
@@ -42,6 +44,7 @@ class KelimoApp extends StatefulWidget {
     this.notificationService,
     this.navigationController,
     this.interstitialAdService,
+    this.categoryUnlockStore,
   });
 
   final WordProgressStore? wordProgressStore;
@@ -54,6 +57,7 @@ class KelimoApp extends StatefulWidget {
   final NotificationService? notificationService;
   final AppNavigationController? navigationController;
   final InterstitialAdService? interstitialAdService;
+  final CategoryUnlockStore? categoryUnlockStore;
 
   @override
   State<KelimoApp> createState() => _KelimoAppState();
@@ -76,6 +80,7 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
   late final AppNavigationController _navigationController;
   late final bool _ownsNavigationController;
   late final InterstitialAdService _interstitialAdService;
+  late final CategoryAccessService _categoryAccessService;
   late final bool _ownsInterstitialAdService;
   late final StreamSubscription<String> _notificationPayloadSubscription;
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
@@ -101,6 +106,16 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
       repository: widget.xpStore ?? XpRepository(databaseService),
     );
     _quizStore = widget.quizStore ?? QuizRepository(databaseService);
+    _categoryAccessService = CategoryAccessService(
+      repository:
+          widget.categoryUnlockStore ??
+          (widget.wordProgressStore == null
+              ? CategoryUnlockRepository(databaseService)
+              : MemoryCategoryUnlockStore()),
+      wordProgressStore: _wordProgressStore,
+      quizStore: _quizStore,
+      xpService: _xpService,
+    );
     _statisticsService = StatisticsService(
       wordProgressStore: _wordProgressStore,
       quizStore: _quizStore,
@@ -147,6 +162,7 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
       statisticsService: _statisticsService,
       achievementService: _achievementService,
       dailyReminderService: _dailyReminderService,
+      categoryAccessService: _categoryAccessService,
     );
     _initialization = _initializePersistence();
   }
@@ -165,6 +181,7 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
     await _settingsService.initialize();
     await _streakService.initialize();
     await _xpService.initialize();
+    await _categoryAccessService.initialize();
     await _achievementService.initialize();
     await _dailyReminderService.initialize();
     await _interstitialAdService.initialize();
@@ -194,6 +211,7 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
     unawaited(_notificationPayloadSubscription.cancel());
     _streakService.dispose();
     _xpService.dispose();
+    _categoryAccessService.dispose();
     _statisticsService.dispose();
     _settingsService.dispose();
     _dataManagementService.dispose();
@@ -242,6 +260,7 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
               dailyReminderService: _dailyReminderService,
               navigationController: _navigationController,
               interstitialAdService: _interstitialAdService,
+              categoryAccessService: _categoryAccessService,
             );
           },
         ),

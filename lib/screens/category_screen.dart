@@ -15,6 +15,7 @@ import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 import 'package:kelimo/widgets/glass_surface.dart';
+import 'package:kelimo/services/category_access_service.dart';
 
 class CategoryScreen extends StatefulWidget {
   const CategoryScreen({
@@ -28,6 +29,7 @@ class CategoryScreen extends StatefulWidget {
     this.achievementService,
     this.dailyReminderService,
     this.interstitialAdService,
+    this.categoryAccessService,
     super.key,
   });
 
@@ -41,6 +43,7 @@ class CategoryScreen extends StatefulWidget {
   final AchievementService? achievementService;
   final DailyReminderService? dailyReminderService;
   final InterstitialAdService? interstitialAdService;
+  final CategoryAccessService? categoryAccessService;
 
   @override
   State<CategoryScreen> createState() => _CategoryScreenState();
@@ -67,6 +70,10 @@ class _CategoryScreenState extends State<CategoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final access = widget.categoryAccessService;
+    if (access != null && !access.canOpen(widget.category)) {
+      return const _LockedCategoryScreen();
+    }
     final streakService = widget.streakService;
     final wordProgressStore = widget.wordProgressStore;
     final xpService = widget.xpService;
@@ -116,6 +123,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
                                 achievementService: widget.achievementService,
                                 dailyReminderService:
                                     widget.dailyReminderService,
+                                categoryAccessService: access,
                               ),
                             ),
                           );
@@ -140,6 +148,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
                                 interstitialAdService:
                                     widget.interstitialAdService,
                                 streakService: streakService,
+                                categoryAccessService: access,
                               ),
                             ),
                           );
@@ -156,6 +165,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
                               builder: (_) => CategoryStatisticsScreen(
                                 category: widget.category,
                                 statisticsService: statisticsService,
+                                categoryAccessService: access,
                               ),
                             ),
                           );
@@ -166,6 +176,29 @@ class _CategoryScreenState extends State<CategoryScreen> {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LockedCategoryScreen extends StatelessWidget {
+  const _LockedCategoryScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(backgroundColor: Colors.transparent),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(32),
+            child: Text(
+              'Bu kategori henüz kilitli. Kategori Seç ekranından açabilirsin.',
+              textAlign: TextAlign.center,
+            ),
           ),
         ),
       ),

@@ -5,6 +5,7 @@ enum AchievementType {
   completedQuizzes,
   perfectQuiz,
   streak,
+  mosaicCompletion,
 }
 
 class Achievement {
@@ -32,6 +33,7 @@ class Achievement {
       AchievementType.completedQuizzes => metrics.completedQuizCount,
       AchievementType.perfectQuiz => metrics.hasPerfectQuiz ? 1 : 0,
       AchievementType.streak => metrics.currentStreak,
+      AchievementType.mosaicCompletion => metrics.learnedWordCount,
     };
   }
 

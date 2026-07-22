@@ -53,6 +53,30 @@ class XpService extends ChangeNotifier {
     }
   }
 
+  Future<bool> awardWordReview({
+    required String wordId,
+    required LearningRating rating,
+    DateTime? awardedAt,
+  }) async {
+    final amount = xpRewardForRating(rating);
+    if (repository is! XpAwardStore) return addXp(amount);
+    final awardStore = repository as XpAwardStore;
+    try {
+      final state = await awardStore.awardWordReview(
+        wordId: wordId,
+        rating: rating,
+        amount: amount,
+        awardedAt: awardedAt,
+      );
+      _applyState(state);
+      notifyListeners();
+      return true;
+    } catch (error, stackTrace) {
+      debugPrint('Kelime XP ödülü uygulanamadı: $error\n$stackTrace');
+      return false;
+    }
+  }
+
   void applyPersistedState(XpState state) {
     repository.synchronizeState(state);
     _applyState(state);

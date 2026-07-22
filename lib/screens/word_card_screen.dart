@@ -13,6 +13,7 @@ import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/widgets/learning_flashcard.dart';
 import 'package:kelimo/widgets/achievement_notification.dart';
 import 'package:kelimo/widgets/glass_surface.dart';
+import 'package:kelimo/services/category_access_service.dart';
 
 class WordCardScreen extends StatefulWidget {
   WordCardScreen({
@@ -26,6 +27,7 @@ class WordCardScreen extends StatefulWidget {
     this.settingsService,
     this.achievementService,
     this.dailyReminderService,
+    this.categoryAccessService,
   }) : assert(
          initialWordIndex >= 0 && initialWordIndex < category.words.length,
        );
@@ -39,6 +41,7 @@ class WordCardScreen extends StatefulWidget {
   final SettingsService? settingsService;
   final AchievementService? achievementService;
   final DailyReminderService? dailyReminderService;
+  final CategoryAccessService? categoryAccessService;
 
   @override
   State<WordCardScreen> createState() => _WordCardScreenState();
@@ -159,8 +162,9 @@ class _WordCardScreenState extends State<WordCardScreen>
       await widget.wordProgressStore.saveLearningResult(learningResult);
       progressSaved = true;
       completedDailyGoal = await _streakService.recordEvaluation();
-      final xpSaved = await widget.xpService.addXp(
-        xpRewardForRating(learningResult.rating),
+      final xpSaved = await widget.xpService.awardWordReview(
+        wordId: learningResult.word.id,
+        rating: learningResult.rating,
       );
       if (!xpSaved && mounted) {
         ScaffoldMessenger.of(
@@ -265,6 +269,12 @@ class _WordCardScreenState extends State<WordCardScreen>
 
   @override
   Widget build(BuildContext context) {
+    final access = widget.categoryAccessService;
+    if (access != null && !access.canOpen(widget.category)) {
+      return const Scaffold(
+        body: Center(child: Text('Bu kategori henüz kilitli.')),
+      );
+    }
     final word = _learningEngine.currentWord;
 
     return GlassBackground(

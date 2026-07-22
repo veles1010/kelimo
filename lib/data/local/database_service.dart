@@ -1,11 +1,37 @@
 import 'package:flutter/foundation.dart';
+import 'package:kelimo/data/category_catalog.dart';
 import 'package:kelimo/services/review_scheduler.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
 class DatabaseService {
   static const databaseName = 'kelimo.db';
-  static const databaseVersion = 6;
+  static const databaseVersion = 7;
+  static const createCategoryUnlocksTableSql = '''
+    CREATE TABLE IF NOT EXISTS category_unlocks (
+      category_id TEXT PRIMARY KEY,
+      unlocked_at TEXT NOT NULL,
+      consumes_credit INTEGER NOT NULL DEFAULT 0
+    )
+  ''';
+  static const createWordXpClaimsTableSql = '''
+    CREATE TABLE IF NOT EXISTS word_xp_claims (
+      word_id TEXT NOT NULL,
+      date_key TEXT NOT NULL,
+      awarded_xp INTEGER NOT NULL,
+      awarded_at TEXT NOT NULL,
+      PRIMARY KEY (word_id, date_key)
+    )
+  ''';
+  static const createQuizXpClaimsTableSql = '''
+    CREATE TABLE IF NOT EXISTS quiz_xp_claims (
+      category_id TEXT NOT NULL,
+      date_key TEXT NOT NULL,
+      awarded_xp INTEGER NOT NULL,
+      awarded_at TEXT NOT NULL,
+      PRIMARY KEY (category_id, date_key)
+    )
+  ''';
   static const createAchievementUnlocksTableSql = '''
     CREATE TABLE IF NOT EXISTS achievement_unlocks (
       achievement_id TEXT PRIMARY KEY,
@@ -64,6 +90,7 @@ class DatabaseService {
     if (version >= 4) await _migrateVersion3To4(database);
     if (version >= 5) await _migrateVersion4To5(database);
     if (version >= 6) await _migrateVersion5To6(database);
+    if (version >= 7) await _migrateVersion6To7(database);
   }
 
   Future<void> _createVersion1(Database database) async {
@@ -116,6 +143,9 @@ class DatabaseService {
     }
     if (oldVersion < 6 && newVersion >= 6) {
       await _migrateVersion5To6(database);
+    }
+    if (oldVersion < 7 && newVersion >= 7) {
+      await _migrateVersion6To7(database);
     }
   }
 
@@ -191,6 +221,57 @@ class DatabaseService {
 
   Future<void> _migrateVersion5To6(Database database) async {
     await database.execute(createAchievementUnlocksTableSql);
+  }
+
+  Future<void> _migrateVersion6To7(Database database) async {
+    await database.execute(createCategoryUnlocksTableSql);
+    await database.execute(createWordXpClaimsTableSql);
+    await database.execute(createQuizXpClaimsTableSql);
+
+    final migratedAt = DateTime.now().toUtc().toIso8601String();
+    const initialCategoryIds = {
+      'animals',
+      'foods',
+      'colors',
+      'home',
+      'family',
+      'daily_routines',
+    };
+    final categoryByWordId = <String, String>{
+      for (final category in CategoryCatalog.categories)
+        for (final word in category.words) word.id: category.id,
+    };
+    final categoryIds = <String>{...initialCategoryIds};
+    final progressRows = await database.query(
+      'word_progress',
+      columns: ['word_id', 'mastery', 'repetition_count'],
+    );
+    for (final row in progressRows) {
+      final reviewed =
+          (row['repetition_count'] as int? ?? 0) > 0 ||
+          (row['mastery'] as String? ?? 'new') != 'new';
+      if (!reviewed) continue;
+      final categoryId = categoryByWordId[row['word_id'] as String?];
+      if (categoryId != null) categoryIds.add(categoryId);
+    }
+    final quizRows = await database.query(
+      'quiz_attempts',
+      columns: ['category_id'],
+      distinct: true,
+    );
+    for (final row in quizRows) {
+      final categoryId = row['category_id'] as String?;
+      if (categoryId != null && CategoryCatalog.findById(categoryId) != null) {
+        categoryIds.add(categoryId);
+      }
+    }
+    for (final categoryId in categoryIds) {
+      await database.insert('category_unlocks', {
+        'category_id': categoryId,
+        'unlocked_at': migratedAt,
+        'consumes_credit': 0,
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
+    }
   }
 }
 

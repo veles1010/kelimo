@@ -23,6 +23,7 @@ import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/services/interstitial_ad_service.dart';
+import 'package:kelimo/services/category_access_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 import 'package:kelimo/widgets/glass_surface.dart';
 
@@ -40,6 +41,7 @@ class HomeScreen extends StatefulWidget {
     this.dailyReminderService,
     this.navigationController,
     this.interstitialAdService,
+    this.categoryAccessService,
     super.key,
   });
 
@@ -55,6 +57,7 @@ class HomeScreen extends StatefulWidget {
   final DailyReminderService? dailyReminderService;
   final AppNavigationController? navigationController;
   final InterstitialAdService? interstitialAdService;
+  final CategoryAccessService? categoryAccessService;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -110,6 +113,15 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openCategory(LearningCategory category) async {
+    final access = widget.categoryAccessService;
+    if (access != null && !access.canOpen(category)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Bu kategori henüz kilitli.')),
+        );
+      }
+      return;
+    }
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => CategoryScreen(
@@ -123,6 +135,7 @@ class _HomeScreenState extends State<HomeScreen> {
           achievementService: widget.achievementService,
           dailyReminderService: widget.dailyReminderService,
           interstitialAdService: widget.interstitialAdService,
+          categoryAccessService: widget.categoryAccessService,
         ),
       ),
     );
@@ -132,7 +145,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _showCategorySelection(CategoryHubSnapshot snapshot) async {
     final category = await Navigator.of(context).push<LearningCategory>(
       MaterialPageRoute(
-        builder: (_) => CategorySelectionScreen(snapshot: snapshot),
+        builder: (_) => CategorySelectionScreen(
+          snapshot: snapshot,
+          categoryAccessService: widget.categoryAccessService,
+        ),
       ),
     );
     if (category != null && mounted) await _openCategory(category);
@@ -154,10 +170,12 @@ class _HomeScreenState extends State<HomeScreen> {
           settingsService: widget.settingsService,
           achievementService: widget.achievementService,
           dailyReminderService: widget.dailyReminderService,
+          categoryAccessService: widget.categoryAccessService,
         ),
         2 => ProgressScreen(
           statisticsService: widget.statisticsService,
           achievementService: widget.achievementService,
+          wordProgressStore: widget.wordProgressStore,
         ),
         3 => SettingsScreen(
           settingsService: widget.settingsService,
@@ -198,6 +216,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                     );
                                 return _HomeCategoryHub(
                                   snapshot: safeData,
+                                  categoryAccessService:
+                                      widget.categoryAccessService,
                                   onContinue: (category) {
                                     if (category == null) {
                                       _showCategorySelection(safeData);
@@ -638,17 +658,23 @@ class _HomeCategoryHub extends StatelessWidget {
     required this.snapshot,
     required this.onContinue,
     required this.onShowAll,
+    this.categoryAccessService,
   });
 
   final CategoryHubSnapshot snapshot;
   final ValueChanged<LearningCategory?> onContinue;
   final VoidCallback onShowAll;
+  final CategoryAccessService? categoryAccessService;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final category = snapshot.lastCategory;
+    final candidate = snapshot.lastCategory;
+    final category =
+        candidate != null && (categoryAccessService?.canOpen(candidate) ?? true)
+        ? candidate
+        : null;
     final statistics = category == null
         ? null
         : snapshot.progressFor(category.id);

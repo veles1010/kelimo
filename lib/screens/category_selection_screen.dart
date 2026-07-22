@@ -4,11 +4,17 @@ import 'package:kelimo/models/category_hub_snapshot.dart';
 import 'package:kelimo/models/learning_category.dart';
 import 'package:kelimo/theme/app_theme.dart';
 import 'package:kelimo/widgets/glass_surface.dart';
+import 'package:kelimo/services/category_access_service.dart';
 
 class CategorySelectionScreen extends StatefulWidget {
-  const CategorySelectionScreen({required this.snapshot, super.key});
+  const CategorySelectionScreen({
+    required this.snapshot,
+    super.key,
+    this.categoryAccessService,
+  });
 
   final CategoryHubSnapshot snapshot;
+  final CategoryAccessService? categoryAccessService;
 
   @override
   State<CategorySelectionScreen> createState() =>
@@ -30,10 +36,64 @@ class _CategorySelectionScreenState extends State<CategorySelectionScreen> {
         .toList(growable: false);
   }
 
+  bool _isUnlocked(LearningCategory category) =>
+      widget.categoryAccessService?.canOpen(category) ?? true;
+
+  Future<void> _selectCategory(LearningCategory category) async {
+    final service = widget.categoryAccessService;
+    if (service == null || service.canOpen(category)) {
+      Navigator.of(context).pop(category);
+      return;
+    }
+    if (service.availableUnlockCredits <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Yeni kategori için ${service.xpUntilNextCredit} XP kaldı',
+          ),
+        ),
+      );
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Kategori açılsın mı?'),
+        content: Text('${category.title} kategorisini açmak istiyor musun?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Aç'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final unlocked = await service.unlockCategory(category.id);
+    if (!mounted) return;
+    if (!unlocked) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Kategori açılamadı. Tekrar dene.')),
+      );
+      return;
+    }
+    setState(() {});
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('🎉 ${category.title} kategorisi açıldı!')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final categories = _filteredCategories;
-    final recentCategories = widget.snapshot.recentCategories.take(2).toList();
+    final recentCategories = widget.snapshot.recentCategories
+        .where(_isUnlocked)
+        .take(2)
+        .toList();
     final textTheme = Theme.of(context).textTheme;
     final textScale = MediaQuery.textScalerOf(context).scale(1);
     final gridExtent =
@@ -133,8 +193,7 @@ class _CategorySelectionScreenState extends State<CategorySelectionScreen> {
                                 height: cardHeight,
                                 child: _RecentCategoryCard(
                                   category: category,
-                                  onTap: () =>
-                                      Navigator.of(context).pop(category),
+                                  onTap: () => _selectCategory(category),
                                 ),
                               ),
                           ],
@@ -177,11 +236,23 @@ class _CategorySelectionScreenState extends State<CategorySelectionScreen> {
                       final learned = progress?.learnedWordCount ?? 0;
                       final total =
                           progress?.totalWordCount ?? category.words.length;
+                      final unlocked = _isUnlocked(category);
                       return _CompactCategoryCard(
                         category: category,
                         learnedCount: learned,
                         totalCount: total,
-                        onTap: () => Navigator.of(context).pop(category),
+                        isUnlocked: unlocked,
+                        statusText: unlocked
+                            ? null
+                            : (widget
+                                          .categoryAccessService
+                                          ?.availableUnlockCredits ??
+                                      0) >
+                                  0
+                            ? 'Açma hakkını kullan'
+                            : 'Yeni kategori için '
+                                  '${widget.categoryAccessService?.xpUntilNextCredit ?? 0} XP kaldı',
+                        onTap: () => _selectCategory(category),
                       );
                     },
                   ),
@@ -256,12 +327,16 @@ class _CompactCategoryCard extends StatelessWidget {
     required this.category,
     required this.learnedCount,
     required this.totalCount,
+    required this.isUnlocked,
+    required this.statusText,
     required this.onTap,
   });
 
   final LearningCategory category;
   final int learnedCount;
   final int totalCount;
+  final bool isUnlocked;
+  final String? statusText;
   final VoidCallback onTap;
 
   @override
@@ -271,62 +346,78 @@ class _CompactCategoryCard extends StatelessWidget {
     final progress = totalCount == 0 ? 0.0 : learnedCount / totalCount;
     final percentage = (progress * 100).round();
 
-    return GlassSurface(
-      enableBlur: false,
-      showShadow: false,
-      padding: EdgeInsets.zero,
-      child: Card(
-        key: ValueKey('category-grid-${category.id}'),
-        color: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    SizedBox(
-                      width: 36,
-                      height: 36,
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          category.emoji,
-                          style: const TextStyle(fontSize: 28),
+    return Opacity(
+      opacity: isUnlocked ? 1 : 0.72,
+      child: GlassSurface(
+        enableBlur: false,
+        showShadow: false,
+        padding: EdgeInsets.zero,
+        child: Card(
+          key: ValueKey('category-grid-${category.id}'),
+          color: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      SizedBox(
+                        width: 36,
+                        height: 36,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            category.emoji,
+                            style: const TextStyle(fontSize: 28),
+                          ),
                         ),
                       ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      '%$percentage',
-                      style: textTheme.labelMedium?.copyWith(
-                        color: colorScheme.primary,
+                      const Spacer(),
+                      if (isUnlocked)
+                        Text(
+                          '%$percentage',
+                          style: textTheme.labelMedium?.copyWith(
+                            color: colorScheme.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        )
+                      else
+                        const Icon(Icons.lock_rounded, size: 22),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Expanded(
+                    child: Text(
+                      category.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.bold,
+                        height: 1.1,
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Expanded(
-                  child: Text(
-                    category.title,
+                  ),
+                  Text(
+                    isUnlocked ? '$totalCount kelime' : statusText!,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      height: 1.1,
+                    style: textTheme.bodySmall?.copyWith(
+                      fontWeight: isUnlocked ? null : FontWeight.w600,
                     ),
                   ),
-                ),
-                Text('$totalCount kelime', style: textTheme.bodySmall),
-                const SizedBox(height: 8),
-                LinearProgressIndicator(value: progress, minHeight: 5),
-              ],
+                  const SizedBox(height: 8),
+                  LinearProgressIndicator(
+                    value: isUnlocked ? progress : 0,
+                    minHeight: 5,
+                  ),
+                ],
+              ),
             ),
           ),
         ),

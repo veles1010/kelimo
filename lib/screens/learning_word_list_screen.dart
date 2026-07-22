@@ -14,6 +14,7 @@ import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/widgets/achievement_notification.dart';
 import 'package:kelimo/widgets/glass_surface.dart';
+import 'package:kelimo/services/category_access_service.dart';
 
 class LearningWordListScreen extends StatefulWidget {
   const LearningWordListScreen({
@@ -27,6 +28,7 @@ class LearningWordListScreen extends StatefulWidget {
     this.sessionBuilder,
     this.achievementService,
     this.dailyReminderService,
+    this.categoryAccessService,
   });
 
   final LearningCenterFilter filter;
@@ -38,6 +40,7 @@ class LearningWordListScreen extends StatefulWidget {
   final ReviewSessionBuilder? sessionBuilder;
   final AchievementService? achievementService;
   final DailyReminderService? dailyReminderService;
+  final CategoryAccessService? categoryAccessService;
 
   @override
   State<LearningWordListScreen> createState() => _LearningWordListScreenState();
@@ -63,6 +66,13 @@ class _LearningWordListScreenState extends State<LearningWordListScreen> {
   }
 
   Future<void> _openWord(LearningCenterWord entry) async {
+    final access = widget.categoryAccessService;
+    if (access != null && !access.canOpen(entry.category)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bu kelimenin kategorisi henüz kilitli.')),
+      );
+      return;
+    }
     final initialWordIndex = entry.category.words.indexWhere(
       (word) => word.id == entry.word.id,
     );
@@ -79,6 +89,7 @@ class _LearningWordListScreenState extends State<LearningWordListScreen> {
           settingsService: widget.settingsService,
           achievementService: widget.achievementService,
           dailyReminderService: widget.dailyReminderService,
+          categoryAccessService: access,
         ),
       ),
     );

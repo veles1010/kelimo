@@ -3,16 +3,19 @@ import 'package:kelimo/models/learning_category.dart';
 import 'package:kelimo/models/progress_statistics.dart';
 import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/widgets/glass_surface.dart';
+import 'package:kelimo/services/category_access_service.dart';
 
 class CategoryStatisticsScreen extends StatefulWidget {
   const CategoryStatisticsScreen({
     required this.category,
     required this.statisticsService,
+    this.categoryAccessService,
     super.key,
   });
 
   final LearningCategory category;
   final StatisticsService statisticsService;
+  final CategoryAccessService? categoryAccessService;
 
   @override
   State<CategoryStatisticsScreen> createState() =>
@@ -36,6 +39,12 @@ class _CategoryStatisticsScreenState extends State<CategoryStatisticsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final access = widget.categoryAccessService;
+    if (access != null && !access.canOpen(widget.category)) {
+      return const Scaffold(
+        body: Center(child: Text('Bu kategori henüz kilitli.')),
+      );
+    }
     return GlassBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,

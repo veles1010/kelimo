@@ -18,6 +18,9 @@ class DataResetRepository implements DataResetStore {
     'streak_state',
     'xp_state',
     'achievement_unlocks',
+    'category_unlocks',
+    'word_xp_claims',
+    'quiz_xp_claims',
   ];
 
   final DatabaseService _databaseService;

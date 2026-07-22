@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:kelimo/data/local/database_service.dart';
 import 'package:kelimo/models/xp_state.dart';
+import 'package:kelimo/services/learning_engine.dart';
 import 'package:sqflite/sqflite.dart';
 
 abstract interface class XpStore {
@@ -11,7 +12,16 @@ abstract interface class XpStore {
   Future<void> resetXp();
 }
 
-class XpRepository implements XpStore {
+abstract interface class XpAwardStore {
+  Future<XpState> awardWordReview({
+    required String wordId,
+    required LearningRating rating,
+    required int amount,
+    DateTime? awardedAt,
+  });
+}
+
+class XpRepository implements XpStore, XpAwardStore {
   XpRepository(this._databaseService);
 
   final DatabaseService _databaseService;
@@ -85,6 +95,53 @@ class XpRepository implements XpStore {
   }
 
   @override
+  Future<XpState> awardWordReview({
+    required String wordId,
+    required LearningRating rating,
+    required int amount,
+    DateTime? awardedAt,
+  }) async {
+    if (amount <= 0) return _state;
+    final localDate = awardedAt ?? DateTime.now();
+    final dateKey = _localDateKey(localDate);
+    try {
+      final database = await _databaseService.database;
+      final updated = await database.transaction((transaction) async {
+        final claimId = await transaction.insert('word_xp_claims', {
+          'word_id': wordId,
+          'date_key': dateKey,
+          'awarded_xp': amount,
+          'awarded_at': localDate.toUtc().toIso8601String(),
+        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+        final rows = await transaction.query(
+          'xp_state',
+          where: 'id = 1',
+          limit: 1,
+        );
+        final current = rows.isEmpty
+            ? XpState.initial()
+            : XpState.fromMap(rows.first);
+        if (claimId == 0) return current;
+        final next = XpState(
+          totalXp: current.totalXp + amount,
+          updatedAt: localDate,
+        );
+        await transaction.insert(
+          'xp_state',
+          next.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+        return next;
+      });
+      _state = updated;
+      return updated;
+    } catch (error, stackTrace) {
+      debugPrint('Kelime XP ödülü kaydedilemedi: $error\n$stackTrace');
+      rethrow;
+    }
+  }
+
+  @override
   Future<void> resetXp() async {
     final reset = XpState.initial();
     try {
@@ -100,4 +157,11 @@ class XpRepository implements XpStore {
       rethrow;
     }
   }
+}
+
+String _localDateKey(DateTime value) {
+  final local = value.toLocal();
+  return '${local.year.toString().padLeft(4, '0')}-'
+      '${local.month.toString().padLeft(2, '0')}-'
+      '${local.day.toString().padLeft(2, '0')}';
 }

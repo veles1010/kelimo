@@ -169,7 +169,10 @@ class _ReviewSessionScreenState extends State<ReviewSessionScreen>
     }
 
     final completedDailyGoal = await widget.streakService.recordEvaluation();
-    final xpSaved = await widget.xpService.addXp(xpRewardForRating(rating));
+    final xpSaved = await widget.xpService.awardWordReview(
+      wordId: _currentItem.word.id,
+      rating: rating,
+    );
     if (!xpSaved && mounted) {
       ScaffoldMessenger.of(
         context,

@@ -9,16 +9,21 @@ import 'package:kelimo/services/achievement_service.dart';
 import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 import 'package:kelimo/widgets/glass_surface.dart';
+import 'package:kelimo/repositories/word_progress_repository.dart';
+import 'package:kelimo/screens/mosaic_screen.dart';
+import 'package:kelimo/services/mosaic_service.dart';
 
 class ProgressScreen extends StatefulWidget {
   const ProgressScreen({
     required this.statisticsService,
     super.key,
     this.achievementService,
+    this.wordProgressStore,
   });
 
   final StatisticsService statisticsService;
   final AchievementService? achievementService;
+  final WordProgressStore? wordProgressStore;
 
   @override
   State<ProgressScreen> createState() => _ProgressScreenState();
@@ -101,6 +106,12 @@ class _ProgressScreenState extends State<ProgressScreen> {
                               },
                             ),
                           ],
+                          if (widget.wordProgressStore case final store?) ...[
+                            const SizedBox(height: 16),
+                            _MosaicLinkCard(
+                              service: MosaicService(wordProgressStore: store),
+                            ),
+                          ],
                           const SizedBox(height: 16),
                           _WordDistributionCard(
                             distribution: statistics.distribution,
@@ -129,6 +140,60 @@ class _ProgressScreenState extends State<ProgressScreen> {
               ),
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+class _MosaicLinkCard extends StatelessWidget {
+  const _MosaicLinkCard({required this.service});
+
+  final MosaicService service;
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = service.load();
+    return GlassSurface(
+      key: const ValueKey('hidden-mosaic-card'),
+      enableBlur: false,
+      padding: EdgeInsets.zero,
+      child: Card(
+        color: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        child: InkWell(
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => MosaicScreen(service: service),
+            ),
+          ),
+          child: Padding(
+            padding: AppDimensions.cardPadding,
+            child: Row(
+              children: [
+                const Text('🖼️', style: TextStyle(fontSize: 34)),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Gizli Mozaik',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 4),
+                      Text('${progress.discoveredCount} / 1080 parça'),
+                      const SizedBox(height: 8),
+                      LinearProgressIndicator(value: progress.progress),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Icon(Icons.chevron_right_rounded),
+              ],
+            ),
+          ),
         ),
       ),
     );
