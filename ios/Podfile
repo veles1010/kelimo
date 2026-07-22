@@ -39,5 +39,15 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+
+    # flutter_tts 4.2.5, Xcode 26'nın VerifyModule aşamasında framework
+    # umbrella header'ındaki quoted include nedeniyle doğrulanamıyor. Bu
+    # uyumluluk ayarları yalnızca ilgili üçüncü taraf pod için geçerlidir.
+    if target.name == 'flutter_tts'
+      target.build_configurations.each do |config|
+        config.build_settings['ENABLE_MODULE_VERIFIER'] = 'NO'
+        config.build_settings['CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER'] = 'NO'
+      end
+    end
   end
 end
