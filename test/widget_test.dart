@@ -338,6 +338,9 @@ class FakeRewardedAdService extends RewardedAdService {
   bool ready = true;
   bool enabled = true;
   bool loading = false;
+  bool waitingForRetry = false;
+  Duration? retryDelay;
+  int preloadCalls = 0;
   int showCalls = 0;
   RewardedAdResult result = const RewardedAdResult(
     outcome: RewardedAdOutcome.rewarded,
@@ -349,11 +352,15 @@ class FakeRewardedAdService extends RewardedAdService {
   @override
   bool get isLoading => loading;
   @override
+  bool get isWaitingForRetry => waitingForRetry;
+  @override
+  Duration? get retryAfter => retryDelay;
+  @override
   bool get isReady => ready;
   @override
   Future<void> initialize() async {}
   @override
-  Future<void> preload() async {}
+  Future<void> preload() async => preloadCalls++;
   @override
   Future<RewardedAdResult> show() async {
     showCalls++;
@@ -4473,6 +4480,91 @@ void main() {
     expect(xpStorage.state.totalXp, 15);
     expect(find.text('+15 XP kazandın!'), findsOneWidget);
     expect(find.text('Bugün 1 hakkın kaldı'), findsOneWidget);
+  });
+
+  testWidgets(
+    'günlük XP bonusu yükleme, backoff, hazır ve pasif durumlarını ayırır',
+    (tester) async {
+      final rewardedAds = FakeRewardedAdService();
+      await pumpKelimoApp(tester, rewardedAdService: rewardedAds);
+
+      final card = find.byKey(const ValueKey('daily-xp-bonus-card'));
+      await tester.scrollUntilVisible(card, 250);
+      rewardedAds
+        ..loading = true
+        ..ready = false
+        ..notifyListeners();
+      await tester.pump();
+      expect(find.byKey(const ValueKey('rewarded-ad-loading')), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+      rewardedAds
+        ..loading = false
+        ..waitingForRetry = true
+        ..retryDelay = const Duration(seconds: 15)
+        ..ready = false
+        ..notifyListeners();
+      await tester.pump();
+      expect(find.byKey(const ValueKey('rewarded-ad-loading')), findsNothing);
+      expect(find.byKey(const ValueKey('rewarded-ad-backoff')), findsOneWidget);
+      expect(
+        find.text('Reklam kısa süre sonra yeniden denenecek'),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const ValueKey('rewarded-ad-backoff')));
+      await tester.pump();
+      expect(rewardedAds.preloadCalls, 0);
+
+      rewardedAds
+        ..waitingForRetry = false
+        ..retryDelay = null
+        ..ready = true
+        ..notifyListeners();
+      await tester.pump();
+      expect(find.byKey(const ValueKey('watch-rewarded-ad')), findsOneWidget);
+      expect(find.text('Reklamı izle · +15 XP'), findsOneWidget);
+
+      rewardedAds
+        ..ready = false
+        ..notifyListeners();
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('rewarded-ad-unavailable')),
+        findsOneWidget,
+      );
+      expect(find.text('Reklam şu anda hazır değil'), findsOneWidget);
+    },
+  );
+
+  testWidgets('günlük XP bonusu iki ödülden sonra tamamlanmış görünür', (
+    tester,
+  ) async {
+    final rewardedAds = FakeRewardedAdService()
+      ..result = const RewardedAdResult(
+        outcome: RewardedAdOutcome.rewarded,
+        claimId: 'first-reward',
+      );
+    await pumpKelimoApp(tester, rewardedAdService: rewardedAds);
+    final card = find.byKey(const ValueKey('daily-xp-bonus-card'));
+    await tester.scrollUntilVisible(card, 250);
+
+    await tester.tap(find.byKey(const ValueKey('watch-rewarded-ad')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Reklamı izle'));
+    await tester.pumpAndSettle();
+
+    rewardedAds.result = const RewardedAdResult(
+      outcome: RewardedAdOutcome.rewarded,
+      claimId: 'second-reward',
+    );
+    await tester.tap(find.byKey(const ValueKey('watch-rewarded-ad')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Reklamı izle'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bugünkü bonuslarını topladın'), findsOneWidget);
+    expect(find.byKey(const ValueKey('rewarded-ad-exhausted')), findsOneWidget);
+    expect(find.byKey(const ValueKey('watch-rewarded-ad')), findsNothing);
   });
 
   testWidgets(

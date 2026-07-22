@@ -331,6 +331,20 @@ class _RewardedBonusCard extends StatelessWidget {
         final colors = Theme.of(context).colorScheme;
         final exhausted = service.isExhausted;
         final enabled = service.isEnabled;
+        final loading = service.isAdLoading;
+        final waitingForRetry = service.isWaitingForRetry;
+        final ready = enabled && service.isAdReady && !service.isBusy;
+        final description = exhausted
+            ? 'Bugünkü bonuslarını topladın'
+            : loading
+            ? 'Reklam hazırlanıyor…'
+            : waitingForRetry
+            ? 'Reklam kısa süre sonra yeniden denenecek'
+            : ready
+            ? 'Reklamı izle · +15 XP'
+            : !enabled
+            ? 'Bonus bu sürümde kullanılamıyor'
+            : 'Reklam şu anda hazır değil';
         return GlassSurface(
           key: const ValueKey('daily-xp-bonus-card'),
           enableBlur: false,
@@ -363,17 +377,7 @@ class _RewardedBonusCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 3),
-                    Text(
-                      exhausted
-                          ? 'Bugünkü bonuslarını topladın'
-                          : service.isBusy
-                          ? service.retryAfter == null
-                                ? 'Reklam hazırlanıyor…'
-                                : 'Reklam kısa süre sonra yeniden denenecek'
-                          : !enabled
-                          ? 'Bonus bu sürümde kullanılamıyor'
-                          : 'Reklam izle, +15 XP kazan',
-                    ),
+                    Text(description),
                     if (!exhausted && enabled) ...[
                       const SizedBox(height: 2),
                       Text(
@@ -385,18 +389,32 @@ class _RewardedBonusCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              if (service.isBusy)
+              if (loading)
                 const SizedBox.square(
+                  key: ValueKey('rewarded-ad-loading'),
                   dimension: 24,
                   child: CircularProgressIndicator(strokeWidth: 2.5),
+                )
+              else if (waitingForRetry)
+                const Icon(
+                  Icons.schedule_rounded,
+                  key: ValueKey('rewarded-ad-backoff'),
+                )
+              else if (exhausted)
+                const Icon(
+                  Icons.task_alt_rounded,
+                  key: ValueKey('rewarded-ad-exhausted'),
+                )
+              else if (!enabled || !service.isAdReady || service.isBusy)
+                const Icon(
+                  Icons.info_outline_rounded,
+                  key: ValueKey('rewarded-ad-unavailable'),
                 )
               else
                 IconButton.filledTonal(
                   key: const ValueKey('watch-rewarded-ad'),
                   tooltip: 'Reklam izleyerek 15 XP kazan',
-                  onPressed: exhausted || !enabled
-                      ? null
-                      : () => _watch(context),
+                  onPressed: !ready ? null : () => _watch(context),
                   icon: const Icon(Icons.play_arrow_rounded),
                 ),
             ],
