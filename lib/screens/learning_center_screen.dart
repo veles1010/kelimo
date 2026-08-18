@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:kelimo/models/category_hub_snapshot.dart';
+import 'package:kelimo/models/learning_category.dart';
 import 'package:kelimo/models/learning_center.dart';
+import 'package:kelimo/repositories/quiz_repository.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
+import 'package:kelimo/screens/category_screen.dart';
+import 'package:kelimo/screens/category_selection_screen.dart';
 import 'package:kelimo/screens/learning_word_list_screen.dart';
+import 'package:kelimo/services/category_hub_service.dart';
 import 'package:kelimo/services/learning_center_service.dart';
+import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/services/achievement_service.dart';
 import 'package:kelimo/services/daily_reminder_service.dart';
@@ -19,6 +26,8 @@ class LearningCenterScreen extends StatefulWidget {
     required this.streakService,
     required this.xpService,
     required this.settingsService,
+    required this.quizStore,
+    required this.statisticsService,
     super.key,
     this.achievementService,
     this.dailyReminderService,
@@ -30,6 +39,8 @@ class LearningCenterScreen extends StatefulWidget {
   final StreakService streakService;
   final XpService xpService;
   final SettingsService settingsService;
+  final QuizStore quizStore;
+  final StatisticsService statisticsService;
   final AchievementService? achievementService;
   final DailyReminderService? dailyReminderService;
   final CategoryAccessService? categoryAccessService;
@@ -40,15 +51,60 @@ class LearningCenterScreen extends StatefulWidget {
 
 class _LearningCenterScreenState extends State<LearningCenterScreen> {
   late LearningCenterSnapshot _snapshot;
+  late final CategoryHubService _categoryHubService;
+  late Future<CategoryHubSnapshot> _categorySnapshot;
 
   @override
   void initState() {
     super.initState();
     _snapshot = widget.service.load();
+    _categoryHubService = CategoryHubService(
+      wordProgressStore: widget.wordProgressStore,
+      quizStore: widget.quizStore,
+      statisticsService: widget.statisticsService,
+    );
+    _categorySnapshot = _categoryHubService.load();
   }
 
   void _reload() {
-    setState(() => _snapshot = widget.service.load());
+    setState(() {
+      _snapshot = widget.service.load();
+      _categorySnapshot = _categoryHubService.load();
+    });
+  }
+
+  Future<void> _openCategory(LearningCategory category) async {
+    final access = widget.categoryAccessService;
+    if (access != null && !access.canOpen(category)) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CategoryScreen(
+          category: category,
+          streakService: widget.streakService,
+          wordProgressStore: widget.wordProgressStore,
+          xpService: widget.xpService,
+          quizStore: widget.quizStore,
+          statisticsService: widget.statisticsService,
+          settingsService: widget.settingsService,
+          achievementService: widget.achievementService,
+          dailyReminderService: widget.dailyReminderService,
+          categoryAccessService: widget.categoryAccessService,
+        ),
+      ),
+    );
+    if (mounted) _reload();
+  }
+
+  Future<void> _showCategorySelection(CategoryHubSnapshot snapshot) async {
+    final category = await Navigator.of(context).push<LearningCategory>(
+      MaterialPageRoute(
+        builder: (_) => CategorySelectionScreen(
+          snapshot: snapshot,
+          categoryAccessService: widget.categoryAccessService,
+        ),
+      ),
+    );
+    if (category != null && mounted) await _openCategory(category);
   }
 
   Future<void> _openFilter(LearningCenterFilter filter) async {
@@ -92,12 +148,43 @@ class _LearningCenterScreenState extends State<LearningCenterScreen> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Kelimelerini durumlarına göre yeniden çalış.',
+                      'Yeni kelimeler öğren veya öğrendiklerini tekrar et.',
                       style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 24),
+                    FutureBuilder<CategoryHubSnapshot>(
+                      future: _categorySnapshot,
+                      builder: (context, snapshot) {
+                        final data = snapshot.data;
+                        if (data == null &&
+                            snapshot.connectionState != ConnectionState.done) {
+                          return const _NewWordsLoadingCard();
+                        }
+                        final safeData =
+                            data ??
+                            const CategoryHubSnapshot(
+                              progressByCategoryId: {},
+                              recentCategories: [],
+                            );
+                        return _NewWordsCard(
+                          snapshot: safeData,
+                          categoryAccessService: widget.categoryAccessService,
+                          onContinue: _openCategory,
+                          onSelectCategory: () =>
+                              _showCategorySelection(safeData),
+                        );
+                      },
                     ),
                     const SizedBox(height: 24),
                     _LearningSummary(snapshot: _snapshot),
                     const SizedBox(height: 24),
+                    Text(
+                      'Çalışma ve Tekrar',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     _StudyCard(
                       key: const ValueKey('learning-filter-repeat'),
                       icon: Icons.replay_rounded,
@@ -205,6 +292,116 @@ class _LearningSummary extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+class _NewWordsLoadingCard extends StatelessWidget {
+  const _NewWordsLoadingCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return const GlassSurface(
+      enableBlur: true,
+      child: Padding(
+        padding: AppDimensions.cardPadding,
+        child: LinearProgressIndicator(),
+      ),
+    );
+  }
+}
+
+class _NewWordsCard extends StatelessWidget {
+  const _NewWordsCard({
+    required this.snapshot,
+    required this.categoryAccessService,
+    required this.onContinue,
+    required this.onSelectCategory,
+  });
+
+  final CategoryHubSnapshot snapshot;
+  final CategoryAccessService? categoryAccessService;
+  final ValueChanged<LearningCategory> onContinue;
+  final VoidCallback onSelectCategory;
+
+  @override
+  Widget build(BuildContext context) {
+    final category = _lastOpenCategory();
+    final progress = category == null
+        ? null
+        : snapshot.progressFor(category.id);
+    final learned = progress?.learnedWordCount ?? 0;
+    final total = progress?.totalWordCount ?? category?.words.length ?? 0;
+    final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return GlassSurface(
+      enableBlur: true,
+      padding: EdgeInsets.zero,
+      child: Card(
+        color: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        child: Padding(
+          padding: AppDimensions.cardPadding,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Yeni Kelimeler Öğren',
+                style: textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                category == null
+                    ? 'Başlamak için açık bir kategori seç.'
+                    : 'Kaldığın yerden devam et · ${category.title}',
+              ),
+              if (category != null) ...[
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(child: Text('$learned / $total kelime')),
+                    Text(
+                      '%${total == 0 ? 0 : (learned / total * 100).round()}',
+                      style: textTheme.labelLarge?.copyWith(
+                        color: colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  if (category != null)
+                    FilledButton.icon(
+                      onPressed: () => onContinue(category),
+                      icon: const Icon(Icons.play_arrow_rounded),
+                      label: const Text('Devam Et'),
+                    ),
+                  OutlinedButton.icon(
+                    onPressed: onSelectCategory,
+                    icon: const Icon(Icons.grid_view_rounded),
+                    label: const Text('Kategori Seç'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  LearningCategory? _lastOpenCategory() {
+    for (final category in snapshot.recentCategories) {
+      if (categoryAccessService?.canOpen(category) ?? true) return category;
+    }
+    return null;
   }
 }
 

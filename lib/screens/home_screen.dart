@@ -187,6 +187,8 @@ class _HomeScreenState extends State<HomeScreen> {
           streakService: streakService,
           xpService: xpService,
           settingsService: widget.settingsService,
+          quizStore: widget.quizStore,
+          statisticsService: widget.statisticsService,
           achievementService: widget.achievementService,
           dailyReminderService: widget.dailyReminderService,
           categoryAccessService: widget.categoryAccessService,

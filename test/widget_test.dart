@@ -3406,6 +3406,8 @@ void main() {
     expect(find.byType(GlassBackground), findsOneWidget);
     expect(find.byType(GlassSurface), findsWidgets);
     expect(find.text('Öğrenme Merkezi'), findsOneWidget);
+    expect(find.text('Yeni Kelimeler Öğren'), findsOneWidget);
+    expect(find.text('Çalışma ve Tekrar'), findsOneWidget);
     expect(find.text('Çalışma zamanı gelen kelimeler'), findsOneWidget);
     expect(find.text('Toplam kelime'), findsOneWidget);
     expect(find.text('Favoriler'), findsOneWidget);
@@ -3462,6 +3464,36 @@ void main() {
             .dy,
       ),
     );
+  });
+
+  testWidgets('Öğrenme Merkezi kategori seçimi ve devam akışını kullanır', (
+    tester,
+  ) async {
+    final quizStorage = FakeQuizStorage();
+    final xpStorage = FakeXpStorage();
+    final quizStore = FakeQuizStore(quizStorage, xpStorage);
+    await quizStore.saveCompletedQuiz(
+      categoryId: 'foods',
+      correctCount: 6,
+      totalQuestions: 10,
+      scorePercent: 60,
+      completedAt: DateTime.utc(2026, 7, 20),
+    );
+
+    await pumpKelimoApp(tester, quizStorage: quizStorage);
+    await openLearningCenter(tester);
+
+    expect(find.text('Kaldığın yerden devam et · Yiyecekler'), findsOneWidget);
+    await tester.tap(find.text('Devam Et'));
+    await tester.pumpAndSettle();
+    expect(find.byType(CategoryScreen), findsOneWidget);
+    expect(find.text('Yiyecekler'), findsWidgets);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Kategori Seç'));
+    await tester.pumpAndSettle();
+    expect(find.byType(CategorySelectionScreen), findsOneWidget);
   });
 
   testWidgets('Öğrenme Merkezi filtreleri kullanıcı dostu durumları gösterir', (
@@ -3667,6 +3699,14 @@ void main() {
     addTearDown(streakService.dispose);
     final xpService = await createXpService();
     addTearDown(xpService.dispose);
+    final quizStore = FakeQuizStore(FakeQuizStorage(), FakeXpStorage());
+    final statisticsService = createStatisticsService(
+      streakService: streakService,
+      xpService: xpService,
+      wordProgressStore: store,
+      quizStore: quizStore,
+    );
+    addTearDown(statisticsService.dispose);
     final settingsService = await createSettingsService();
     addTearDown(settingsService.dispose);
     await tester.pumpWidget(
@@ -3684,6 +3724,8 @@ void main() {
           streakService: streakService,
           xpService: xpService,
           settingsService: settingsService,
+          quizStore: quizStore,
+          statisticsService: statisticsService,
         ),
       ),
     );
@@ -4522,6 +4564,7 @@ void main() {
     await tester.tap(find.text('Öğrenmeye Devam Et'));
     await tester.pumpAndSettle();
     expect(find.byType(LearningCenterScreen), findsOneWidget);
+    expect(find.text('Yeni Kelimeler Öğren'), findsOneWidget);
   });
 
   testWidgets(
