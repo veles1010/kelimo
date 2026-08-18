@@ -62,10 +62,18 @@ class LocalNotificationService implements NotificationService {
     timezone_data.initializeTimeZones();
     try {
       final localTimezone = await FlutterTimezone.getLocalTimezone();
-      timezone.setLocalLocation(timezone.getLocation(localTimezone.identifier));
-      debugPrint('Algılanan cihaz saat dilimi: ${localTimezone.identifier}');
+      final location = resolveTimezoneLocation(localTimezone.identifier);
+      timezone.setLocalLocation(location);
+      debugPrint(
+        'Algılanan cihaz saat dilimi: ${localTimezone.identifier} | '
+        'Seçilen konum: ${location.name}',
+      );
     } catch (error, stackTrace) {
-      debugPrint('Yerel saat dilimi belirlenemedi: $error\n$stackTrace');
+      timezone.setLocalLocation(timezone.UTC);
+      debugPrint(
+        'Yerel saat dilimi belirlenemedi: $error\n$stackTrace\n'
+        'Seçilen konum: ${timezone.UTC.name}',
+      );
     }
 
     const initializationSettings = InitializationSettings(
@@ -272,6 +280,23 @@ class LocalNotificationService implements NotificationService {
 
   @override
   void dispose() => _payloadController.close();
+}
+
+const _utcEquivalentTimezoneIdentifiers = {'GMT', 'UTC', 'ETC/UTC'};
+
+timezone.Location resolveTimezoneLocation(String identifier) {
+  final normalizedIdentifier = identifier.trim();
+  if (_utcEquivalentTimezoneIdentifiers.contains(
+    normalizedIdentifier.toUpperCase(),
+  )) {
+    return timezone.UTC;
+  }
+
+  try {
+    return timezone.getLocation(normalizedIdentifier);
+  } catch (_) {
+    return timezone.UTC;
+  }
 }
 
 timezone.TZDateTime nextDailyReminderTime({

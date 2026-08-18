@@ -19,6 +19,22 @@ void main() {
     expect(formatReminderTime24Hour(20, 0), '20:00');
   });
 
+  test('Geçerli IANA saat dilimi kimliğini korur', () {
+    final location = resolveTimezoneLocation('Europe/Istanbul');
+
+    expect(location.name, 'Europe/Istanbul');
+  });
+
+  test('UTC eşdeğeri kimlikleri UTC konumuna normalize eder', () {
+    for (final identifier in ['GMT', 'UTC', 'Etc/UTC']) {
+      expect(resolveTimezoneLocation(identifier), same(timezone.UTC));
+    }
+  });
+
+  test('Geçersiz saat dilimi kimliği UTC konumuna düşer', () {
+    expect(resolveTimezoneLocation('Unknown/Timezone'), same(timezone.UTC));
+  });
+
   test('Gelecekteki bugünkü saat aynı güne planlanır', () {
     final now = timezone.TZDateTime(istanbul, 2026, 7, 17, 0, 10);
     final scheduled = nextDailyReminderTime(
