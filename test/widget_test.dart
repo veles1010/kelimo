@@ -27,7 +27,6 @@ import 'package:kelimo/models/word_progress.dart';
 import 'package:kelimo/models/xp_state.dart';
 import 'package:kelimo/models/ad_display_state.dart';
 import 'package:kelimo/models/category_unlock.dart';
-import 'package:kelimo/models/rewarded_bonus.dart';
 import 'package:kelimo/repositories/daily_progress_repository.dart';
 import 'package:kelimo/repositories/achievement_repository.dart';
 import 'package:kelimo/repositories/data_reset_repository.dart';
@@ -63,7 +62,6 @@ import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/services/interstitial_ad_service.dart';
-import 'package:kelimo/services/rewarded_ad_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 import 'package:kelimo/utils/turkish_case.dart';
 import 'package:kelimo/widgets/scale_down_single_line_text.dart';
@@ -331,40 +329,6 @@ class FakeInterstitialAdService extends InterstitialAdService {
   void setForeground(bool isForeground) {
     foreground = isForeground;
     notifyListeners();
-  }
-}
-
-class FakeRewardedAdService extends RewardedAdService {
-  bool ready = true;
-  bool enabled = true;
-  bool loading = false;
-  bool waitingForRetry = false;
-  Duration? retryDelay;
-  int preloadCalls = 0;
-  int showCalls = 0;
-  RewardedAdResult result = const RewardedAdResult(
-    outcome: RewardedAdOutcome.rewarded,
-    claimId: 'widget-reward',
-  );
-
-  @override
-  bool get isEnabled => enabled;
-  @override
-  bool get isLoading => loading;
-  @override
-  bool get isWaitingForRetry => waitingForRetry;
-  @override
-  Duration? get retryAfter => retryDelay;
-  @override
-  bool get isReady => ready;
-  @override
-  Future<void> initialize() async {}
-  @override
-  Future<void> preload() async => preloadCalls++;
-  @override
-  Future<RewardedAdResult> show() async {
-    showCalls++;
-    return result;
   }
 }
 
@@ -907,7 +871,6 @@ Future<void> pumpKelimoApp(
   NotificationService? notificationService,
   AppNavigationController? navigationController,
   InterstitialAdService? interstitialAdService,
-  RewardedAdService? rewardedAdService,
 }) async {
   final sharedXpStorage = xpStorage ?? FakeXpStorage();
   final notifications = notificationService ?? FakeNotificationService();
@@ -938,7 +901,6 @@ Future<void> pumpKelimoApp(
       notificationService: notifications,
       navigationController: navigationController,
       interstitialAdService: ads,
-      rewardedAdService: rewardedAdService,
       categoryUnlockStore: MemoryCategoryUnlockStore(
         CategoryCatalog.categories.map(
           (category) => CategoryUnlock(
@@ -1269,7 +1231,6 @@ void main() {
       'category_unlocks',
       'word_xp_claims',
       'quiz_xp_claims',
-      'rewarded_xp_claims',
     ]);
     expect(
       DatabaseService.createCategoryUnlocksTableSql,
@@ -3331,7 +3292,11 @@ void main() {
     expect(find.text('İlk kategorini seç'), findsOneWidget);
     expect(find.text('Devam Et'), findsOneWidget);
     expect(find.text('Tüm Kategorileri Gör · 36'), findsOneWidget);
-    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('glass-bottom-navigation')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('daily-xp-bonus-card')), findsNothing);
   });
 
   testWidgets('kategori seçim ekranı açılır ve arama listeyi filtreler', (
@@ -4452,121 +4417,6 @@ void main() {
     expect(levelProgress.value, 0.005);
   });
 
-  testWidgets('günlük XP bonus kartı onay sonrası ödülü anında gösterir', (
-    tester,
-  ) async {
-    final xpStorage = FakeXpStorage();
-    final rewardedAds = FakeRewardedAdService();
-    await pumpKelimoApp(
-      tester,
-      xpStorage: xpStorage,
-      rewardedAdService: rewardedAds,
-    );
-
-    final card = find.byKey(const ValueKey('daily-xp-bonus-card'));
-    await tester.scrollUntilVisible(card, 250);
-    expect(find.text('Günlük XP Bonusu'), findsOneWidget);
-    expect(find.text('Bugün 2 hakkın kaldı'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('watch-rewarded-ad')));
-    await tester.pumpAndSettle();
-    expect(
-      find.text('Reklamı tamamladığında +15 XP kazanırsın.'),
-      findsOneWidget,
-    );
-    await tester.tap(find.text('Reklamı izle'));
-    await tester.pumpAndSettle();
-
-    expect(rewardedAds.showCalls, 1);
-    expect(xpStorage.state.totalXp, 15);
-    expect(find.text('+15 XP kazandın!'), findsOneWidget);
-    expect(find.text('Bugün 1 hakkın kaldı'), findsOneWidget);
-  });
-
-  testWidgets(
-    'günlük XP bonusu yükleme, backoff, hazır ve pasif durumlarını ayırır',
-    (tester) async {
-      final rewardedAds = FakeRewardedAdService();
-      await pumpKelimoApp(tester, rewardedAdService: rewardedAds);
-
-      final card = find.byKey(const ValueKey('daily-xp-bonus-card'));
-      await tester.scrollUntilVisible(card, 250);
-      rewardedAds
-        ..loading = true
-        ..ready = false
-        ..notifyListeners();
-      await tester.pump();
-      expect(find.byKey(const ValueKey('rewarded-ad-loading')), findsOneWidget);
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
-
-      rewardedAds
-        ..loading = false
-        ..waitingForRetry = true
-        ..retryDelay = const Duration(seconds: 15)
-        ..ready = false
-        ..notifyListeners();
-      await tester.pump();
-      expect(find.byKey(const ValueKey('rewarded-ad-loading')), findsNothing);
-      expect(find.byKey(const ValueKey('rewarded-ad-backoff')), findsOneWidget);
-      expect(
-        find.text('Reklam kısa süre sonra yeniden denenecek'),
-        findsOneWidget,
-      );
-      await tester.tap(find.byKey(const ValueKey('rewarded-ad-backoff')));
-      await tester.pump();
-      expect(rewardedAds.preloadCalls, 0);
-
-      rewardedAds
-        ..waitingForRetry = false
-        ..retryDelay = null
-        ..ready = true
-        ..notifyListeners();
-      await tester.pump();
-      expect(find.byKey(const ValueKey('watch-rewarded-ad')), findsOneWidget);
-      expect(find.text('Reklamı izle · +15 XP'), findsOneWidget);
-
-      rewardedAds
-        ..ready = false
-        ..notifyListeners();
-      await tester.pump();
-      expect(
-        find.byKey(const ValueKey('rewarded-ad-unavailable')),
-        findsOneWidget,
-      );
-      expect(find.text('Reklam şu anda hazır değil'), findsOneWidget);
-    },
-  );
-
-  testWidgets('günlük XP bonusu iki ödülden sonra tamamlanmış görünür', (
-    tester,
-  ) async {
-    final rewardedAds = FakeRewardedAdService()
-      ..result = const RewardedAdResult(
-        outcome: RewardedAdOutcome.rewarded,
-        claimId: 'first-reward',
-      );
-    await pumpKelimoApp(tester, rewardedAdService: rewardedAds);
-    final card = find.byKey(const ValueKey('daily-xp-bonus-card'));
-    await tester.scrollUntilVisible(card, 250);
-
-    await tester.tap(find.byKey(const ValueKey('watch-rewarded-ad')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Reklamı izle'));
-    await tester.pumpAndSettle();
-
-    rewardedAds.result = const RewardedAdResult(
-      outcome: RewardedAdOutcome.rewarded,
-      claimId: 'second-reward',
-    );
-    await tester.tap(find.byKey(const ValueKey('watch-rewarded-ad')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Reklamı izle'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Bugünkü bonuslarını topladın'), findsOneWidget);
-    expect(find.byKey(const ValueKey('rewarded-ad-exhausted')), findsOneWidget);
-    expect(find.byKey(const ValueKey('watch-rewarded-ad')), findsNothing);
-  });
-
   testWidgets(
     'Günlük görev kartı hedef üstü sayacı yalnızca görünümde sınırlar',
     (tester) async {
@@ -5022,16 +4872,80 @@ void main() {
     );
     expect(find.text('Devam Et'), findsOneWidget);
     expect(find.text('Tüm Kategorileri Gör · 36'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('bottom-nav-selection-indicator')),
+      findsOneWidget,
+    );
+    final firstPosition = tester.getTopLeft(
+      find.byKey(const ValueKey('bottom-nav-selection-indicator')),
+    );
 
-    await tester.tap(find.text('Öğren'));
+    await tester.tap(find.byKey(const ValueKey('bottom-nav-item-1')));
     await tester.pumpAndSettle();
     expect(find.text('Öğrenme Merkezi'), findsOneWidget);
+    final learningPosition = tester.getTopLeft(
+      find.byKey(const ValueKey('bottom-nav-selection-indicator')),
+    );
+    expect(learningPosition.dx, greaterThan(firstPosition.dx));
 
-    await tester.tap(find.text('Ana Sayfa'));
+    await tester.tap(find.byKey(const ValueKey('bottom-nav-item-0')));
     await tester.pumpAndSettle();
     expect(find.text('Merhaba!'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'cam alt navigasyon hızlı geçiş ve azaltılmış animasyonda tutarlı kalır',
+    (tester) async {
+      addTearDown(
+        tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+      );
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.binding.setSurfaceSize(const Size(320, 568));
+      tester.platformDispatcher.accessibilityFeaturesTestValue =
+          const FakeAccessibilityFeatures(disableAnimations: true);
+      var selectedIndex = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: MediaQuery(
+            data: const MediaQueryData(textScaler: TextScaler.linear(1.5)),
+            child: StatefulBuilder(
+              builder: (context, setState) => Scaffold(
+                bottomNavigationBar: GlassBottomNavigation(
+                  selectedIndex: selectedIndex,
+                  onDestinationSelected: (index) =>
+                      setState(() => selectedIndex = index),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('bottom-nav-item-1')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('bottom-nav-item-2')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('bottom-nav-item-0')));
+      await tester.pump();
+
+      expect(selectedIndex, 0);
+      final selectedPosition = tester.getTopLeft(
+        find.byKey(const ValueKey('bottom-nav-selection-indicator')),
+      );
+      expect(selectedPosition.dx, lessThan(20));
+      await tester.tap(find.byKey(const ValueKey('bottom-nav-item-0')));
+      await tester.pump();
+      expect(
+        tester.getTopLeft(
+          find.byKey(const ValueKey('bottom-nav-selection-indicator')),
+        ),
+        selectedPosition,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('Kategori Seç cam katmanı koyu temada aramayı korur', (
     tester,

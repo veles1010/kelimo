@@ -11,6 +11,8 @@ class GlassSurface extends StatelessWidget {
     this.enableBlur = true,
     this.showHighlight = true,
     this.showShadow = true,
+    this.fillColor,
+    this.borderColor,
     super.key,
   });
 
@@ -21,15 +23,21 @@ class GlassSurface extends StatelessWidget {
   final bool enableBlur;
   final bool showHighlight;
   final bool showShadow;
+  final Color? fillColor;
+  final Color? borderColor;
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final fill = isDark ? const Color(0xB31B2B38) : const Color(0xB8FFFFFF);
+    final fill =
+        fillColor ??
+        (isDark ? const Color(0xB31B2B38) : const Color(0xB8FFFFFF));
     final highlight = isDark
         ? const Color(0x1FFFFFFF)
         : const Color(0x8AFFFFFF);
-    final border = isDark ? const Color(0x35FFFFFF) : const Color(0xA6FFFFFF);
+    final border =
+        borderColor ??
+        (isDark ? const Color(0x35FFFFFF) : const Color(0xA6FFFFFF));
 
     Widget content = DecoratedBox(
       decoration: BoxDecoration(

@@ -25,8 +25,6 @@ import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/services/interstitial_ad_service.dart';
 import 'package:kelimo/services/category_access_service.dart';
-import 'package:kelimo/services/rewarded_ad_service.dart';
-import 'package:kelimo/services/rewarded_bonus_service.dart';
 import 'package:kelimo/screens/onboarding_screen.dart';
 import 'package:kelimo/theme/app_theme.dart';
 
@@ -48,7 +46,6 @@ class KelimoApp extends StatefulWidget {
     this.navigationController,
     this.interstitialAdService,
     this.categoryUnlockStore,
-    this.rewardedAdService,
   });
 
   final WordProgressStore? wordProgressStore;
@@ -62,7 +59,6 @@ class KelimoApp extends StatefulWidget {
   final AppNavigationController? navigationController;
   final InterstitialAdService? interstitialAdService;
   final CategoryUnlockStore? categoryUnlockStore;
-  final RewardedAdService? rewardedAdService;
 
   @override
   State<KelimoApp> createState() => _KelimoAppState();
@@ -86,7 +82,6 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
   late final bool _ownsNavigationController;
   late final InterstitialAdService _interstitialAdService;
   late final CategoryAccessService _categoryAccessService;
-  late final RewardedBonusService _rewardedBonusService;
   late final bool _ownsInterstitialAdService;
   late final StreamSubscription<String> _notificationPayloadSubscription;
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
@@ -143,19 +138,6 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
     _interstitialAdService =
         widget.interstitialAdService ??
         GoogleInterstitialAdService(AdFrequencyRepository(databaseService));
-    final rewardedAdService =
-        widget.rewardedAdService ??
-        (widget.xpStore == null
-            ? GoogleRewardedAdService(_interstitialAdService)
-            : DisabledRewardedAdService());
-    final rewardedXpStore = xpStore is RewardedXpStore
-        ? xpStore as RewardedXpStore
-        : MemoryRewardedXpStore();
-    _rewardedBonusService = RewardedBonusService(
-      repository: rewardedXpStore,
-      adService: rewardedAdService,
-      xpService: _xpService,
-    );
     _ownsNavigationController = widget.navigationController == null;
     _navigationController =
         widget.navigationController ?? AppNavigationController();
@@ -182,7 +164,6 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
       achievementService: _achievementService,
       dailyReminderService: _dailyReminderService,
       categoryAccessService: _categoryAccessService,
-      rewardedBonusService: _rewardedBonusService,
     );
     _initialization = _initializePersistence();
   }
@@ -204,11 +185,7 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
     await _categoryAccessService.initialize();
     await _achievementService.initialize();
     await _dailyReminderService.initialize();
-    if (_settingsService.onboardingCompleted) {
-      await _initializeAdsOnce();
-    } else {
-      await _rewardedBonusService.refresh();
-    }
+    if (_settingsService.onboardingCompleted) await _initializeAdsOnce();
     try {
       _navigationController.handlePayload(
         await _dailyReminderService.getLaunchPayload(),
@@ -224,7 +201,6 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
     if (_adsInitialized) return;
     _adsInitialized = true;
     await _interstitialAdService.initialize();
-    await _rewardedBonusService.initialize();
   }
 
   Future<void> _completeInitialOnboarding() async {
@@ -238,8 +214,6 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       unawaited(_streakService.refresh());
       unawaited(_dailyReminderService.refreshSchedule());
-      unawaited(_rewardedBonusService.refresh());
-      unawaited(_rewardedBonusService.adService.preload());
     }
   }
 
@@ -250,7 +224,6 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
     _streakService.dispose();
     _xpService.dispose();
     _categoryAccessService.dispose();
-    _rewardedBonusService.dispose();
     _statisticsService.dispose();
     _settingsService.dispose();
     _dataManagementService.dispose();
@@ -303,7 +276,6 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
               navigationController: _navigationController,
               interstitialAdService: _interstitialAdService,
               categoryAccessService: _categoryAccessService,
-              rewardedBonusService: _rewardedBonusService,
             );
           },
         ),

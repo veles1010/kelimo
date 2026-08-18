@@ -13,7 +13,6 @@ import 'package:kelimo/screens/learning_center_screen.dart';
 import 'package:kelimo/screens/progress_screen.dart';
 import 'package:kelimo/screens/settings_screen.dart';
 import 'package:kelimo/screens/onboarding_screen.dart';
-import 'package:kelimo/models/rewarded_bonus.dart';
 import 'package:kelimo/services/data_management_service.dart';
 import 'package:kelimo/services/achievement_service.dart';
 import 'package:kelimo/services/app_navigation_controller.dart';
@@ -26,7 +25,6 @@ import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/services/interstitial_ad_service.dart';
 import 'package:kelimo/services/category_access_service.dart';
-import 'package:kelimo/services/rewarded_bonus_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 import 'package:kelimo/widgets/glass_surface.dart';
 
@@ -45,7 +43,6 @@ class HomeScreen extends StatefulWidget {
     this.navigationController,
     this.interstitialAdService,
     this.categoryAccessService,
-    this.rewardedBonusService,
     super.key,
   });
 
@@ -62,7 +59,6 @@ class HomeScreen extends StatefulWidget {
   final AppNavigationController? navigationController;
   final InterstitialAdService? interstitialAdService;
   final CategoryAccessService? categoryAccessService;
-  final RewardedBonusService? rewardedBonusService;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -249,12 +245,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                 );
                               },
                             ),
-                            if (widget.rewardedBonusService != null) ...[
-                              const SizedBox(height: 16),
-                              _RewardedBonusCard(
-                                service: widget.rewardedBonusService!,
-                              ),
-                            ],
                             const SizedBox(height: 20),
                             _ProgressCards(
                               streakService: streakService,
@@ -272,155 +262,14 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       },
-      bottomNavigationBar: _GlassBottomNavigation(
+      bottomNavigationBar: GlassBottomNavigation(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (index) {
-          if (index >= 0 && index <= 3) {
+          if (index >= 0 && index <= 3 && index != _selectedIndex) {
             setState(() => _selectedIndex = index);
           }
         },
       ),
-    );
-  }
-}
-
-class _RewardedBonusCard extends StatelessWidget {
-  const _RewardedBonusCard({required this.service});
-
-  final RewardedBonusService service;
-
-  Future<void> _watch(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Günlük XP Bonusu'),
-        content: const Text('Reklamı tamamladığında +15 XP kazanırsın.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Vazgeç'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Reklamı izle'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !context.mounted) return;
-    final result = await service.watchAd();
-    if (!context.mounted) return;
-    final message = switch (result) {
-      RewardedBonusResult.awarded => '+15 XP kazandın!',
-      RewardedBonusResult.exhausted => 'Bugünkü bonuslarını topladın',
-      RewardedBonusResult.unavailable =>
-        'Reklam şu anda hazır değil. Daha sonra tekrar dene.',
-      RewardedBonusResult.dismissed => 'Reklam tamamlanmadı, XP değişmedi.',
-      RewardedBonusResult.failed => 'Bonus şu anda verilemedi.',
-    };
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: service,
-      builder: (context, _) {
-        final colors = Theme.of(context).colorScheme;
-        final exhausted = service.isExhausted;
-        final enabled = service.isEnabled;
-        final loading = service.isAdLoading;
-        final waitingForRetry = service.isWaitingForRetry;
-        final ready = enabled && service.isAdReady && !service.isBusy;
-        final description = exhausted
-            ? 'Bugünkü bonuslarını topladın'
-            : loading
-            ? 'Reklam hazırlanıyor…'
-            : waitingForRetry
-            ? 'Reklam kısa süre sonra yeniden denenecek'
-            : ready
-            ? 'Reklamı izle · +15 XP'
-            : !enabled
-            ? 'Bonus bu sürümde kullanılamıyor'
-            : 'Reklam şu anda hazır değil';
-        return GlassSurface(
-          key: const ValueKey('daily-xp-bonus-card'),
-          enableBlur: false,
-          borderRadius: BorderRadius.circular(22),
-          padding: const EdgeInsets.all(18),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: colors.secondaryContainer,
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: Icon(
-                  Icons.ondemand_video_rounded,
-                  color: colors.secondary,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Günlük XP Bonusu',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(description),
-                    if (!exhausted && enabled) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        'Bugün ${service.remainingCount} hakkın kaldı',
-                        style: Theme.of(context).textTheme.labelMedium,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              if (loading)
-                const SizedBox.square(
-                  key: ValueKey('rewarded-ad-loading'),
-                  dimension: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2.5),
-                )
-              else if (waitingForRetry)
-                const Icon(
-                  Icons.schedule_rounded,
-                  key: ValueKey('rewarded-ad-backoff'),
-                )
-              else if (exhausted)
-                const Icon(
-                  Icons.task_alt_rounded,
-                  key: ValueKey('rewarded-ad-exhausted'),
-                )
-              else if (!enabled || !service.isAdReady || service.isBusy)
-                const Icon(
-                  Icons.info_outline_rounded,
-                  key: ValueKey('rewarded-ad-unavailable'),
-                )
-              else
-                IconButton.filledTonal(
-                  key: const ValueKey('watch-rewarded-ad'),
-                  tooltip: 'Reklam izleyerek 15 XP kazan',
-                  onPressed: !ready ? null : () => _watch(context),
-                  icon: const Icon(Icons.play_arrow_rounded),
-                ),
-            ],
-          ),
-        );
-      },
     );
   }
 }
@@ -1023,10 +872,11 @@ class _GlassCard extends StatelessWidget {
   }
 }
 
-class _GlassBottomNavigation extends StatelessWidget {
-  const _GlassBottomNavigation({
+class GlassBottomNavigation extends StatelessWidget {
+  const GlassBottomNavigation({
     required this.selectedIndex,
     required this.onDestinationSelected,
+    super.key,
   });
 
   final int selectedIndex;
@@ -1034,6 +884,33 @@ class _GlassBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final disableAnimations = MediaQuery.of(context).disableAnimations;
+    const destinations = [
+      _BottomNavigationDestination(
+        label: 'Ana Sayfa',
+        icon: Icons.home_outlined,
+        selectedIcon: Icons.home_rounded,
+      ),
+      _BottomNavigationDestination(
+        label: 'Öğren',
+        icon: Icons.school_outlined,
+        selectedIcon: Icons.school_rounded,
+      ),
+      _BottomNavigationDestination(
+        label: 'İlerleme',
+        icon: Icons.bar_chart_outlined,
+        selectedIcon: Icons.bar_chart_rounded,
+      ),
+      _BottomNavigationDestination(
+        label: 'Ayarlar',
+        icon: Icons.settings_outlined,
+        selectedIcon: Icons.settings_rounded,
+      ),
+    ];
+    final duration = disableAnimations
+        ? Duration.zero
+        : const Duration(milliseconds: 320);
     return SafeArea(
       top: false,
       minimum: const EdgeInsets.fromLTRB(12, 4, 12, 10),
@@ -1041,37 +918,119 @@ class _GlassBottomNavigation extends StatelessWidget {
         key: const ValueKey('glass-bottom-navigation'),
         borderRadius: BorderRadius.circular(30),
         blurSigma: 18,
-        padding: EdgeInsets.zero,
-        child: NavigationBar(
-          height: 70,
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          selectedIndex: selectedIndex,
-          onDestinationSelected: onDestinationSelected,
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home_rounded),
-              label: 'Ana Sayfa',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.school_outlined),
-              selectedIcon: Icon(Icons.school_rounded),
-              label: 'Öğren',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.bar_chart_outlined),
-              selectedIcon: Icon(Icons.bar_chart_rounded),
-              label: 'İlerleme',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.settings_outlined),
-              selectedIcon: Icon(Icons.settings_rounded),
-              label: 'Ayarlar',
-            ),
-          ],
+        padding: const EdgeInsets.all(4),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final itemWidth = constraints.maxWidth / destinations.length;
+            return SizedBox(
+              height: 70,
+              child: Stack(
+                children: [
+                  AnimatedPositioned(
+                    key: const ValueKey('bottom-nav-selection-indicator'),
+                    duration: duration,
+                    curve: Curves.easeOutCubic,
+                    left: selectedIndex * itemWidth,
+                    top: 3,
+                    bottom: 3,
+                    width: itemWidth,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 3),
+                      child: GlassSurface(
+                        enableBlur: true,
+                        blurSigma: 10,
+                        borderRadius: BorderRadius.circular(22),
+                        padding: EdgeInsets.zero,
+                        fillColor: colorScheme.primary.withValues(alpha: 0.22),
+                        borderColor: colorScheme.primary.withValues(
+                          alpha: 0.36,
+                        ),
+                        child: const SizedBox.expand(),
+                      ),
+                    ),
+                  ),
+                  Row(
+                    children: List.generate(destinations.length, (index) {
+                      final destination = destinations[index];
+                      final selected = index == selectedIndex;
+                      return Expanded(
+                        child: Semantics(
+                          button: true,
+                          selected: selected,
+                          label: destination.label,
+                          child: InkWell(
+                            key: ValueKey('bottom-nav-item-$index'),
+                            borderRadius: BorderRadius.circular(22),
+                            onTap: selected
+                                ? null
+                                : () => onDestinationSelected(index),
+                            child: Center(
+                              child: AnimatedScale(
+                                duration: duration,
+                                curve: Curves.easeOutCubic,
+                                scale: selected ? 1 : 0.94,
+                                child: AnimatedOpacity(
+                                  duration: duration,
+                                  opacity: selected ? 1 : 0.72,
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        selected
+                                            ? destination.selectedIcon
+                                            : destination.icon,
+                                        color: selected
+                                            ? colorScheme.onPrimaryContainer
+                                            : colorScheme.onSurfaceVariant,
+                                      ),
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        destination.label,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        textAlign: TextAlign.center,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .labelSmall
+                                            ?.copyWith(
+                                              color: selected
+                                                  ? colorScheme
+                                                        .onPrimaryContainer
+                                                  : colorScheme
+                                                        .onSurfaceVariant,
+                                              fontWeight: selected
+                                                  ? FontWeight.w700
+                                                  : FontWeight.w500,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                ],
+              ),
+            );
+          },
         ),
       ),
     );
   }
+}
+
+class _BottomNavigationDestination {
+  const _BottomNavigationDestination({
+    required this.label,
+    required this.icon,
+    required this.selectedIcon,
+  });
+
+  final String label;
+  final IconData icon;
+  final IconData selectedIcon;
 }

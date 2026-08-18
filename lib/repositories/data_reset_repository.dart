@@ -21,7 +21,6 @@ class DataResetRepository implements DataResetStore {
     'category_unlocks',
     'word_xp_claims',
     'quiz_xp_claims',
-    'rewarded_xp_claims',
   ];
 
   final DatabaseService _databaseService;
