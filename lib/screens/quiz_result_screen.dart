@@ -37,6 +37,14 @@ String formatQuizDuration(Duration duration) {
   return '$minutes dk $seconds sn';
 }
 
+String formatQuizTotalXp({
+  required int totalXpBefore,
+  required int totalXpAfter,
+}) {
+  if (totalXpAfter <= totalXpBefore) return 'Toplam XP: $totalXpAfter';
+  return 'Toplam XP: $totalXpBefore → $totalXpAfter';
+}
+
 class QuizResultScreen extends StatefulWidget {
   QuizResultScreen({
     super.key,
@@ -45,6 +53,8 @@ class QuizResultScreen extends StatefulWidget {
     required this.totalQuestionCount,
     required this.successPercentage,
     required this.xpAwarded,
+    required this.totalXpBefore,
+    required this.totalXpAfter,
     required this.longestCorrectStreak,
     required this.elapsedDuration,
     required this.onRetry,
@@ -56,6 +66,8 @@ class QuizResultScreen extends StatefulWidget {
        assert(correctAnswerCount <= totalQuestionCount),
        assert(successPercentage >= 0 && successPercentage <= 100),
        assert(xpAwarded >= 0),
+       assert(totalXpBefore >= 0),
+       assert(totalXpAfter >= totalXpBefore),
        assert(longestCorrectStreak >= 0),
        assert(longestCorrectStreak <= correctAnswerCount),
        assert(!elapsedDuration.isNegative);
@@ -65,6 +77,8 @@ class QuizResultScreen extends StatefulWidget {
   final int totalQuestionCount;
   final int successPercentage;
   final int xpAwarded;
+  final int totalXpBefore;
+  final int totalXpAfter;
   final int longestCorrectStreak;
   final Duration elapsedDuration;
   final VoidCallback onRetry;
@@ -154,7 +168,10 @@ class _QuizResultScreenState extends State<QuizResultScreen> {
                       if (widget.xpAwarded > 0) ...[
                         const SizedBox(height: 12),
                         Text(
-                          '🏆 Kusursuz sonuç! +25 XP kazandın.',
+                          widget.successPercentage == 100
+                              ? '🏆 Kusursuz sonuç! '
+                                    '+${widget.xpAwarded} XP kazandın.'
+                              : '+${widget.xpAwarded} XP kazandın.',
                           textAlign: TextAlign.center,
                           style: textTheme.titleMedium?.copyWith(
                             color: Colors.amber.shade800,
@@ -162,6 +179,18 @@ class _QuizResultScreenState extends State<QuizResultScreen> {
                           ),
                         ),
                       ],
+                      const SizedBox(height: 8),
+                      Text(
+                        formatQuizTotalXp(
+                          totalXpBefore: widget.totalXpBefore,
+                          totalXpAfter: widget.totalXpAfter,
+                        ),
+                        textAlign: TextAlign.center,
+                        style: textTheme.titleMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       const SizedBox(height: 24),
                       _SummaryCards(
                         xpAwarded: widget.xpAwarded,

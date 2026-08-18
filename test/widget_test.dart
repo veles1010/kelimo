@@ -6270,7 +6270,7 @@ void main() {
   testWidgets('Düşük quiz sonucu kaydedilir fakat XP kazandırmaz', (
     tester,
   ) async {
-    final xpStorage = FakeXpStorage();
+    final xpStorage = FakeXpStorage(totalXp: 1275);
     final quizStorage = FakeQuizStorage();
     await pumpKelimoApp(tester, xpStorage: xpStorage, quizStorage: quizStorage);
     await openAnimalsCategory(tester);
@@ -6281,8 +6281,10 @@ void main() {
     expect(find.text('%90 başarı'), findsOneWidget);
     expect(find.text('0 XP'), findsOneWidget);
     expect(find.text('🏆 Kusursuz sonuç! +25 XP kazandın.'), findsNothing);
+    expect(find.text('Toplam XP: 1275'), findsOneWidget);
+    expect(find.text('Toplam XP: 1275 → 1275'), findsNothing);
     expect(quizStorage.attempts.single.xpAwarded, 0);
-    expect(xpStorage.state.totalXp, 0);
+    expect(xpStorage.state.totalXp, 1275);
   });
 
   testWidgets(
@@ -6299,6 +6301,9 @@ void main() {
       await tester.tap(find.text('Quiz Çöz'));
       await tester.pumpAndSettle();
       await completeQuiz(tester);
+
+      expect(find.text('🏆 Kusursuz sonuç! +25 XP kazandın.'), findsOneWidget);
+      expect(find.text('Toplam XP: 250 → 275'), findsOneWidget);
 
       await tester.ensureVisible(find.text('Ana Sayfa'));
       await tester.pumpAndSettle();
@@ -6334,6 +6339,8 @@ void main() {
         totalQuestionCount: 10,
         successPercentage: 80,
         xpAwarded: 0,
+        totalXpBefore: 0,
+        totalXpAfter: 0,
         longestCorrectStreak: 3,
         elapsedDuration: const Duration(seconds: 72),
         onRetry: () => selectedAction = 'retry',
@@ -6371,6 +6378,8 @@ void main() {
           totalQuestionCount: 10,
           successPercentage: 80,
           xpAwarded: 0,
+          totalXpBefore: 0,
+          totalXpAfter: 0,
           longestCorrectStreak: 4,
           elapsedDuration: const Duration(seconds: 42),
           onRetry: () {},
@@ -6382,6 +6391,33 @@ void main() {
 
     expect(find.text('Renkler Quizi Tamamlandı'), findsOneWidget);
     expect(find.text('Hayvanlar Quizi Tamamlandı'), findsNothing);
+  });
+
+  testWidgets('XP ödülü kusursuz olmayan sonuçta kusursuz mesajı göstermez', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: QuizResultScreen(
+          categoryName: 'Hayvanlar',
+          correctAnswerCount: 8,
+          totalQuestionCount: 10,
+          successPercentage: 80,
+          xpAwarded: 10,
+          totalXpBefore: 90,
+          totalXpAfter: 100,
+          longestCorrectStreak: 3,
+          elapsedDuration: const Duration(seconds: 42),
+          onRetry: () {},
+          onReturnToCategory: () {},
+          onReturnHome: () {},
+        ),
+      ),
+    );
+
+    expect(find.text('+10 XP kazandın.'), findsOneWidget);
+    expect(find.textContaining('Kusursuz sonuç'), findsNothing);
+    expect(find.text('Toplam XP: 90 → 100'), findsOneWidget);
   });
 
   testWidgets('Öğren akışı cam yüzeyleri koyu ve dar ekranda taşmaz', (
@@ -6405,6 +6441,8 @@ void main() {
           totalQuestionCount: 10,
           successPercentage: 80,
           xpAwarded: 0,
+          totalXpBefore: 0,
+          totalXpAfter: 0,
           longestCorrectStreak: 3,
           elapsedDuration: const Duration(seconds: 72),
           onRetry: () {},
@@ -6442,6 +6480,8 @@ void main() {
             totalQuestionCount: 10,
             successPercentage: 80,
             xpAwarded: 0,
+            totalXpBefore: 0,
+            totalXpAfter: 0,
             longestCorrectStreak: 3,
             elapsedDuration: const Duration(seconds: 30),
             interstitialAdService: ads,
@@ -6483,6 +6523,8 @@ void main() {
           totalQuestionCount: 10,
           successPercentage: 100,
           xpAwarded: 25,
+          totalXpBefore: 250,
+          totalXpAfter: 275,
           longestCorrectStreak: 10,
           elapsedDuration: const Duration(seconds: 30),
           interstitialAdService: ads,

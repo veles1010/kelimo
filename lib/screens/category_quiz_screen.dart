@@ -163,6 +163,9 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
             totalQuestionCount: _questionCount,
             successPercentage: successPercentage,
             xpAwarded: completion.attempt.xpAwarded,
+            totalXpBefore:
+                completion.xpState.totalXp - completion.attempt.xpAwarded,
+            totalXpAfter: completion.xpState.totalXp,
             longestCorrectStreak: _correctStreak.longest,
             elapsedDuration: elapsedDuration,
             interstitialAdService: widget.interstitialAdService,
