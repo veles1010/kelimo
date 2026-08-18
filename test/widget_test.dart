@@ -56,6 +56,7 @@ import 'package:kelimo/services/app_navigation_controller.dart';
 import 'package:kelimo/services/daily_reminder_service.dart';
 import 'package:kelimo/services/learning_engine.dart';
 import 'package:kelimo/services/learning_center_service.dart';
+import 'package:kelimo/services/category_access_service.dart';
 import 'package:kelimo/services/notification_service.dart';
 import 'package:kelimo/services/streak_service.dart';
 import 'package:kelimo/services/streak_calculator.dart';
@@ -820,6 +821,8 @@ createTestHomeScreen({
   required StatisticsService statisticsService,
   WordProgressStore? wordProgressStore,
   QuizStore? quizStore,
+  LearningCenterService? learningCenterService,
+  CategoryAccessService? categoryAccessService,
 }) async {
   final settingsService = await createSettingsService();
   final words = wordProgressStore ?? FakeWordProgressStore();
@@ -842,6 +845,8 @@ createTestHomeScreen({
       statisticsService: statisticsService,
       settingsService: settingsService,
       dataManagementService: dataManagementService,
+      learningCenterService: learningCenterService,
+      categoryAccessService: categoryAccessService,
     ),
     settingsService: settingsService,
   );
@@ -4385,6 +4390,173 @@ void main() {
     expect(find.text('5 / 5'), findsOneWidget);
     expect(find.text('Günlük hedef tamamlandı'), findsOneWidget);
   });
+
+  testWidgets('ana sayfa kategori açma hakkına günlük hedeften öncelik verir', (
+    tester,
+  ) async {
+    final streakService = StreakService(repository: FakeDailyProgressStore());
+    final xpService = await createXpService(totalXp: 100);
+    final wordStore = FakeWordProgressStore();
+    final quizStore = FakeQuizStore(FakeQuizStorage(), FakeXpStorage());
+    final access = CategoryAccessService(
+      repository: MemoryCategoryUnlockStore(),
+      wordProgressStore: wordStore,
+      quizStore: quizStore,
+      xpService: xpService,
+    );
+    addTearDown(streakService.dispose);
+    addTearDown(xpService.dispose);
+    addTearDown(access.dispose);
+    await streakService.initialize();
+    await access.initialize();
+    final statisticsService = createStatisticsService(
+      streakService: streakService,
+      xpService: xpService,
+      wordProgressStore: wordStore,
+      quizStore: quizStore,
+    );
+    addTearDown(statisticsService.dispose);
+    final home = await createTestHomeScreen(
+      streakService: streakService,
+      xpService: xpService,
+      statisticsService: statisticsService,
+      wordProgressStore: wordStore,
+      quizStore: quizStore,
+      categoryAccessService: access,
+    );
+    addTearDown(home.settingsService.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(theme: AppTheme.light, home: home.screen),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Kategori açma hakkın var'), findsOneWidget);
+    expect(find.text('Bugünkü hedef'), findsNothing);
+    await tester.tap(find.text('Kategorileri Gör'));
+    await tester.pumpAndSettle();
+    expect(find.byType(CategorySelectionScreen), findsOneWidget);
+  });
+
+  testWidgets('ana sayfa sonradan kazanılan ve harcanan krediye tepki verir', (
+    tester,
+  ) async {
+    final streakService = StreakService(repository: FakeDailyProgressStore());
+    final xpService = await createXpService();
+    final wordStore = FakeWordProgressStore();
+    final quizStore = FakeQuizStore(FakeQuizStorage(), FakeXpStorage());
+    final access = CategoryAccessService(
+      repository: MemoryCategoryUnlockStore(),
+      wordProgressStore: wordStore,
+      quizStore: quizStore,
+      xpService: xpService,
+    );
+    addTearDown(streakService.dispose);
+    addTearDown(xpService.dispose);
+    addTearDown(access.dispose);
+    await streakService.initialize();
+    await access.initialize();
+    final statisticsService = createStatisticsService(
+      streakService: streakService,
+      xpService: xpService,
+      wordProgressStore: wordStore,
+      quizStore: quizStore,
+    );
+    addTearDown(statisticsService.dispose);
+    final home = await createTestHomeScreen(
+      streakService: streakService,
+      xpService: xpService,
+      statisticsService: statisticsService,
+      wordProgressStore: wordStore,
+      quizStore: quizStore,
+      categoryAccessService: access,
+    );
+    addTearDown(home.settingsService.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(theme: AppTheme.light, home: home.screen),
+    );
+    await tester.pumpAndSettle();
+    expect(access.availableUnlockCredits, 0);
+    expect(find.text('Bugünkü hedef'), findsOneWidget);
+
+    await xpService.addXp(100);
+    await tester.pumpAndSettle();
+    expect(access.availableUnlockCredits, 1);
+    expect(find.text('Kategori açma hakkın var'), findsOneWidget);
+
+    expect(await access.unlockCategory('daily_routines'), isTrue);
+    await tester.pumpAndSettle();
+    expect(access.availableUnlockCredits, 0);
+    expect(find.text('Kategori açma hakkın var'), findsNothing);
+    expect(find.text('Bugünkü hedef'), findsOneWidget);
+  });
+
+  testWidgets('ana sayfa eksik günlük hedef için öğrenme sekmesini açar', (
+    tester,
+  ) async {
+    final streakService = StreakService(repository: FakeDailyProgressStore());
+    final xpService = await createXpService();
+    addTearDown(streakService.dispose);
+    addTearDown(xpService.dispose);
+    await streakService.initialize();
+    final statisticsService = createStatisticsService(
+      streakService: streakService,
+      xpService: xpService,
+    );
+    addTearDown(statisticsService.dispose);
+    final home = await createTestHomeScreen(
+      streakService: streakService,
+      xpService: xpService,
+      statisticsService: statisticsService,
+    );
+    addTearDown(home.settingsService.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(theme: AppTheme.light, home: home.screen),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bugünkü hedef'), findsOneWidget);
+    expect(find.text('0 / 5 kelime tamamlandı'), findsOneWidget);
+    await tester.tap(find.text('Öğrenmeye Devam Et'));
+    await tester.pumpAndSettle();
+    expect(find.byType(LearningCenterScreen), findsOneWidget);
+  });
+
+  testWidgets(
+    'tamamlanan hedefte aksiyon yoksa kaldığın yerden devam et korunur',
+    (tester) async {
+      final streakService = StreakService(repository: FakeDailyProgressStore());
+      final xpService = await createXpService();
+      addTearDown(streakService.dispose);
+      addTearDown(xpService.dispose);
+      await streakService.initialize();
+      for (var count = 0; count < streakService.dailyGoal; count++) {
+        await streakService.recordEvaluation();
+      }
+      final statisticsService = createStatisticsService(
+        streakService: streakService,
+        xpService: xpService,
+      );
+      addTearDown(statisticsService.dispose);
+      final home = await createTestHomeScreen(
+        streakService: streakService,
+        xpService: xpService,
+        statisticsService: statisticsService,
+      );
+      addTearDown(home.settingsService.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(theme: AppTheme.light, home: home.screen),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Bugünkü hedef'), findsNothing);
+      expect(find.text('Tekrar zamanı'), findsNothing);
+      expect(find.text('Kaldığın yerden devam et'), findsOneWidget);
+    },
+  );
 
   testWidgets('Ana ekran seviye kartını gerçek XP servisinden gösterir', (
     tester,

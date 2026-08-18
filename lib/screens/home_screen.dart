@@ -155,6 +155,11 @@ class _HomeScreenState extends State<HomeScreen> {
     if (category != null && mounted) await _openCategory(category);
   }
 
+  Future<void> _showCategorySelectionFromNextAction() async {
+    final snapshot = await _categorySnapshot;
+    if (mounted) await _showCategorySelection(snapshot);
+  }
+
   Future<void> _showOnboarding() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
@@ -214,6 +219,23 @@ class _HomeScreenState extends State<HomeScreen> {
                           children: [
                             const _Greeting(),
                             const SizedBox(height: 20),
+                            AnimatedBuilder(
+                              animation: Listenable.merge([
+                                streakService,
+                                if (widget.categoryAccessService != null)
+                                  widget.categoryAccessService!,
+                              ]),
+                              builder: (context, child) => _HomeNextActionCard(
+                                categoryAccessService:
+                                    widget.categoryAccessService,
+                                streakService: streakService,
+                                learningCenterService: _learningCenterService,
+                                onShowCategories:
+                                    _showCategorySelectionFromNextAction,
+                                onOpenLearning: () =>
+                                    setState(() => _selectedIndex = 1),
+                              ),
+                            ),
                             FutureBuilder<CategoryHubSnapshot>(
                               future: _categorySnapshot,
                               builder: (context, snapshot) {
@@ -272,6 +294,129 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+}
+
+class _HomeNextActionCard extends StatelessWidget {
+  const _HomeNextActionCard({
+    required this.categoryAccessService,
+    required this.streakService,
+    required this.learningCenterService,
+    required this.onShowCategories,
+    required this.onOpenLearning,
+  });
+
+  final CategoryAccessService? categoryAccessService;
+  final StreakService streakService;
+  final LearningCenterService learningCenterService;
+  final VoidCallback onShowCategories;
+  final VoidCallback onOpenLearning;
+
+  @override
+  Widget build(BuildContext context) {
+    final access = categoryAccessService;
+    final availableCredits = access?.availableUnlockCredits ?? 0;
+    final action = switch ((availableCredits, streakService.isTodayCompleted)) {
+      (final credits, _) when credits > 0 => _HomeNextAction(
+        icon: Icons.lock_open_rounded,
+        title: credits == 1
+            ? 'Kategori açma hakkın var'
+            : '$credits kategori açma hakkın var',
+        description: 'İstediğin kilitli kategoriyi açabilirsin.',
+        cta: 'Kategorileri Gör',
+        onPressed: onShowCategories,
+      ),
+      (_, false) => _HomeNextAction(
+        icon: Icons.task_alt_rounded,
+        title: 'Bugünkü hedef',
+        description:
+            '${streakService.todayCount.clamp(0, streakService.dailyGoal)} / '
+            '${streakService.dailyGoal} kelime tamamlandı',
+        cta: 'Öğrenmeye Devam Et',
+        onPressed: onOpenLearning,
+      ),
+      _ => _reviewAction(),
+    };
+
+    if (action == null) return const SizedBox.shrink();
+
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _GlassCard(
+          enableBlur: true,
+          child: Padding(
+            padding: AppDimensions.cardPadding,
+            child: Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                  child: Icon(action.icon, color: colorScheme.primary),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        action.title,
+                        style: textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(action.description, style: textTheme.bodySmall),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: action.onPressed,
+                  child: Text(action.cta),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  _HomeNextAction? _reviewAction() {
+    final pending = learningCenterService.load().repeatPendingCount;
+    if (pending == 0) return null;
+    return _HomeNextAction(
+      icon: Icons.replay_rounded,
+      title: 'Tekrar zamanı',
+      description: '$pending kelime tekrar bekliyor',
+      cta: 'Tekrar Et',
+      onPressed: onOpenLearning,
+    );
+  }
+}
+
+class _HomeNextAction {
+  const _HomeNextAction({
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.cta,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String title;
+  final String description;
+  final String cta;
+  final VoidCallback onPressed;
 }
 
 class _Greeting extends StatelessWidget {
