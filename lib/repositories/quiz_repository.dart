@@ -49,7 +49,7 @@ class QuizRepository implements QuizStore {
 
     try {
       final database = await _databaseService.database;
-      return database.transaction((transaction) async {
+      return await database.transaction((transaction) async {
         var xpAwarded = 0;
         if (possibleXp > 0) {
           final claimId = await transaction.insert('quiz_xp_claims', {

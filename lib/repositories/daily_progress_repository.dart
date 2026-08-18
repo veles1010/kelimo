@@ -58,7 +58,7 @@ class DailyProgressRepository implements DailyProgressStore {
     final reviewDate = (now ?? DateTime.now()).toLocal();
     try {
       final database = await _databaseService.database;
-      return database.transaction((transaction) async {
+      return await database.transaction((transaction) async {
         final dateKey = localDateKey(reviewDate);
         final dailyRows = await transaction.query(
           'daily_progress',
