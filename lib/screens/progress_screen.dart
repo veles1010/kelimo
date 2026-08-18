@@ -474,26 +474,6 @@ class _OverviewGrid extends StatelessWidget {
         '${statistics.todayReviewCount}',
         Icons.today_rounded,
       ),
-      (
-        'Başlanan kelime',
-        '${statistics.startedWordCount}',
-        Icons.school_rounded,
-      ),
-      (
-        'Favori kelime',
-        '${statistics.favoriteWordCount}',
-        Icons.favorite_rounded,
-      ),
-      (
-        'Tamamlanan quiz',
-        '${statistics.quizStatistics.totalQuizCount}',
-        Icons.quiz_rounded,
-      ),
-      (
-        'Quiz başarısı',
-        '%${statistics.quizStatistics.generalSuccessPercentage}',
-        Icons.insights_rounded,
-      ),
     ];
 
     final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
@@ -502,6 +482,7 @@ class _OverviewGrid extends StatelessWidget {
         final columns = constraints.maxWidth < 330 || textScale > 1.25 ? 1 : 2;
         final width = (constraints.maxWidth - (columns - 1) * 12) / columns;
         return Wrap(
+          key: const ValueKey('progress-overview-grid'),
           spacing: 12,
           runSpacing: 12,
           children: [

@@ -4350,13 +4350,33 @@ void main() {
       expect(find.text('Mozaiği Gör'), findsOneWidget);
       expect(find.byType(GlassBackground), findsOneWidget);
       expect(find.byType(GlassSurface), findsWidgets);
-      expect(find.text('Toplam XP'), findsOneWidget);
-      expect(find.text('Başlanan kelime'), findsOneWidget);
-      expect(find.text('Favori kelime'), findsOneWidget);
-      expect(find.text('Tamamlanan quiz'), findsOneWidget);
-      expect(find.text('Quiz başarısı'), findsOneWidget);
+      final overview = find.byKey(const ValueKey('progress-overview-grid'));
+      for (final label in [
+        'Seviye',
+        'Toplam XP',
+        'Güncel seri',
+        'Bugünkü değerlendirme',
+      ]) {
+        expect(
+          find.descendant(of: overview, matching: find.text(label)),
+          findsOneWidget,
+        );
+      }
+      for (final label in [
+        'Başlanan kelime',
+        'Favori kelime',
+        'Tamamlanan quiz',
+        'Quiz başarısı',
+      ]) {
+        expect(
+          find.descendant(of: overview, matching: find.text(label)),
+          findsNothing,
+        );
+      }
       expect(find.text('Başarımlar'), findsOneWidget);
       expect(find.text('13 / 13 rozet'), findsOneWidget);
+      expect(find.text('Kelime öğrenme dağılımı'), findsOneWidget);
+      expect(find.text('Quiz istatistikleri'), findsOneWidget);
       expect(find.text('Yeni'), findsOneWidget);
       expect(find.text('1080 • %100'), findsOneWidget);
       expect(find.text('Henüz tamamlanmış bir quiz yok.'), findsOneWidget);
