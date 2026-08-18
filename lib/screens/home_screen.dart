@@ -350,9 +350,9 @@ class _HomeNextActionCard extends StatelessWidget {
           enableBlur: true,
           child: Padding(
             padding: AppDimensions.cardPadding,
-            child: Row(
-              children: [
-                Container(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final icon = Container(
                   width: 42,
                   height: 42,
                   alignment: Alignment.center,
@@ -361,29 +361,50 @@ class _HomeNextActionCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(13),
                   ),
                   child: Icon(action.icon, color: colorScheme.primary),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        action.title,
-                        style: textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                );
+                final details = Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      action.title,
+                      style: textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
                       ),
-                      const SizedBox(height: 2),
-                      Text(action.description, style: textTheme.bodySmall),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                TextButton(
+                    ),
+                    const SizedBox(height: 2),
+                    Text(action.description, style: textTheme.bodySmall),
+                  ],
+                );
+                final button = TextButton(
                   onPressed: action.onPressed,
                   child: Text(action.cta),
-                ),
-              ],
+                );
+                if (constraints.maxWidth >= 360) {
+                  return Row(
+                    children: [
+                      icon,
+                      const SizedBox(width: 12),
+                      Expanded(child: details),
+                      const SizedBox(width: 8),
+                      button,
+                    ],
+                  );
+                }
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        icon,
+                        const SizedBox(width: 12),
+                        Expanded(child: details),
+                      ],
+                    ),
+                    Align(alignment: Alignment.centerRight, child: button),
+                  ],
+                );
+              },
             ),
           ),
         ),

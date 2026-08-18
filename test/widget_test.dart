@@ -44,6 +44,7 @@ import 'package:kelimo/screens/category_statistics_screen.dart';
 import 'package:kelimo/screens/category_selection_screen.dart';
 import 'package:kelimo/screens/home_screen.dart';
 import 'package:kelimo/screens/learning_center_screen.dart';
+import 'package:kelimo/screens/mosaic_screen.dart';
 import 'package:kelimo/screens/learning_word_list_screen.dart';
 import 'package:kelimo/screens/settings_screen.dart';
 import 'package:kelimo/screens/privacy_center_screen.dart';
@@ -3550,6 +3551,7 @@ void main() {
     await tester.ensureVisible(
       find.byKey(const ValueKey('learning-filter-favorites')),
     );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('learning-filter-favorites')));
     await tester.pumpAndSettle();
 
@@ -3640,6 +3642,7 @@ void main() {
     await tester.ensureVisible(
       find.byKey(const ValueKey('learning-filter-favorites')),
     );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('learning-filter-favorites')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('learning-word-dog')));
@@ -4342,6 +4345,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Tüm çalışmalarının güncel özeti'), findsOneWidget);
+      expect(find.byKey(const ValueKey('next-milestone-card')), findsOneWidget);
+      expect(find.text('Gizli Mozaik'), findsWidgets);
+      expect(find.text('Mozaiği Gör'), findsOneWidget);
       expect(find.byType(GlassBackground), findsOneWidget);
       expect(find.byType(GlassSurface), findsWidgets);
       expect(find.text('Toplam XP'), findsOneWidget);
@@ -4356,6 +4362,19 @@ void main() {
       expect(find.text('Henüz tamamlanmış bir quiz yok.'), findsOneWidget);
     },
   );
+
+  testWidgets('kilometre taşı mozaik CTA’sı mevcut ekrana gider', (
+    tester,
+  ) async {
+    await pumpKelimoApp(tester);
+    await tester.tap(find.text('İlerleme'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Mozaiği Gör'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(MosaicScreen), findsOneWidget);
+  });
 
   testWidgets('İlerleme ekranı son quiz kaydını cam satırda gösterir', (
     tester,

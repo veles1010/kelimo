@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kelimo/data/achievement_catalog.dart';
 import 'package:kelimo/models/achievement.dart';
+import 'package:kelimo/models/mosaic_progress.dart';
 import 'package:kelimo/repositories/achievement_repository.dart';
 import 'package:kelimo/screens/achievements_screen.dart';
+import 'package:kelimo/screens/progress_screen.dart';
 import 'package:kelimo/services/achievement_service.dart';
 import 'package:kelimo/widgets/achievement_notification.dart';
 import 'package:kelimo/widgets/glass_surface.dart';
@@ -101,6 +103,60 @@ void main() {
       'streak_30',
       'mosaic_master',
     ]);
+  });
+
+  test(
+    'sıradaki kilometre taşı en yüksek oranı ve katalog sırasını kullanır',
+    () async {
+      final store = _FakeAchievementStore();
+      final source = _MutableMetricsSource(_metrics(reviews: 5, learned: 5));
+      final service = _service(store: store, source: source);
+      addTearDown(service.dispose);
+      await service.initialize();
+
+      final milestone = selectProgressMilestone(achievementService: service);
+
+      expect(milestone.kind, ProgressMilestoneKind.achievement);
+      expect(milestone.achievement?.id, 'review_master');
+      expect(milestone.current, 5);
+      expect(milestone.target, 10);
+    },
+  );
+
+  test('tüm başarımlarda mozaik ve tamamlanma fallbackini kullanır', () async {
+    final store = _FakeAchievementStore(
+      AchievementCatalog.achievements.map(
+        (achievement) => AchievementUnlock(
+          achievementId: achievement.id,
+          unlockedAt: DateTime.utc(2026, 7, 16),
+        ),
+      ),
+    );
+    final service = _service(
+      store: store,
+      source: _MutableMetricsSource(AchievementMetrics.empty),
+    );
+    addTearDown(service.dispose);
+    await service.initialize();
+
+    final mosaic = selectProgressMilestone(
+      achievementService: service,
+      mosaicProgress: const MosaicProgress(
+        discoveredCellIndices: {1, 2, 3},
+        totalCells: 1080,
+      ),
+    );
+    expect(mosaic.kind, ProgressMilestoneKind.mosaic);
+    expect(mosaic.current, 3);
+
+    final completed = selectProgressMilestone(
+      achievementService: service,
+      mosaicProgress: MosaicProgress(
+        discoveredCellIndices: Set<int>.from(List<int>.generate(3, (i) => i)),
+        totalCells: 3,
+      ),
+    );
+    expect(completed.kind, ProgressMilestoneKind.completed);
   });
 
   test('Başarım eşikleri bir alt değerde kapalı, hedefte açıktır', () {

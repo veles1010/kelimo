@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:kelimo/data/achievement_catalog.dart';
+import 'package:kelimo/models/achievement.dart';
 import 'package:kelimo/models/progress_statistics.dart';
 import 'package:kelimo/models/quiz_attempt.dart';
 import 'package:kelimo/screens/achievements_screen.dart';
@@ -12,6 +13,87 @@ import 'package:kelimo/widgets/glass_surface.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/screens/mosaic_screen.dart';
 import 'package:kelimo/services/mosaic_service.dart';
+import 'package:kelimo/models/mosaic_progress.dart';
+
+enum ProgressMilestoneKind { achievement, mosaic, completed }
+
+class ProgressMilestone {
+  const ProgressMilestone._({
+    required this.kind,
+    this.achievement,
+    this.current = 0,
+    this.target = 0,
+  });
+
+  const ProgressMilestone.achievement({
+    required Achievement achievement,
+    required int current,
+    required int target,
+  }) : this._(
+         kind: ProgressMilestoneKind.achievement,
+         achievement: achievement,
+         current: current,
+         target: target,
+       );
+
+  const ProgressMilestone.mosaic({required int current, required int target})
+    : this._(
+        kind: ProgressMilestoneKind.mosaic,
+        current: current,
+        target: target,
+      );
+
+  const ProgressMilestone.completed()
+    : this._(kind: ProgressMilestoneKind.completed);
+
+  final ProgressMilestoneKind kind;
+  final Achievement? achievement;
+  final int current;
+  final int target;
+
+  double get progress =>
+      target <= 0 ? 0 : (current / target).clamp(0.0, 1.0).toDouble();
+}
+
+ProgressMilestone selectProgressMilestone({
+  AchievementService? achievementService,
+  MosaicProgress? mosaicProgress,
+}) {
+  if (achievementService != null) {
+    Achievement? closest;
+    var closestProgress = 0.0;
+    var closestCurrent = 0;
+    for (final achievement in AchievementCatalog.achievements) {
+      if (achievement.target <= 0 ||
+          achievementService.isUnlocked(achievement.id) ||
+          achievement.isMet(achievementService.metrics)) {
+        continue;
+      }
+      final current = achievement.progress(achievementService.metrics);
+      final progress = (current / achievement.target).clamp(0.0, 1.0);
+      if (closest == null || progress > closestProgress) {
+        closest = achievement;
+        closestProgress = progress;
+        closestCurrent = current;
+      }
+    }
+    if (closest != null) {
+      return ProgressMilestone.achievement(
+        achievement: closest,
+        current: closestCurrent,
+        target: closest.target,
+      );
+    }
+  }
+
+  if (mosaicProgress != null && !mosaicProgress.isComplete) {
+    return ProgressMilestone.mosaic(
+      current: mosaicProgress.discoveredCount,
+      target: mosaicProgress.totalCells,
+    );
+  }
+  return const ProgressMilestone.completed();
+}
 
 class ProgressScreen extends StatefulWidget {
   const ProgressScreen({
@@ -87,6 +169,16 @@ class _ProgressScreenState extends State<ProgressScreen> {
                           const SizedBox(height: 6),
                           const Text('Tüm çalışmalarının güncel özeti'),
                           const SizedBox(height: 24),
+                          _MilestoneCard(
+                            achievementService: widget.achievementService,
+                            mosaicService: widget.wordProgressStore == null
+                                ? null
+                                : MosaicService(
+                                    wordProgressStore:
+                                        widget.wordProgressStore!,
+                                  ),
+                          ),
+                          const SizedBox(height: 16),
                           _OverviewGrid(statistics: statistics),
                           if (widget.achievementService
                               case final service?) ...[
@@ -144,6 +236,104 @@ class _ProgressScreenState extends State<ProgressScreen> {
       ),
     );
   }
+}
+
+class _MilestoneCard extends StatelessWidget {
+  const _MilestoneCard({this.achievementService, this.mosaicService});
+
+  final AchievementService? achievementService;
+  final MosaicService? mosaicService;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: achievementService ?? const _SilentListenable(),
+      builder: (context, child) {
+        final milestone = selectProgressMilestone(
+          achievementService: achievementService,
+          mosaicProgress: mosaicService?.load(),
+        );
+        final colorScheme = Theme.of(context).colorScheme;
+        final (title, detail, cta, icon, onPressed) = switch (milestone.kind) {
+          ProgressMilestoneKind.achievement => (
+            'Sıradaki rozet: ${milestone.achievement!.title}',
+            '${milestone.current} / ${milestone.target}',
+            'Başarımları Gör',
+            Icons.workspace_premium_rounded,
+            () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) =>
+                    AchievementsScreen(service: achievementService!),
+              ),
+            ),
+          ),
+          ProgressMilestoneKind.mosaic => (
+            'Gizli Mozaik',
+            '${milestone.current} / ${milestone.target} parça',
+            'Mozaiği Gör',
+            Icons.auto_awesome_rounded,
+            () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => MosaicScreen(service: mosaicService!),
+              ),
+            ),
+          ),
+          ProgressMilestoneKind.completed => (
+            'Tüm büyük hedefleri tamamladın!',
+            'Harika bir ilerleme kaydettin.',
+            null,
+            Icons.celebration_rounded,
+            null,
+          ),
+        };
+        return GlassSurface(
+          key: const ValueKey('next-milestone-card'),
+          enableBlur: true,
+          padding: EdgeInsets.zero,
+          child: Card(
+            color: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
+            child: Padding(
+              padding: AppDimensions.cardPadding,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(icon, color: colorScheme.primary, size: 30),
+                  const SizedBox(height: 8),
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(detail),
+                  if (milestone.kind != ProgressMilestoneKind.completed) ...[
+                    const SizedBox(height: 10),
+                    LinearProgressIndicator(value: milestone.progress),
+                  ],
+                  if (cta != null) ...[
+                    const SizedBox(height: 8),
+                    TextButton(onPressed: onPressed, child: Text(cta)),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SilentListenable implements Listenable {
+  const _SilentListenable();
+
+  @override
+  void addListener(VoidCallback listener) {}
+
+  @override
+  void removeListener(VoidCallback listener) {}
 }
 
 class _MosaicLinkCard extends StatelessWidget {
