@@ -1043,6 +1043,12 @@ Future<void> completeQuiz(
     await tester.tap(option);
     await tester.pump();
 
+    if (isCorrect) {
+      await tester.pump(const Duration(milliseconds: 650));
+      await tester.pumpAndSettle();
+      continue;
+    }
+
     final buttonLabel = index == 9 ? 'Sonucu Gör' : 'Sonraki Soru';
     await tester.ensureVisible(find.text(buttonLabel));
     await tester.pumpAndSettle();

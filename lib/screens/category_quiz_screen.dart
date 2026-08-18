@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -15,6 +16,7 @@ import 'package:kelimo/widgets/scale_down_single_line_text.dart';
 import 'package:kelimo/widgets/achievement_notification.dart';
 import 'package:kelimo/widgets/glass_surface.dart';
 import 'package:kelimo/services/category_access_service.dart';
+import 'package:kelimo/services/english_tts_service.dart';
 
 class CategoryQuizScreen extends StatefulWidget {
   CategoryQuizScreen({
@@ -28,6 +30,7 @@ class CategoryQuizScreen extends StatefulWidget {
     this.interstitialAdService,
     this.streakService,
     this.categoryAccessService,
+    this.ttsService,
   }) : now = now ?? DateTime.now,
        random = random ?? Random(),
        assert(category.words.length >= 4);
@@ -41,6 +44,7 @@ class CategoryQuizScreen extends StatefulWidget {
   final InterstitialAdService? interstitialAdService;
   final StreakService? streakService;
   final CategoryAccessService? categoryAccessService;
+  final EnglishTtsService? ttsService;
 
   @override
   State<CategoryQuizScreen> createState() => _CategoryQuizScreenState();
@@ -75,12 +79,26 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
   late final DateTime _startedAt;
   Duration? _elapsedDuration;
   late final QuizSession _session;
+  late final EnglishTtsService _ttsService;
+  late final bool _ownsTtsService;
+  Timer? _autoAdvanceTimer;
+  bool _isAutoAdvancing = false;
 
   @override
   void initState() {
     super.initState();
     _session = QuizSessionBuilder(random: widget.random).build(widget.category);
     _startedAt = widget.now();
+    _ownsTtsService = widget.ttsService == null;
+    _ttsService = widget.ttsService ?? EnglishTtsService();
+  }
+
+  @override
+  void dispose() {
+    _autoAdvanceTimer?.cancel();
+    unawaited(_ttsService.stop());
+    if (_ownsTtsService) unawaited(_ttsService.dispose());
+    super.dispose();
   }
 
   int get _questionCount => _session.questions.length;
@@ -91,9 +109,9 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
 
   void _selectAnswer(String answer) {
     if (_selectedAnswer != null) return;
+    final isCorrect = _currentQuestion.isCorrectAnswer(answer);
     setState(() {
       _selectedAnswer = answer;
-      final isCorrect = _currentQuestion.isCorrectAnswer(answer);
       _correctStreak.recordAnswer(isCorrect: isCorrect);
       if (isCorrect) {
         _correctAnswerCount++;
@@ -101,6 +119,18 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
       if (_questionIndex == _questionCount - 1) {
         _elapsedDuration = _durationSinceStart();
       }
+    });
+    if (isCorrect) _scheduleAutoAdvance();
+  }
+
+  void _scheduleAutoAdvance() {
+    if (_autoAdvanceTimer != null || _isCompleting) return;
+    _isAutoAdvancing = true;
+    _autoAdvanceTimer = Timer(const Duration(milliseconds: 650), () {
+      _autoAdvanceTimer = null;
+      if (!mounted || _isCompleting || _selectedAnswer == null) return;
+      _isAutoAdvancing = false;
+      _continueQuiz();
     });
   }
 
@@ -110,7 +140,7 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
   }
 
   void _continueQuiz() {
-    if (_selectedAnswer == null || _isCompleting) return;
+    if (_selectedAnswer == null || _isCompleting || _isAutoAdvancing) return;
 
     if (_questionIndex == _questionCount - 1) {
       _showResult();
@@ -121,6 +151,7 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
       _questionIndex++;
       _selectedAnswer = null;
     });
+    unawaited(_ttsService.stop());
   }
 
   Future<void> _showResult() async {
@@ -250,7 +281,11 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
                         borderRadius: BorderRadius.circular(4),
                       ),
                       const SizedBox(height: 24),
-                      _QuestionCard(word: _currentWord),
+                      _QuestionCard(
+                        word: _currentWord,
+                        onSpeak: () =>
+                            unawaited(_ttsService.speak(_currentWord.english)),
+                      ),
                       const SizedBox(height: 20),
                       for (final option in options) ...[
                         _AnswerOption(
@@ -263,7 +298,10 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
                       ],
                       const SizedBox(height: 8),
                       FilledButton(
-                        onPressed: _selectedAnswer == null || _isCompleting
+                        onPressed:
+                            _selectedAnswer == null ||
+                                _isCompleting ||
+                                _isAutoAdvancing
                             ? null
                             : _continueQuiz,
                         child: Text(
@@ -285,9 +323,10 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
 }
 
 class _QuestionCard extends StatelessWidget {
-  const _QuestionCard({required this.word});
+  const _QuestionCard({required this.word, required this.onSpeak});
 
   final Word word;
+  final VoidCallback onSpeak;
 
   @override
   Widget build(BuildContext context) {
@@ -324,6 +363,12 @@ class _QuestionCard extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1.5,
                   ),
+                ),
+                IconButton(
+                  key: const ValueKey('quiz-pronunciation-button'),
+                  tooltip: 'Telaffuzu dinle',
+                  onPressed: onSpeak,
+                  icon: const Icon(Icons.volume_up_rounded),
                 ),
                 const SizedBox(height: 12),
                 Text(
