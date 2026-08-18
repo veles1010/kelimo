@@ -179,13 +179,18 @@ Future<({CategoryAccessService access, XpService xp})> _access({
   int xp = 0,
   Map<String, WordProgress>? progress,
   List<QuizAttempt>? attempts,
+  Iterable<CategoryUnlock> unlocks = const [],
 }) async {
   final xpService = XpService(repository: _XpMemoryStore(xp));
   await xpService.initialize();
   final quiz = _QuizMemoryStore();
   if (attempts != null) quiz.attempts.addAll(attempts);
+  final unlockStore = _UnlockMemoryStore()
+    ..values.addEntries(
+      unlocks.map((unlock) => MapEntry(unlock.categoryId, unlock)),
+    );
   final access = CategoryAccessService(
-    repository: _UnlockMemoryStore(),
+    repository: unlockStore,
     wordProgressStore: _WordMemoryStore(progress),
     quizStore: quiz,
     xpService: xpService,
@@ -206,6 +211,58 @@ void main() {
     expect(services.access.xpUntilNextCredit, 100);
   });
 
+  test(
+    'başlangıç kategorileri katalog sırasındaki ilk altı ID ile eşleşir',
+    () {
+      final firstSixIds = CategoryCatalog.categories
+          .take(6)
+          .map((category) => category.id)
+          .toSet();
+
+      expect(initialUnlockedCategoryIds, firstSixIds);
+      expect(initialUnlockedCategoryIds, contains('transportation'));
+      expect(initialUnlockedCategoryIds, isNot(contains('daily_routines')));
+    },
+  );
+
+  test(
+    'başlangıç sonrasındaki kategori krediyle seçilerek açılabilir',
+    () async {
+      final services = await _access(xp: 100);
+      addTearDown(services.access.dispose);
+      addTearDown(services.xp.dispose);
+
+      expect(services.access.isUnlocked('daily_routines'), isFalse);
+      expect(await services.access.unlockCategory('technology'), isTrue);
+      expect(services.access.isUnlocked('technology'), isTrue);
+      expect(services.access.isUnlocked('daily_routines'), isFalse);
+    },
+  );
+
+  test('kalıcı kategori açılımları korunur', () async {
+    final legacyDailyRoutines = CategoryUnlock(
+      categoryId: 'daily_routines',
+      unlockedAt: DateTime.utc(2026, 8, 18),
+      consumesCredit: false,
+    );
+    final selectedCategory = CategoryUnlock(
+      categoryId: 'technology',
+      unlockedAt: DateTime.utc(2026, 8, 18),
+      consumesCredit: true,
+    );
+    final services = await _access(
+      xp: 100,
+      unlocks: [legacyDailyRoutines, selectedCategory],
+    );
+    addTearDown(services.access.dispose);
+    addTearDown(services.xp.dispose);
+
+    expect(services.access.isUnlocked('daily_routines'), isTrue);
+    expect(services.access.isUnlocked('technology'), isTrue);
+    expect(services.access.manuallySpentCredits, 1);
+    expect(services.access.isUnlocked('transportation'), isTrue);
+  });
+
   test('XP eşikleri ve 700 sonrası döngü doğru hak üretir', () {
     expect(earnedCategoryUnlockCredits(99), 0);
     expect(earnedCategoryUnlockCredits(100), 1);
@@ -215,6 +272,74 @@ void main() {
     expect(earnedCategoryUnlockCredits(999), 5);
     expect(earnedCategoryUnlockCredits(1000), 7);
     expect(earnedCategoryUnlockCredits(1300), 9);
+  });
+
+  test(
+    'quiz kredi ilerlemesi mevcut kategori erişimi kurallarını kullanır',
+    () async {
+      final firstCredit = await _access();
+      addTearDown(firstCredit.access.dispose);
+      addTearDown(firstCredit.xp.dispose);
+      await firstCredit.xp.addXp(100);
+      final oneCredit = firstCredit.access.quizCreditProgress(
+        totalXpBefore: 0,
+        totalXpAfter: 100,
+      );
+      expect(oneCredit.newCreditsEarned, 1);
+      expect(oneCredit.availableCredits, 1);
+
+      final twoCredits = await _access(xp: 450);
+      addTearDown(twoCredits.access.dispose);
+      addTearDown(twoCredits.xp.dispose);
+      await twoCredits.xp.addXp(250);
+      final atSevenHundred = twoCredits.access.quizCreditProgress(
+        totalXpBefore: 450,
+        totalXpAfter: 700,
+      );
+      expect(atSevenHundred.newCreditsEarned, 2);
+      expect(atSevenHundred.availableCredits, 5);
+
+      final existingCredit = firstCredit.access.quizCreditProgress(
+        totalXpBefore: 100,
+        totalXpAfter: 100,
+      );
+      expect(existingCredit.newCreditsEarned, 0);
+      expect(existingCredit.availableCredits, 1);
+
+      final noCredit = await _access(xp: 75);
+      addTearDown(noCredit.access.dispose);
+      addTearDown(noCredit.xp.dispose);
+      final pendingCredit = noCredit.access.quizCreditProgress(
+        totalXpBefore: 75,
+        totalXpAfter: 75,
+      );
+      expect(pendingCredit.xpUntilNextCredit, 25);
+      expect(pendingCredit.progressStartXp, 0);
+      expect(pendingCredit.nextCreditXp, 100);
+
+      final snapshotProgress = noCredit.access.quizCreditProgress(
+        totalXpBefore: 250,
+        totalXpAfter: 300,
+      );
+      expect(snapshotProgress.nextCreditXp, 450);
+      expect(snapshotProgress.xpUntilNextCredit, 150);
+      expect(snapshotProgress.progressStartXp, 250);
+    },
+  );
+
+  test('tüm kategoriler açıkken quiz kredi ilerlemesi gizlenir', () async {
+    final services = await _access(xp: 4600);
+    addTearDown(services.access.dispose);
+    addTearDown(services.xp.dispose);
+    for (final category in CategoryCatalog.categories) {
+      await services.access.unlockCategory(category.id);
+    }
+
+    final progress = services.access.quizCreditProgress(
+      totalXpBefore: 4600,
+      totalXpAfter: 4600,
+    );
+    expect(progress.hasLockedCategories, isFalse);
   });
 
   test('açma hakkı tüketilir ve aynı kategori iki kez açılamaz', () async {

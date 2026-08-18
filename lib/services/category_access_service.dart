@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:kelimo/data/category_catalog.dart';
 import 'package:kelimo/models/category_unlock.dart';
+import 'package:kelimo/models/category_unlock_credit_progress.dart';
 import 'package:kelimo/models/learning_category.dart';
 import 'package:kelimo/repositories/category_unlock_repository.dart';
 import 'package:kelimo/repositories/quiz_repository.dart';
@@ -8,14 +9,9 @@ import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 
-const initialUnlockedCategoryIds = <String>{
-  'animals',
-  'foods',
-  'colors',
-  'home',
-  'family',
-  'daily_routines',
-};
+final Set<String> initialUnlockedCategoryIds = Set.unmodifiable(
+  CategoryCatalog.categories.take(6).map((category) => category.id),
+);
 
 int earnedCategoryUnlockCredits(int totalXp) {
   if (totalXp < 100) return 0;
@@ -74,6 +70,38 @@ class CategoryAccessService extends ChangeNotifier {
 
   bool isUnlocked(String categoryId) => _unlocks.containsKey(categoryId);
   bool canOpen(LearningCategory category) => isUnlocked(category.id);
+
+  CategoryUnlockCreditProgress quizCreditProgress({
+    required int totalXpBefore,
+    required int totalXpAfter,
+  }) {
+    final earnedBefore = earnedCategoryUnlockCredits(totalXpBefore);
+    final earnedAfter = earnedCategoryUnlockCredits(totalXpAfter);
+    final newCreditsEarned = earnedAfter > earnedBefore
+        ? earnedAfter - earnedBefore
+        : 0;
+    final availableCredits = availableUnlockCredits;
+    final lockedCategories = lockedCategoryCount;
+    final nextCreditXp = lockedCategories == 0 || availableCredits > 0
+        ? null
+        : nextCategoryUnlockXp(totalXpAfter);
+    final remainingXp = lockedCategories == 0 || availableCredits > 0
+        ? 0
+        : (nextCreditXp! - totalXpAfter).clamp(0, nextCreditXp).toInt();
+    final progressStartXp = nextCreditXp == null
+        ? null
+        : _creditProgressStartXp(totalXpAfter, nextCreditXp);
+
+    return CategoryUnlockCreditProgress(
+      newCreditsEarned: newCreditsEarned,
+      availableCredits: availableCredits,
+      lockedCategoryCount: lockedCategories,
+      xpUntilNextCredit: remainingXp,
+      currentXp: totalXpAfter,
+      progressStartXp: progressStartXp,
+      nextCreditXp: nextCreditXp,
+    );
+  }
 
   Future<void> initialize() async {
     _isLoading = true;
@@ -171,6 +199,14 @@ class CategoryAccessService extends ChangeNotifier {
   }
 
   void _handleXpChanged() => notifyListeners();
+
+  int _creditProgressStartXp(int totalXp, int targetXp) {
+    var start = totalXp.clamp(0, targetXp).toInt();
+    while (start > 0 && nextCategoryUnlockXp(start - 1) == targetXp) {
+      start--;
+    }
+    return start;
+  }
 
   @override
   void dispose() {

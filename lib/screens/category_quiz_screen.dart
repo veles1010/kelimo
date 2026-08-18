@@ -166,6 +166,12 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
             totalXpBefore:
                 completion.xpState.totalXp - completion.attempt.xpAwarded,
             totalXpAfter: completion.xpState.totalXp,
+            categoryUnlockCreditProgress: widget.categoryAccessService
+                ?.quizCreditProgress(
+                  totalXpBefore:
+                      completion.xpState.totalXp - completion.attempt.xpAwarded,
+                  totalXpAfter: completion.xpState.totalXp,
+                ),
             longestCorrectStreak: _correctStreak.longest,
             elapsedDuration: elapsedDuration,
             interstitialAdService: widget.interstitialAdService,

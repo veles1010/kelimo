@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:kelimo/models/category_unlock_credit_progress.dart';
 import 'package:kelimo/services/interstitial_ad_service.dart';
 import 'package:kelimo/widgets/glass_surface.dart';
 
@@ -55,6 +56,7 @@ class QuizResultScreen extends StatefulWidget {
     required this.xpAwarded,
     required this.totalXpBefore,
     required this.totalXpAfter,
+    this.categoryUnlockCreditProgress,
     required this.longestCorrectStreak,
     required this.elapsedDuration,
     required this.onRetry,
@@ -79,6 +81,7 @@ class QuizResultScreen extends StatefulWidget {
   final int xpAwarded;
   final int totalXpBefore;
   final int totalXpAfter;
+  final CategoryUnlockCreditProgress? categoryUnlockCreditProgress;
   final int longestCorrectStreak;
   final Duration elapsedDuration;
   final VoidCallback onRetry;
@@ -149,6 +152,15 @@ class _QuizResultScreenState extends State<QuizResultScreen> {
                         textAlign: TextAlign.center,
                         style: textTheme.titleMedium,
                       ),
+                      if (widget
+                              .categoryUnlockCreditProgress
+                              ?.hasLockedCategories ??
+                          false) ...[
+                        const SizedBox(height: 12),
+                        _CategoryUnlockCreditCard(
+                          progress: widget.categoryUnlockCreditProgress!,
+                        ),
+                      ],
                       const SizedBox(height: 24),
                       _ScoreCard(
                         correctAnswerCount: widget.correctAnswerCount,
@@ -231,6 +243,64 @@ class _QuizResultScreenState extends State<QuizResultScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _CategoryUnlockCreditCard extends StatelessWidget {
+  const _CategoryUnlockCreditCard({required this.progress});
+
+  final CategoryUnlockCreditProgress progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
+    final newCredits = progress.newCreditsEarned;
+    final availableCredits = progress.availableCredits;
+
+    final title = newCredits > 0
+        ? newCredits == 1
+              ? '🔓 Yeni kategori açma kredisi kazandın!'
+              : '🔓 $newCredits kategori açma kredisi kazandın!'
+        : availableCredits > 0
+        ? '🔓 Kullanılabilir kategori açma kredisi: $availableCredits'
+        : 'Sonraki kategori açma kredisine '
+              '${progress.xpUntilNextCredit} XP kaldı';
+    final subtitle = newCredits > 0
+        ? 'İstediğin kilitli kategoriyi açabilirsin.'
+        : availableCredits > 0
+        ? 'Kategori seçiminden istediğin kilitli kategoriyi açabilirsin.'
+        : null;
+
+    return GlassSurface(
+      enableBlur: false,
+      showShadow: false,
+      borderRadius: BorderRadius.circular(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: textTheme.titleSmall?.copyWith(
+              color: colorScheme.primary,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 4),
+            Text(subtitle, style: textTheme.bodySmall),
+          ],
+          if (progress.nextCreditXp != null) ...[
+            const SizedBox(height: 10),
+            LinearProgressIndicator(
+              value: progress.progressToNextCredit,
+              minHeight: 6,
+              borderRadius: BorderRadius.circular(3),
+            ),
+          ],
+        ],
       ),
     );
   }

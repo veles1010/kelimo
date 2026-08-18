@@ -27,6 +27,7 @@ import 'package:kelimo/models/word_progress.dart';
 import 'package:kelimo/models/xp_state.dart';
 import 'package:kelimo/models/ad_display_state.dart';
 import 'package:kelimo/models/category_unlock.dart';
+import 'package:kelimo/models/category_unlock_credit_progress.dart';
 import 'package:kelimo/repositories/daily_progress_repository.dart';
 import 'package:kelimo/repositories/achievement_repository.dart';
 import 'package:kelimo/repositories/data_reset_repository.dart';
@@ -6418,6 +6419,109 @@ void main() {
     expect(find.text('+10 XP kazandın.'), findsOneWidget);
     expect(find.textContaining('Kusursuz sonuç'), findsNothing);
     expect(find.text('Toplam XP: 90 → 100'), findsOneWidget);
+  });
+
+  testWidgets('Quiz sonucu kategori açma kredisi durumlarını gösterir', (
+    tester,
+  ) async {
+    Widget resultScreen(CategoryUnlockCreditProgress progress) => MaterialApp(
+      home: QuizResultScreen(
+        categoryName: 'Hayvanlar',
+        correctAnswerCount: 10,
+        totalQuestionCount: 10,
+        successPercentage: 100,
+        xpAwarded: 25,
+        totalXpBefore: 75,
+        totalXpAfter: 100,
+        categoryUnlockCreditProgress: progress,
+        longestCorrectStreak: 10,
+        elapsedDuration: const Duration(seconds: 30),
+        onRetry: () {},
+        onReturnToCategory: () {},
+        onReturnHome: () {},
+      ),
+    );
+
+    await tester.pumpWidget(
+      resultScreen(
+        const CategoryUnlockCreditProgress(
+          newCreditsEarned: 1,
+          availableCredits: 1,
+          lockedCategoryCount: 1,
+          xpUntilNextCredit: 0,
+          currentXp: 100,
+        ),
+      ),
+    );
+    expect(
+      find.text('🔓 Yeni kategori açma kredisi kazandın!'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('İstediğin kilitli kategoriyi açabilirsin.'),
+      findsOneWidget,
+    );
+
+    await tester.pumpWidget(
+      resultScreen(
+        const CategoryUnlockCreditProgress(
+          newCreditsEarned: 2,
+          availableCredits: 2,
+          lockedCategoryCount: 2,
+          xpUntilNextCredit: 0,
+          currentXp: 700,
+        ),
+      ),
+    );
+    expect(find.text('🔓 2 kategori açma kredisi kazandın!'), findsOneWidget);
+
+    await tester.pumpWidget(
+      resultScreen(
+        const CategoryUnlockCreditProgress(
+          newCreditsEarned: 0,
+          availableCredits: 2,
+          lockedCategoryCount: 2,
+          xpUntilNextCredit: 0,
+          currentXp: 700,
+        ),
+      ),
+    );
+    expect(
+      find.text('🔓 Kullanılabilir kategori açma kredisi: 2'),
+      findsOneWidget,
+    );
+
+    await tester.pumpWidget(
+      resultScreen(
+        const CategoryUnlockCreditProgress(
+          newCreditsEarned: 0,
+          availableCredits: 0,
+          lockedCategoryCount: 1,
+          xpUntilNextCredit: 25,
+          currentXp: 75,
+          progressStartXp: 0,
+          nextCreditXp: 100,
+        ),
+      ),
+    );
+    expect(
+      find.text('Sonraki kategori açma kredisine 25 XP kaldı'),
+      findsOneWidget,
+    );
+    expect(find.byType(LinearProgressIndicator), findsWidgets);
+
+    await tester.pumpWidget(
+      resultScreen(
+        const CategoryUnlockCreditProgress(
+          newCreditsEarned: 0,
+          availableCredits: 0,
+          lockedCategoryCount: 0,
+          xpUntilNextCredit: 0,
+          currentXp: 4600,
+        ),
+      ),
+    );
+    expect(find.textContaining('kategori açma kredisi'), findsNothing);
   });
 
   testWidgets('Öğren akışı cam yüzeyleri koyu ve dar ekranda taşmaz', (
