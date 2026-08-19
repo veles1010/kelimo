@@ -325,10 +325,12 @@ class _NewWordsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final category = _lastOpenCategory();
-    final progress = category == null
-        ? null
-        : snapshot.progressFor(category.id);
+    final selection = snapshot.nextLearningCategory(
+      categoryAccessService?.unlockedCategoryIds ??
+          snapshot.progressByCategoryId.keys.toSet(),
+    );
+    final category = selection?.category;
+    final progress = selection?.progress;
     final learned = progress?.learnedWordCount ?? 0;
     final total = progress?.totalWordCount ?? category?.words.length ?? 0;
     final textTheme = Theme.of(context).textTheme;
@@ -355,6 +357,10 @@ class _NewWordsCard extends StatelessWidget {
               Text(
                 category == null
                     ? 'Başlamak için açık bir kategori seç.'
+                    : selection!.kind == CategoryHubSelectionKind.unstarted
+                    ? '${category.title} kategorisine başla'
+                    : selection.kind == CategoryHubSelectionKind.completed
+                    ? 'Tekrar çalış · ${category.title}'
                     : 'Kaldığın yerden devam et · ${category.title}',
               ),
               if (category != null) ...[
@@ -381,7 +387,14 @@ class _NewWordsCard extends StatelessWidget {
                     FilledButton.icon(
                       onPressed: () => onContinue(category),
                       icon: const Icon(Icons.play_arrow_rounded),
-                      label: const Text('Devam Et'),
+                      label: Text(
+                        selection?.kind == CategoryHubSelectionKind.unstarted
+                            ? 'Başla'
+                            : selection?.kind ==
+                                  CategoryHubSelectionKind.completed
+                            ? 'Tekrar Çalış'
+                            : 'Devam Et',
+                      ),
                     ),
                   OutlinedButton.icon(
                     onPressed: onSelectCategory,
@@ -395,13 +408,6 @@ class _NewWordsCard extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  LearningCategory? _lastOpenCategory() {
-    for (final category in snapshot.recentCategories) {
-      if (categoryAccessService?.canOpen(category) ?? true) return category;
-    }
-    return null;
   }
 }
 

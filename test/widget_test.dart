@@ -3283,7 +3283,7 @@ void main() {
     expect(find.text('Merhaba!'), findsOneWidget);
     expect(find.text('Bugün öğrenmeye hazır mısın?'), findsOneWidget);
     expect(
-      tester.getTopLeft(find.text('Kaldığın yerden devam et')).dy,
+      tester.getTopLeft(find.text('Yeni kategoriye başla')).dy,
       lessThan(tester.getTopLeft(find.text('Genel ilerleme')).dy),
     );
     expect(find.text('Genel ilerleme'), findsOneWidget);
@@ -3299,11 +3299,11 @@ void main() {
     expect(find.text('Günlük Görev'), findsOneWidget);
     expect(find.text('0 / 5'), findsOneWidget);
     expect(find.text('Bugün 5 kelime değerlendir'), findsOneWidget);
-    expect(find.byType(LinearProgressIndicator), findsNWidgets(3));
-    await tester.scrollUntilVisible(find.text('Kaldığın yerden devam et'), 300);
-    expect(find.text('Kaldığın yerden devam et'), findsOneWidget);
-    expect(find.text('İlk kategorini seç'), findsOneWidget);
-    expect(find.text('Devam Et'), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsNWidgets(4));
+    await tester.scrollUntilVisible(find.text('Yeni kategoriye başla'), 300);
+    expect(find.text('Yeni kategoriye başla'), findsOneWidget);
+    expect(find.text('Hayvanlar'), findsOneWidget);
+    expect(find.text('Başla'), findsOneWidget);
     expect(find.text('Tüm Kategorileri Gör · 36'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('glass-bottom-navigation')),
@@ -3332,58 +3332,54 @@ void main() {
     expect(find.text('Arama Sonuçları'), findsOneWidget);
   });
 
-  testWidgets(
-    'ana ekran quiz geçmişindeki son kategoriyi devam kartında gösterir',
-    (tester) async {
-      final quizStorage = FakeQuizStorage();
-      final xpStorage = FakeXpStorage();
-      final quizStore = FakeQuizStore(quizStorage, xpStorage);
-      await quizStore.saveCompletedQuiz(
-        categoryId: 'foods',
-        correctCount: 8,
-        totalQuestions: 10,
-        scorePercent: 80,
-        completedAt: DateTime.utc(2026, 7, 20),
-      );
-      final wordStore = FakeWordProgressStore({
-        animalWords.first.id: testWordProgress(
-          wordId: animalWords.first.id,
-          mastery: 'easy',
-          repetitionCount: 1,
-        ),
-      });
-      final streakService = StreakService(repository: FakeDailyProgressStore());
-      final xpService = await createXpService();
-      await streakService.initialize();
-      final statisticsService = createStatisticsService(
-        streakService: streakService,
-        xpService: xpService,
-        wordProgressStore: wordStore,
-        quizStore: quizStore,
-      );
-      final home = await createTestHomeScreen(
-        streakService: streakService,
-        xpService: xpService,
-        statisticsService: statisticsService,
-        wordProgressStore: wordStore,
-        quizStore: quizStore,
-      );
-      addTearDown(streakService.dispose);
-      addTearDown(xpService.dispose);
-      addTearDown(statisticsService.dispose);
-      addTearDown(home.settingsService.dispose);
+  testWidgets('ana ekran yarım kategoriyi son quiz geçmişine tercih eder', (
+    tester,
+  ) async {
+    final quizStorage = FakeQuizStorage();
+    final xpStorage = FakeXpStorage();
+    final quizStore = FakeQuizStore(quizStorage, xpStorage);
+    await quizStore.saveCompletedQuiz(
+      categoryId: 'foods',
+      correctCount: 8,
+      totalQuestions: 10,
+      scorePercent: 80,
+      completedAt: DateTime.utc(2026, 7, 20),
+    );
+    final wordStore = FakeWordProgressStore({
+      animalWords.first.id: testWordProgress(
+        wordId: animalWords.first.id,
+        mastery: 'easy',
+        repetitionCount: 1,
+      ),
+    });
+    final streakService = StreakService(repository: FakeDailyProgressStore());
+    final xpService = await createXpService();
+    await streakService.initialize();
+    final statisticsService = createStatisticsService(
+      streakService: streakService,
+      xpService: xpService,
+      wordProgressStore: wordStore,
+      quizStore: quizStore,
+    );
+    final home = await createTestHomeScreen(
+      streakService: streakService,
+      xpService: xpService,
+      statisticsService: statisticsService,
+      wordProgressStore: wordStore,
+      quizStore: quizStore,
+    );
+    addTearDown(streakService.dispose);
+    addTearDown(xpService.dispose);
+    addTearDown(statisticsService.dispose);
+    addTearDown(home.settingsService.dispose);
 
-      await tester.pumpWidget(MaterialApp(home: home.screen));
-      await tester.pumpAndSettle();
+    await tester.pumpWidget(MaterialApp(home: home.screen));
+    await tester.pumpAndSettle();
 
-      await tester.scrollUntilVisible(
-        find.text('Kaldığın yerden devam et'),
-        300,
-      );
-      expect(find.text('Yiyecekler'), findsOneWidget);
-      expect(find.text('0 / 30 kelime'), findsOneWidget);
-    },
-  );
+    await tester.scrollUntilVisible(find.text('Kaldığın yerden devam et'), 300);
+    expect(find.text('Hayvanlar'), findsOneWidget);
+    expect(find.text('1 / 30 kelime'), findsOneWidget);
+  });
 
   testWidgets('Öğrenme Merkezi dört gerçek çalışma kartını gösterir', (
     tester,
@@ -3490,11 +3486,11 @@ void main() {
     await pumpKelimoApp(tester, quizStorage: quizStorage);
     await openLearningCenter(tester);
 
-    expect(find.text('Kaldığın yerden devam et · Yiyecekler'), findsOneWidget);
-    await tester.tap(find.text('Devam Et'));
+    expect(find.text('Hayvanlar kategorisine başla'), findsOneWidget);
+    await tester.tap(find.text('Başla'));
     await tester.pumpAndSettle();
     expect(find.byType(CategoryScreen), findsOneWidget);
-    expect(find.text('Yiyecekler'), findsWidgets);
+    expect(find.text('Hayvanlar'), findsWidgets);
 
     await tester.pageBack();
     await tester.pumpAndSettle();
@@ -4612,39 +4608,38 @@ void main() {
     expect(find.text('Yeni Kelimeler Öğren'), findsOneWidget);
   });
 
-  testWidgets(
-    'tamamlanan hedefte aksiyon yoksa kaldığın yerden devam et korunur',
-    (tester) async {
-      final streakService = StreakService(repository: FakeDailyProgressStore());
-      final xpService = await createXpService();
-      addTearDown(streakService.dispose);
-      addTearDown(xpService.dispose);
-      await streakService.initialize();
-      for (var count = 0; count < streakService.dailyGoal; count++) {
-        await streakService.recordEvaluation();
-      }
-      final statisticsService = createStatisticsService(
-        streakService: streakService,
-        xpService: xpService,
-      );
-      addTearDown(statisticsService.dispose);
-      final home = await createTestHomeScreen(
-        streakService: streakService,
-        xpService: xpService,
-        statisticsService: statisticsService,
-      );
-      addTearDown(home.settingsService.dispose);
+  testWidgets('tamamlanan hedefte başlanmamış kategori önerisi korunur', (
+    tester,
+  ) async {
+    final streakService = StreakService(repository: FakeDailyProgressStore());
+    final xpService = await createXpService();
+    addTearDown(streakService.dispose);
+    addTearDown(xpService.dispose);
+    await streakService.initialize();
+    for (var count = 0; count < streakService.dailyGoal; count++) {
+      await streakService.recordEvaluation();
+    }
+    final statisticsService = createStatisticsService(
+      streakService: streakService,
+      xpService: xpService,
+    );
+    addTearDown(statisticsService.dispose);
+    final home = await createTestHomeScreen(
+      streakService: streakService,
+      xpService: xpService,
+      statisticsService: statisticsService,
+    );
+    addTearDown(home.settingsService.dispose);
 
-      await tester.pumpWidget(
-        MaterialApp(theme: AppTheme.light, home: home.screen),
-      );
-      await tester.pumpAndSettle();
+    await tester.pumpWidget(
+      MaterialApp(theme: AppTheme.light, home: home.screen),
+    );
+    await tester.pumpAndSettle();
 
-      expect(find.text('Bugünkü hedef'), findsNothing);
-      expect(find.text('Tekrar zamanı'), findsNothing);
-      expect(find.text('Kaldığın yerden devam et'), findsOneWidget);
-    },
-  );
+    expect(find.text('Bugünkü hedef'), findsNothing);
+    expect(find.text('Tekrar zamanı'), findsNothing);
+    expect(find.text('Yeni kategoriye başla'), findsOneWidget);
+  });
 
   testWidgets('Ana ekran seviye kartını gerçek XP servisinden gösterir', (
     tester,
@@ -4720,7 +4715,7 @@ void main() {
     'ana ekrandaki uzun liste yerine kategori seçimi 36 kartı gösterir',
     (tester) async {
       await pumpKelimoApp(tester);
-      expect(find.text('Hayvanlar'), findsNothing);
+      expect(find.byKey(const ValueKey('category-grid-animals')), findsNothing);
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey('all-categories-button')),
         300,
@@ -5131,7 +5126,7 @@ void main() {
       find.byKey(const ValueKey('glass-bottom-navigation')),
       findsOneWidget,
     );
-    expect(find.text('Devam Et'), findsOneWidget);
+    expect(find.text('Başla'), findsOneWidget);
     expect(find.text('Tüm Kategorileri Gör · 36'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('bottom-nav-selection-indicator')),

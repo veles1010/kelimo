@@ -853,14 +853,12 @@ class _HomeCategoryHub extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final candidate = snapshot.lastCategory;
-    final category =
-        candidate != null && (categoryAccessService?.canOpen(candidate) ?? true)
-        ? candidate
-        : null;
-    final statistics = category == null
-        ? null
-        : snapshot.progressFor(category.id);
+    final selection = snapshot.nextLearningCategory(
+      categoryAccessService?.unlockedCategoryIds ??
+          snapshot.progressByCategoryId.keys.toSet(),
+    );
+    final category = selection?.category;
+    final statistics = selection?.progress;
     final total = statistics?.totalWordCount ?? category?.words.length ?? 0;
     final learned = statistics?.learnedWordCount ?? 0;
     final progress = total == 0 ? 0.0 : learned / total;
@@ -870,7 +868,11 @@ class _HomeCategoryHub extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          'Kaldığın yerden devam et',
+          selection?.kind == CategoryHubSelectionKind.unstarted
+              ? 'Yeni kategoriye başla'
+              : selection?.kind == CategoryHubSelectionKind.completed
+              ? 'Tekrar çalış'
+              : 'Kaldığın yerden devam et',
           style: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
@@ -942,7 +944,14 @@ class _HomeCategoryHub extends StatelessWidget {
                     child: FilledButton.icon(
                       onPressed: () => onContinue(category),
                       icon: const Icon(Icons.play_arrow_rounded),
-                      label: const Text('Devam Et'),
+                      label: Text(
+                        selection?.kind == CategoryHubSelectionKind.unstarted
+                            ? 'Başla'
+                            : selection?.kind ==
+                                  CategoryHubSelectionKind.completed
+                            ? 'Tekrar Çalış'
+                            : 'Devam Et',
+                      ),
                     ),
                   ),
                 ],
