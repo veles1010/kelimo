@@ -1,4 +1,9 @@
+import java.util.Base64
 import java.util.Properties
+
+val googleTestAdMobAppId = "ca-app-pub-3940256099942544~3347511713"
+val googleTestAndroidInterstitialAdUnitId =
+    "ca-app-pub-3940256099942544/1033173712"
 
 val releaseSigningPropertiesFile = rootProject.file("key.properties")
 val releaseSigningProperties = Properties()
@@ -10,6 +15,23 @@ if (releaseSigningPropertiesFile.exists()) {
 val isReleaseBuildRequested = gradle.startParameter.taskNames.any {
     it.contains("release", ignoreCase = true)
 }
+val releaseAdMobAppId =
+    providers.gradleProperty("ADMOB_ANDROID_APP_ID").orNull
+        ?: System.getenv("ADMOB_ANDROID_APP_ID")
+val releaseDartDefines =
+    providers.gradleProperty("dart-defines").orNull
+        ?.split(',')
+        ?.mapNotNull { encodedDefine ->
+            runCatching {
+                String(Base64.getDecoder().decode(encodedDefine), Charsets.UTF_8)
+            }.getOrNull()
+        }
+        ?.associate { define ->
+            val separatorIndex = define.indexOf('=')
+            require(separatorIndex > 0) { "Invalid Flutter dart-define: $define" }
+            define.substring(0, separatorIndex) to define.substring(separatorIndex + 1)
+        }
+        .orEmpty()
 
 if (isReleaseBuildRequested) {
     if (!releaseSigningPropertiesFile.exists()) {
@@ -36,6 +58,32 @@ if (isReleaseBuildRequested) {
     if (!releaseKeystoreFile.isFile) {
         throw GradleException(
             "Release keystore was not found at: ${releaseKeystoreFile.path}",
+        )
+    }
+
+    if (releaseAdMobAppId.isNullOrBlank()) {
+        throw GradleException(
+            "Release build requires ADMOB_ANDROID_APP_ID as a Gradle property " +
+                "or environment variable.",
+        )
+    }
+    if (releaseAdMobAppId == googleTestAdMobAppId) {
+        throw GradleException(
+            "Release build must not use the Google test AdMob App ID.",
+        )
+    }
+
+    val releaseInterstitialAdUnitId =
+        releaseDartDefines["ADMOB_INTERSTITIAL_AD_UNIT_ID"]
+    if (releaseInterstitialAdUnitId.isNullOrBlank()) {
+        throw GradleException(
+            "Release build requires --dart-define=" +
+                "ADMOB_INTERSTITIAL_AD_UNIT_ID=<production-ad-unit-id>.",
+        )
+    }
+    if (releaseInterstitialAdUnitId == googleTestAndroidInterstitialAdUnitId) {
+        throw GradleException(
+            "Release build must not use the Google test interstitial Ad Unit ID.",
         )
     }
 }
@@ -84,14 +132,11 @@ android {
     buildTypes {
         getByName("debug") {
             manifestPlaceholders["admobAppId"] =
-                "ca-app-pub-3940256099942544~3347511713"
+                googleTestAdMobAppId
         }
         release {
             signingConfig = signingConfigs.findByName("release")
-            manifestPlaceholders["admobAppId"] =
-                providers.gradleProperty("ADMOB_ANDROID_APP_ID").orNull
-                    ?: System.getenv("ADMOB_ANDROID_APP_ID")
-                    ?: "ca-app-pub-3940256099942544~3347511713"
+            manifestPlaceholders["admobAppId"] = releaseAdMobAppId.orEmpty()
         }
     }
 }
