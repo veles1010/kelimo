@@ -271,7 +271,6 @@ class FakeInterstitialAdService extends InterstitialAdService {
   @override
   bool get canShow => policy.isEligible(
     state: storage.state,
-    now: now(),
     isForeground: foreground,
     canRequestAds: consentAllowed,
     isAdReady: adReady,
@@ -1484,13 +1483,12 @@ void main() {
     expect(ads.preloadCalls, 0);
   });
 
-  test('Reklam sayacı ve cooldown servis yeniden açılınca korunur', () async {
+  test('Reklam sayacı servis yeniden açılınca korunur', () async {
     final storage = FakeInterstitialStorage();
     var now = DateTime.utc(2026, 7, 17, 12);
     final first = FakeInterstitialAdService(storage: storage, now: () => now);
     addTearDown(first.dispose);
     await first.initialize();
-    await first.recordQuizCompleted();
     await first.recordQuizCompleted();
     expect(first.canShow, isFalse);
     await first.recordQuizCompleted();
@@ -1506,9 +1504,6 @@ void main() {
     await reopened.initialize();
     await reopened.recordQuizCompleted();
     await reopened.recordQuizCompleted();
-    await reopened.recordQuizCompleted();
-    expect(reopened.canShow, isFalse);
-    now = now.add(const Duration(minutes: 15));
     expect(reopened.canShow, isTrue);
   });
 
@@ -7050,18 +7045,20 @@ void main() {
   });
 
   testWidgets(
-    'Quiz sonucu yalnızca doğal çıkışta reklam dener ve hata navigasyonu engellemez',
+    'Quiz sonucu üç doğal çıkışta reklam dener ve hata navigasyonu engellemez',
     (tester) async {
       final ads = FakeInterstitialAdService()..showSucceeds = false;
       addTearDown(ads.dispose);
       await ads.recordQuizCompleted();
       await ads.recordQuizCompleted();
-      await ads.recordQuizCompleted();
-      var action = '';
+      expect(ads.canShow, isTrue);
 
-      await tester.pumpWidget(
+      var action = '';
+      var resultKey = '';
+      Future<void> pumpResult() => tester.pumpWidget(
         MaterialApp(
           home: QuizResultScreen(
+            key: ValueKey('quiz-result-$resultKey'),
             categoryName: 'Hayvanlar',
             correctAnswerCount: 8,
             totalQuestionCount: 10,
@@ -7079,21 +7076,63 @@ void main() {
         ),
       );
 
-      await tester.scrollUntilVisible(find.text('Tekrar Çöz'), 250);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Tekrar Çöz'));
-      expect(action, 'retry');
-      expect(ads.showCalls, 0);
+      for (final entry in <(String, String)>[
+        ('Tekrar Çöz', 'retry'),
+        ('Kategoriye Dön', 'category'),
+        ('Ana Sayfa', 'home'),
+      ]) {
+        action = '';
+        resultKey = entry.$1;
+        await pumpResult();
+        await tester.ensureVisible(find.text(entry.$1));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(entry.$1));
+        await tester.pumpAndSettle();
+        expect(action, entry.$2);
+      }
 
-      action = '';
-      await tester.scrollUntilVisible(find.text('Ana Sayfa'), 180);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Ana Sayfa'));
-      await tester.pump();
-      expect(ads.showCalls, 1);
-      expect(action, 'home');
+      expect(ads.showCalls, 3);
+      expect(ads.storage.state.completedQuizCountSinceLastAd, 2);
     },
   );
+
+  testWidgets('Quiz sonucu çift dokunmada çıkış eylemini bir kez çalıştırır', (
+    tester,
+  ) async {
+    final ads = FakeInterstitialAdService();
+    addTearDown(ads.dispose);
+    await ads.recordQuizCompleted();
+    await ads.recordQuizCompleted();
+    var retryCount = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: QuizResultScreen(
+          categoryName: 'Hayvanlar',
+          correctAnswerCount: 8,
+          totalQuestionCount: 10,
+          successPercentage: 80,
+          xpAwarded: 0,
+          totalXpBefore: 0,
+          totalXpAfter: 0,
+          longestCorrectStreak: 3,
+          elapsedDuration: const Duration(seconds: 30),
+          interstitialAdService: ads,
+          onRetry: () => retryCount++,
+          onReturnToCategory: () {},
+          onReturnHome: () {},
+        ),
+      ),
+    );
+
+    await tester.ensureVisible(find.text('Tekrar Çöz'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Tekrar Çöz'));
+    await tester.tap(find.text('Tekrar Çöz'));
+    await tester.pump();
+
+    expect(ads.showCalls, 1);
+    expect(retryCount, 1);
+  });
 
   testWidgets('Reklam kapanınca sayaç sıfırlanır', (tester) async {
     final ads = FakeInterstitialAdService();

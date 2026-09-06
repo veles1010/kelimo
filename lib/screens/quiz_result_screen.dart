@@ -211,7 +211,9 @@ class _QuizResultScreenState extends State<QuizResultScreen> {
                       ),
                       const SizedBox(height: 28),
                       FilledButton(
-                        onPressed: _isLeaving ? null : widget.onRetry,
+                        onPressed: _isLeaving
+                            ? null
+                            : () => _leave(widget.onRetry),
                         child: const Text('Tekrar Çöz'),
                       ),
                       const SizedBox(height: 12),

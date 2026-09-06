@@ -18,7 +18,6 @@ void main() {
         completedQuizCountSinceLastAd: quizCount,
         lastInterstitialShownAt: lastShownAt,
       ),
-      now: now,
       isForeground: foreground,
       canRequestAds: consent,
       isAdReady: ready,
@@ -29,31 +28,24 @@ void main() {
     expect(eligible(quizCount: 3, consent: false), isFalse);
   });
 
-  test('İlk iki quiz sonrası reklam gösterilmez, üçüncüde uygun olur', () {
+  test('İlk quiz sonrası reklam gösterilmez, ikinci quizde uygun olur', () {
+    expect(eligible(quizCount: 0), isFalse);
     expect(eligible(quizCount: 1), isFalse);
-    expect(eligible(quizCount: 2), isFalse);
-    expect(eligible(quizCount: 3), isTrue);
+    expect(eligible(quizCount: 2), isTrue);
   });
 
-  test('15 dakika cooldown dolmadan yeniden gösterilmez', () {
+  test('son reklam zamanı iki yeni quiz sonrası uygunluğu engellemez', () {
     expect(
       eligible(
-        quizCount: 3,
-        lastShownAt: now.subtract(const Duration(minutes: 14, seconds: 59)),
-      ),
-      isFalse,
-    );
-    expect(
-      eligible(
-        quizCount: 3,
-        lastShownAt: now.subtract(const Duration(minutes: 15)),
+        quizCount: 2,
+        lastShownAt: now.subtract(const Duration(seconds: 1)),
       ),
       isTrue,
     );
   });
 
   test('Foreground ve hazır reklam koşulları zorunludur', () {
-    expect(eligible(quizCount: 3, foreground: false), isFalse);
-    expect(eligible(quizCount: 3, ready: false), isFalse);
+    expect(eligible(quizCount: 2, foreground: false), isFalse);
+    expect(eligible(quizCount: 2, ready: false), isFalse);
   });
 }

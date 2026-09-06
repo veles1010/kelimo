@@ -24,26 +24,18 @@ abstract class InterstitialAdService extends ChangeNotifier {
 }
 
 class InterstitialAdPolicy {
-  const InterstitialAdPolicy({
-    this.minimumQuizCount = 3,
-    this.minimumInterval = const Duration(minutes: 15),
-  });
+  const InterstitialAdPolicy({this.minimumQuizCount = 2});
 
   final int minimumQuizCount;
-  final Duration minimumInterval;
 
   bool isEligible({
     required AdDisplayState state,
-    required DateTime now,
     required bool isForeground,
     required bool canRequestAds,
     required bool isAdReady,
   }) {
     if (!isForeground || !canRequestAds || !isAdReady) return false;
-    if (state.completedQuizCountSinceLastAd < minimumQuizCount) return false;
-    final lastShownAt = state.lastInterstitialShownAt;
-    if (lastShownAt == null) return true;
-    return !now.toUtc().isBefore(lastShownAt.add(minimumInterval));
+    return state.completedQuizCountSinceLastAd >= minimumQuizCount;
   }
 }
 
@@ -51,8 +43,6 @@ class GoogleInterstitialAdService extends InterstitialAdService {
   GoogleInterstitialAdService(this._repository, {DateTime Function()? now})
     : _now = now ?? DateTime.now;
 
-  static const minimumQuizCount = 3;
-  static const minimumInterval = Duration(minutes: 15);
   static const androidTestInterstitialAdUnitId =
       'ca-app-pub-3940256099942544/1033173712';
   static const iosTestInterstitialAdUnitId =
@@ -89,7 +79,6 @@ class GoogleInterstitialAdService extends InterstitialAdService {
       !_isShowing &&
       _policy.isEligible(
         state: _state,
-        now: _now(),
         isForeground: _isForeground,
         canRequestAds: _canRequestAds,
         isAdReady: _ad != null,
