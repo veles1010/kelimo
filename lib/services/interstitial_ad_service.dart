@@ -6,12 +6,14 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:kelimo/models/ad_display_state.dart';
 import 'package:kelimo/repositories/ad_frequency_repository.dart';
 import 'package:kelimo/services/ad_load_backoff.dart';
+import 'package:kelimo/services/ad_removal_service.dart';
 
 abstract class InterstitialAdService extends ChangeNotifier {
   bool get privacyOptionsRequired;
   bool get canShow;
   bool get canRequestAds => false;
   bool get adsSdkReady => canRequestAds;
+  bool get isAdsRemoved => false;
 
   Future<void> initialize();
   Future<void> requestConsentIfNeeded();
@@ -40,8 +42,13 @@ class InterstitialAdPolicy {
 }
 
 class GoogleInterstitialAdService extends InterstitialAdService {
-  GoogleInterstitialAdService(this._repository, {DateTime Function()? now})
-    : _now = now ?? DateTime.now;
+  GoogleInterstitialAdService(
+    this._repository, {
+    DateTime Function()? now,
+    this.adRemovalService,
+  }) : _now = now ?? DateTime.now {
+    adRemovalService?.addListener(_handleEntitlementChanged);
+  }
 
   static const androidTestInterstitialAdUnitId =
       'ca-app-pub-3940256099942544/1033173712';
@@ -50,6 +57,8 @@ class GoogleInterstitialAdService extends InterstitialAdService {
 
   final AdFrequencyStore _repository;
   final DateTime Function() _now;
+  final AdRemovalService? adRemovalService;
+  AdRemovalService? get _adRemovalService => adRemovalService;
   final InterstitialAdPolicy _policy = const InterstitialAdPolicy();
   AdDisplayState _state = AdDisplayState.initial;
   InterstitialAd? _ad;
@@ -75,7 +84,11 @@ class GoogleInterstitialAdService extends InterstitialAdService {
   bool get adsSdkReady => _adsSdkReady;
 
   @override
+  bool get isAdsRemoved => _adRemovalService?.isAdsRemoved ?? false;
+
+  @override
   bool get canShow =>
+      !isAdsRemoved &&
       !_isShowing &&
       _policy.isEligible(
         state: _state,
@@ -86,6 +99,7 @@ class GoogleInterstitialAdService extends InterstitialAdService {
 
   @override
   Future<void> initialize() async {
+    if (isAdsRemoved) return;
     try {
       _state = await _repository.load();
       await requestConsentIfNeeded();
@@ -175,7 +189,8 @@ class GoogleInterstitialAdService extends InterstitialAdService {
 
   @override
   Future<void> preload() async {
-    if (!_canRequestAds ||
+    if (isAdsRemoved ||
+        !_canRequestAds ||
         _isLoading ||
         _ad != null ||
         _isDisposed ||
@@ -232,10 +247,11 @@ class GoogleInterstitialAdService extends InterstitialAdService {
 
   @override
   Future<void> recordQuizCompleted() async {
+    if (isAdsRemoved) return;
     try {
       _state = await _repository.recordQuizCompleted();
       notifyListeners();
-      await preload();
+      if (!isAdsRemoved) await preload();
     } catch (error, stackTrace) {
       debugPrint('Reklam quiz sayacı kaydedilemedi: $error\n$stackTrace');
     }
@@ -249,7 +265,11 @@ class GoogleInterstitialAdService extends InterstitialAdService {
 
   @override
   Future<bool> showTestAd() async {
-    if (!_isForeground || !_canRequestAds || _ad == null || _isShowing) {
+    if (isAdsRemoved ||
+        !_isForeground ||
+        !_canRequestAds ||
+        _ad == null ||
+        _isShowing) {
       return false;
     }
     return _show(recordFrequency: false);
@@ -334,7 +354,17 @@ class GoogleInterstitialAdService extends InterstitialAdService {
   void setForeground(bool isForeground) {
     _isForeground = isForeground;
     notifyListeners();
-    if (isForeground) unawaited(preload());
+    if (isForeground && !isAdsRemoved) unawaited(preload());
+  }
+
+  void _handleEntitlementChanged() {
+    if (!isAdsRemoved) return;
+    final ad = _ad;
+    _ad = null;
+    if (ad != null) unawaited(ad.dispose());
+    _retryTimer?.cancel();
+    _retryTimer = null;
+    notifyListeners();
   }
 
   String? get _adUnitId {
@@ -356,6 +386,7 @@ class GoogleInterstitialAdService extends InterstitialAdService {
     final ad = _ad;
     _ad = null;
     if (ad != null) unawaited(ad.dispose());
+    _adRemovalService?.removeListener(_handleEntitlementChanged);
     super.dispose();
   }
 }

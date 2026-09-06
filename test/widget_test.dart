@@ -36,6 +36,7 @@ import 'package:kelimo/repositories/settings_repository.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/repositories/xp_repository.dart';
 import 'package:kelimo/repositories/category_unlock_repository.dart';
+import 'package:kelimo/repositories/ad_removal_repository.dart';
 import 'package:kelimo/screens/quiz_result_screen.dart';
 import 'package:kelimo/screens/about_screen.dart';
 import 'package:kelimo/screens/category_quiz_screen.dart';
@@ -66,6 +67,7 @@ import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/services/interstitial_ad_service.dart';
 import 'package:kelimo/services/banner_ad_service.dart';
+import 'package:kelimo/services/ad_removal_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 import 'package:kelimo/utils/turkish_case.dart';
 import 'package:kelimo/widgets/scale_down_single_line_text.dart';
@@ -233,6 +235,35 @@ class FakeNotificationService implements NotificationService {
 
 class FakeInterstitialStorage {
   AdDisplayState state = AdDisplayState.initial;
+}
+
+class FakeAdRemovalStore implements AdRemovalStore {
+  FakeAdRemovalStore([this.value = false]);
+  bool value;
+  @override
+  Future<bool> loadAdsRemoved() async => value;
+  @override
+  Future<void> saveAdsRemoved(bool value) async => this.value = value;
+}
+
+class FakeStorePurchaseGateway implements StorePurchaseGateway {
+  final controller = StreamController<List<StorePurchase>>.broadcast();
+  bool available;
+  List<StoreProduct> products;
+
+  FakeStorePurchaseGateway({this.available = false, this.products = const []});
+  @override
+  Stream<List<StorePurchase>> get purchaseStream => controller.stream;
+  @override
+  Future<bool> isAvailable() async => available;
+  @override
+  Future<bool> buyNonConsumable(StoreProduct product) async => false;
+  @override
+  Future<void> completePurchase(StorePurchase purchase) async {}
+  @override
+  Future<List<StoreProduct>> queryProducts(Set<String> ids) async => products;
+  @override
+  Future<void> restorePurchases() async {}
 }
 
 class FakeInterstitialAdService extends InterstitialAdService {
@@ -912,6 +943,8 @@ Future<void> pumpKelimoApp(
   NotificationService? notificationService,
   AppNavigationController? navigationController,
   InterstitialAdService? interstitialAdService,
+  AdRemovalStore? adRemovalStore,
+  StorePurchaseGateway? storePurchaseGateway,
 }) async {
   final sharedXpStorage = xpStorage ?? FakeXpStorage();
   final notifications = notificationService ?? FakeNotificationService();
@@ -951,6 +984,8 @@ Future<void> pumpKelimoApp(
           ),
         ),
       ),
+      adRemovalStore: adRemovalStore ?? FakeAdRemovalStore(),
+      storePurchaseGateway: storePurchaseGateway ?? FakeStorePurchaseGateway(),
     ),
   );
   await tester.pumpAndSettle();
@@ -4030,6 +4065,8 @@ void main() {
 
     final selector = find.byKey(const ValueKey('theme-mode-system'));
     expect(selector, findsOneWidget);
+    await tester.ensureVisible(selector);
+    await tester.pumpAndSettle();
     await tester.tap(selector);
     await tester.pumpAndSettle();
     expect(find.text('Sistem ayarı'), findsWidgets);
@@ -4330,6 +4367,53 @@ void main() {
       );
     },
   );
+
+  testWidgets('Ayarlar reklamları kaldırma ürünü ve etkin hakkı gösterir', (
+    tester,
+  ) async {
+    final entitlement = FakeAdRemovalStore();
+    final store = FakeStorePurchaseGateway(
+      available: true,
+      products: const [
+        StoreProduct(
+          id: removeAdsProductId,
+          price: '₺49,99',
+          rawProduct: 'remove-ads',
+        ),
+      ],
+    );
+    addTearDown(store.controller.close);
+    await pumpKelimoApp(
+      tester,
+      adRemovalStore: entitlement,
+      storePurchaseGateway: store,
+    );
+
+    await tester.tap(find.text('Ayarlar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Reklamları Kaldır'), findsOneWidget);
+    final applicationTop = tester.getTopLeft(find.text('Uygulama')).dy;
+    final adRemovalTop = tester.getTopLeft(find.text('Reklamları Kaldır')).dy;
+    final appearanceTop = tester.getTopLeft(find.text('Görünüm')).dy;
+    expect(applicationTop, lessThan(adRemovalTop));
+    expect(adRemovalTop, lessThan(appearanceTop));
+
+    await tester.scrollUntilVisible(find.text('Reklamları Kaldır'), 250);
+    expect(find.text('Reklamları kaldır · ₺49,99'), findsOneWidget);
+    expect(find.text('Satın Alımları Geri Yükle'), findsOneWidget);
+
+    store.controller.add([
+      const StorePurchase(
+        productId: removeAdsProductId,
+        status: StorePurchaseStatus.purchased,
+        pendingCompletePurchase: false,
+        rawPurchase: 'purchase',
+        purchaseId: 'settings-purchase',
+      ),
+    ]);
+    await tester.pumpAndSettle();
+    expect(find.text('Reklamlar kaldırıldı'), findsOneWidget);
+  });
 
   testWidgets(
     'Sesi dene seçili telaffuz hızını kullanır ve küçük ekranda taşmaz',

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:kelimo/data/local/database_service.dart';
 import 'package:kelimo/models/xp_state.dart';
 import 'package:kelimo/repositories/settings_repository.dart';
+import 'package:kelimo/repositories/ad_removal_repository.dart';
 import 'package:sqflite/sqflite.dart';
 
 abstract interface class DataResetStore {
@@ -46,8 +47,25 @@ class DataResetRepository implements DataResetStore {
         );
 
         if (resetSettings) {
+          // A store-confirmed non-consumable entitlement is not ordinary user
+          // data. Keep the local entitlement through every reset; reinstall users
+          // can still restore it from the store.
+          final entitlement = await transaction.query(
+            'app_settings',
+            columns: ['value'],
+            where: 'key = ?',
+            whereArgs: [AdRemovalRepository.adsRemovedKey],
+            limit: 1,
+          );
           await transaction.delete('app_settings');
           await SettingsRepository.writeDefaults(transaction);
+          if (entitlement.isNotEmpty && entitlement.first['value'] == 'true') {
+            await transaction.insert('app_settings', {
+              'key': AdRemovalRepository.adsRemovedKey,
+              'value': 'true',
+              'updated_at': DateTime.now().toUtc().toIso8601String(),
+            }, conflictAlgorithm: ConflictAlgorithm.replace);
+          }
         }
       });
     } catch (error, stackTrace) {

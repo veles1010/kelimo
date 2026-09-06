@@ -12,6 +12,7 @@ import 'package:kelimo/services/english_tts_service.dart';
 import 'package:kelimo/services/notification_service.dart';
 import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/services/interstitial_ad_service.dart';
+import 'package:kelimo/services/ad_removal_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 import 'package:kelimo/widgets/glass_surface.dart';
 
@@ -22,6 +23,7 @@ class SettingsScreen extends StatefulWidget {
     this.previewTtsService,
     this.dailyReminderService,
     this.interstitialAdService,
+    this.adRemovalService,
     this.appInfoProvider,
     this.onShowOnboarding,
     super.key,
@@ -32,6 +34,7 @@ class SettingsScreen extends StatefulWidget {
   final EnglishTtsService? previewTtsService;
   final DailyReminderService? dailyReminderService;
   final InterstitialAdService? interstitialAdService;
+  final AdRemovalService? adRemovalService;
   final AppInfoProvider? appInfoProvider;
   final VoidCallback? onShowOnboarding;
 
@@ -224,6 +227,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _isBusy = false);
   }
 
+  Future<void> _purchaseAdRemoval() async {
+    final service = widget.adRemovalService;
+    if (service == null || _isBusy) return;
+    setState(() => _isBusy = true);
+    final started = await service.purchase();
+    if (!mounted) return;
+    if (!started && service.message != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(service.message!)));
+    }
+    setState(() => _isBusy = false);
+  }
+
+  Future<void> _restoreAdRemoval() async {
+    final service = widget.adRemovalService;
+    if (service == null || _isBusy) return;
+    setState(() => _isBusy = true);
+    await service.restorePurchases();
+    if (!mounted) return;
+    setState(() => _isBusy = false);
+  }
+
   void _openAbout() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -327,6 +353,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               widget.dailyReminderService!,
             if (widget.interstitialAdService != null)
               widget.interstitialAdService!,
+            if (widget.adRemovalService != null) widget.adRemovalService!,
           ]),
           builder: (context, child) => ListView(
             padding: EdgeInsets.fromLTRB(
@@ -406,6 +433,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
+                      if (widget.adRemovalService case final removalService?)
+                        _Section(
+                          title: 'Reklamları Kaldır',
+                          child: _AdRemovalSection(
+                            service: removalService,
+                            isBusy: _isBusy,
+                            onPurchase: _purchaseAdRemoval,
+                            onRestore: _restoreAdRemoval,
+                          ),
+                        ),
+                      if (widget.adRemovalService != null)
+                        const SizedBox(height: 16),
                       _Section(
                         title: 'Görünüm',
                         child: Semantics(
@@ -752,6 +791,78 @@ String _permissionLabel(NotificationPermissionStatus status) {
     NotificationPermissionStatus.denied => 'İzin verilmedi',
     NotificationPermissionStatus.unknown => 'Kontrol ediliyor',
   };
+}
+
+class _AdRemovalSection extends StatelessWidget {
+  const _AdRemovalSection({
+    required this.service,
+    required this.isBusy,
+    required this.onPurchase,
+    required this.onRestore,
+  });
+
+  final AdRemovalService service;
+  final bool isBusy;
+  final VoidCallback onPurchase;
+  final VoidCallback onRestore;
+
+  @override
+  Widget build(BuildContext context) {
+    final pending = service.isPurchasePending || isBusy;
+    if (service.isAdsRemoved) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.block_rounded),
+            title: Text('Reklamlar kaldırıldı'),
+            subtitle: Text('Banner ve geçiş reklamları gösterilmeyecek.'),
+          ),
+          TextButton(
+            key: const ValueKey('restore-purchases-button'),
+            onPressed: pending ? null : onRestore,
+            child: const Text('Satın Alımları Geri Yükle'),
+          ),
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'Tek seferlik satın alımla banner ve geçiş reklamlarını kaldır.',
+        ),
+        const SizedBox(height: 12),
+        if (service.isLoadingProducts)
+          const Center(child: CircularProgressIndicator())
+        else if (service.canPurchase)
+          FilledButton.icon(
+            key: const ValueKey('purchase-remove-ads-button'),
+            onPressed: pending ? null : onPurchase,
+            icon: pending
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.block_rounded),
+            label: Text('Reklamları kaldır · ${service.price}'),
+          )
+        else
+          Text(
+            service.message ??
+                'Reklamları kaldırma ürünü şu anda kullanılamıyor.',
+          ),
+        const SizedBox(height: 6),
+        TextButton(
+          key: const ValueKey('restore-purchases-button'),
+          onPressed: pending ? null : onRestore,
+          child: const Text('Satın Alımları Geri Yükle'),
+        ),
+      ],
+    );
+  }
 }
 
 class _Section extends StatelessWidget {

@@ -18,7 +18,9 @@ abstract class BannerAdService extends ChangeNotifier {
 }
 
 class GoogleBannerAdService extends BannerAdService {
-  GoogleBannerAdService(this._adsService);
+  GoogleBannerAdService(this._adsService) {
+    _adsService.addListener(_handleAdsStateChanged);
+  }
 
   final InterstitialAdService _adsService;
   BannerAd? _ad;
@@ -38,7 +40,12 @@ class GoogleBannerAdService extends BannerAdService {
 
   @override
   Future<void> load({required double width}) async {
-    if (_isDisposed || _isLoading || isLoaded || _attempted || width <= 0) {
+    if (_isDisposed ||
+        _adsService.isAdsRemoved ||
+        _isLoading ||
+        isLoaded ||
+        _attempted ||
+        width <= 0) {
       return;
     }
     if (!_adsService.adsSdkReady || !_adsService.canRequestAds) return;
@@ -116,7 +123,17 @@ class GoogleBannerAdService extends BannerAdService {
     final ad = _ad;
     _ad = null;
     if (ad != null) unawaited(ad.dispose());
+    _adsService.removeListener(_handleAdsStateChanged);
     super.dispose();
+  }
+
+  void _handleAdsStateChanged() {
+    if (!_adsService.isAdsRemoved) return;
+    final ad = _ad;
+    _ad = null;
+    _size = null;
+    if (ad != null) unawaited(ad.dispose());
+    notifyListeners();
   }
 }
 

@@ -25,6 +25,7 @@ import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/services/interstitial_ad_service.dart';
 import 'package:kelimo/services/category_access_service.dart';
+import 'package:kelimo/services/ad_removal_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 import 'package:kelimo/widgets/glass_surface.dart';
 
@@ -43,6 +44,7 @@ class HomeScreen extends StatefulWidget {
     this.navigationController,
     this.interstitialAdService,
     this.categoryAccessService,
+    this.adRemovalService,
     super.key,
   });
 
@@ -59,6 +61,7 @@ class HomeScreen extends StatefulWidget {
   final AppNavigationController? navigationController;
   final InterstitialAdService? interstitialAdService;
   final CategoryAccessService? categoryAccessService;
+  final AdRemovalService? adRemovalService;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -204,6 +207,7 @@ class _HomeScreenState extends State<HomeScreen> {
           dataManagementService: widget.dataManagementService,
           dailyReminderService: widget.dailyReminderService,
           interstitialAdService: widget.interstitialAdService,
+          adRemovalService: widget.adRemovalService,
           onShowOnboarding: _showOnboarding,
         ),
         _ => GlassBackground(
