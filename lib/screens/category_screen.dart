@@ -16,6 +16,7 @@ import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 import 'package:kelimo/widgets/glass_surface.dart';
 import 'package:kelimo/services/category_access_service.dart';
+import 'package:kelimo/services/banner_ad_service.dart';
 
 class CategoryScreen extends StatefulWidget {
   const CategoryScreen({
@@ -29,6 +30,7 @@ class CategoryScreen extends StatefulWidget {
     this.achievementService,
     this.dailyReminderService,
     this.interstitialAdService,
+    this.bannerAdService,
     this.categoryAccessService,
     super.key,
   });
@@ -43,6 +45,7 @@ class CategoryScreen extends StatefulWidget {
   final AchievementService? achievementService;
   final DailyReminderService? dailyReminderService;
   final InterstitialAdService? interstitialAdService;
+  final BannerAdService? bannerAdService;
   final CategoryAccessService? categoryAccessService;
 
   @override
@@ -124,6 +127,11 @@ class _CategoryScreenState extends State<CategoryScreen> {
                                 dailyReminderService:
                                     widget.dailyReminderService,
                                 categoryAccessService: access,
+                                interstitialAdService:
+                                    widget.interstitialAdService,
+                                bannerAdService: widget.bannerAdService,
+                                sessionType:
+                                    WordLearningSessionType.normalLesson,
                               ),
                             ),
                           );

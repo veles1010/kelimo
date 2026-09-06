@@ -65,6 +65,7 @@ import 'package:kelimo/services/settings_service.dart';
 import 'package:kelimo/services/statistics_service.dart';
 import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/services/interstitial_ad_service.dart';
+import 'package:kelimo/services/banner_ad_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 import 'package:kelimo/utils/turkish_case.dart';
 import 'package:kelimo/widgets/scale_down_single_line_text.dart';
@@ -331,6 +332,38 @@ class FakeInterstitialAdService extends InterstitialAdService {
   void setForeground(bool isForeground) {
     foreground = isForeground;
     notifyListeners();
+  }
+}
+
+class FakeBannerAdService extends BannerAdService {
+  FakeBannerAdService({required this.bannerHeight, this.loaded = true});
+
+  final double bannerHeight;
+  bool loaded;
+  int loadCalls = 0;
+  int disposeCalls = 0;
+
+  @override
+  bool get isLoaded => loaded;
+
+  @override
+  bool get isLoading => false;
+
+  @override
+  double get height => bannerHeight;
+
+  @override
+  Future<void> load({required double width}) async {
+    loadCalls++;
+  }
+
+  @override
+  Widget buildAdWidget() => const SizedBox(key: ValueKey('fake-banner-ad'));
+
+  @override
+  void dispose() {
+    disposeCalls++;
+    super.dispose();
   }
 }
 
@@ -3616,12 +3649,23 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(CategoryScreen), findsOneWidget);
     expect(find.text('Hayvanlar'), findsWidgets);
+    await tester.tap(find.text('Öğrenmeye Başla'));
+    await tester.pumpAndSettle();
+    expect(find.byType(WordCardScreen), findsOneWidget);
+    expect(find.byKey(const ValueKey('learning-banner-slot')), findsOneWidget);
 
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     await tester.pageBack();
     await tester.pumpAndSettle();
     await tester.tap(find.text('Kategori Seç'));
     await tester.pumpAndSettle();
     expect(find.byType(CategorySelectionScreen), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('category-grid-animals')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Öğrenmeye Başla'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('learning-banner-slot')), findsOneWidget);
   });
 
   testWidgets('Öğrenme Merkezi filtreleri kullanıcı dostu durumları gösterir', (
@@ -3750,6 +3794,7 @@ void main() {
     expect(find.text('Ev'), findsOneWidget);
     expect(find.text('20 / 30'), findsOneWidget);
     expect(find.text('WASHING MACHINE'), findsOneWidget);
+    expect(find.byKey(const ValueKey('learning-banner-slot')), findsNothing);
   });
 
   testWidgets('Flashcard dönüşünde Öğrenme Merkezi sayaçları yenilenir', (
@@ -6375,6 +6420,7 @@ void main() {
     expect(find.text('Bu kelime nasıldı?'), findsOneWidget);
     expect(find.text('Önceki'), findsOneWidget);
     expect(find.text('Sonraki'), findsOneWidget);
+    expect(find.byKey(const ValueKey('learning-banner-slot')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('word-card')));
     await tester.pumpAndSettle();
@@ -6398,6 +6444,97 @@ void main() {
     expect(find.text('1 / 30'), findsOneWidget);
     expect(find.text('DOG'), findsOneWidget);
   });
+
+  testWidgets(
+    'yüklü adaptive banner standart ekranda tüm öğrenme kontrollerinin altında kalır',
+    (tester) async {
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final xpService = await createXpService();
+      addTearDown(xpService.dispose);
+
+      for (final bannerHeight in <double>[100, 50]) {
+        await tester.binding.setSurfaceSize(const Size(393, 852));
+        final banner = FakeBannerAdService(bannerHeight: bannerHeight);
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: AppTheme.light,
+            home: WordCardScreen(
+              key: ValueKey('banner-session-$bannerHeight'),
+              category: CategoryCatalog.animals,
+              wordProgressStore: FakeWordProgressStore(),
+              xpService: xpService,
+              ttsService: EnglishTtsService(engine: FakeTtsEngine()),
+              bannerAdService: banner,
+              sessionType: WordLearningSessionType.normalLesson,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('DOG'), findsOneWidget);
+        expect(find.text('Dinle'), findsOneWidget);
+        expect(find.text('Favori'), findsOneWidget);
+        expect(find.text('Bu kelime nasıldı?'), findsOneWidget);
+        expect(find.text('Biliyorum'), findsOneWidget);
+        expect(find.text('Tekrar Et'), findsOneWidget);
+        expect(find.text('Zor'), findsOneWidget);
+        expect(find.text('Önceki'), findsOneWidget);
+        expect(find.text('Sonraki'), findsOneWidget);
+
+        final navigation = find.byKey(const ValueKey('word-navigation'));
+        final bannerSlot = find.byKey(const ValueKey('learning-banner-slot'));
+        expect(tester.getTopLeft(navigation).dy, greaterThan(0));
+        expect(
+          tester.getBottomLeft(navigation).dy,
+          lessThanOrEqualTo(tester.getTopLeft(bannerSlot).dy),
+        );
+        expect(tester.getSize(bannerSlot).height, bannerHeight);
+
+        await tester.tap(find.text('Sonraki'));
+        await tester.pumpAndSettle();
+        expect(find.text('2 / 30'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      }
+    },
+  );
+
+  testWidgets(
+    'yüksek metinde banner ile öğrenme ekranı kaydırılarak erişilebilir kalır',
+    (tester) async {
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.binding.setSurfaceSize(const Size(320, 568));
+      final xpService = await createXpService();
+      addTearDown(xpService.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(1.5)),
+            child: child!,
+          ),
+          home: WordCardScreen(
+            category: CategoryCatalog.animals,
+            wordProgressStore: FakeWordProgressStore(),
+            xpService: xpService,
+            ttsService: EnglishTtsService(engine: FakeTtsEngine()),
+            bannerAdService: FakeBannerAdService(bannerHeight: 100),
+            sessionType: WordLearningSessionType.normalLesson,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('word-navigation')),
+        180,
+      );
+      expect(find.text('Biliyorum'), findsOneWidget);
+      expect(find.text('Sonraki'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'Değerlendirme kapsülleri dar ekranda eşit, tam ve işlevsel kalır',

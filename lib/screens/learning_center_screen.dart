@@ -18,6 +18,8 @@ import 'package:kelimo/services/xp_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 import 'package:kelimo/widgets/glass_surface.dart';
 import 'package:kelimo/services/category_access_service.dart';
+import 'package:kelimo/services/interstitial_ad_service.dart';
+import 'package:kelimo/services/banner_ad_service.dart';
 
 class LearningCenterScreen extends StatefulWidget {
   const LearningCenterScreen({
@@ -32,6 +34,8 @@ class LearningCenterScreen extends StatefulWidget {
     this.achievementService,
     this.dailyReminderService,
     this.categoryAccessService,
+    this.interstitialAdService,
+    this.bannerAdService,
   });
 
   final LearningCenterService service;
@@ -44,6 +48,8 @@ class LearningCenterScreen extends StatefulWidget {
   final AchievementService? achievementService;
   final DailyReminderService? dailyReminderService;
   final CategoryAccessService? categoryAccessService;
+  final InterstitialAdService? interstitialAdService;
+  final BannerAdService? bannerAdService;
 
   @override
   State<LearningCenterScreen> createState() => _LearningCenterScreenState();
@@ -88,6 +94,8 @@ class _LearningCenterScreenState extends State<LearningCenterScreen> {
           settingsService: widget.settingsService,
           achievementService: widget.achievementService,
           dailyReminderService: widget.dailyReminderService,
+          interstitialAdService: widget.interstitialAdService,
+          bannerAdService: widget.bannerAdService,
           categoryAccessService: widget.categoryAccessService,
         ),
       ),

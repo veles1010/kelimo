@@ -191,6 +191,7 @@ class _HomeScreenState extends State<HomeScreen> {
           statisticsService: widget.statisticsService,
           achievementService: widget.achievementService,
           dailyReminderService: widget.dailyReminderService,
+          interstitialAdService: widget.interstitialAdService,
           categoryAccessService: widget.categoryAccessService,
         ),
         2 => ProgressScreen(

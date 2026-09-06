@@ -15,6 +15,11 @@ import 'package:kelimo/widgets/learning_flashcard.dart';
 import 'package:kelimo/widgets/achievement_notification.dart';
 import 'package:kelimo/widgets/glass_surface.dart';
 import 'package:kelimo/services/category_access_service.dart';
+import 'package:kelimo/services/banner_ad_service.dart';
+import 'package:kelimo/services/interstitial_ad_service.dart';
+
+/// Distinguishes a normal category lesson from a manually opened word.
+enum WordLearningSessionType { normalLesson, manualWord }
 
 class WordCardScreen extends StatefulWidget {
   WordCardScreen({
@@ -30,6 +35,9 @@ class WordCardScreen extends StatefulWidget {
     this.achievementService,
     this.dailyReminderService,
     this.categoryAccessService,
+    this.interstitialAdService,
+    this.bannerAdService,
+    this.sessionType = WordLearningSessionType.manualWord,
   }) : assert(
          initialWordIndex >= 0 && initialWordIndex < category.words.length,
        );
@@ -48,6 +56,9 @@ class WordCardScreen extends StatefulWidget {
   final AchievementService? achievementService;
   final DailyReminderService? dailyReminderService;
   final CategoryAccessService? categoryAccessService;
+  final InterstitialAdService? interstitialAdService;
+  final BannerAdService? bannerAdService;
+  final WordLearningSessionType sessionType;
 
   @override
   State<WordCardScreen> createState() => _WordCardScreenState();
@@ -61,6 +72,8 @@ class _WordCardScreenState extends State<WordCardScreen>
   late final LearningEngine _learningEngine;
   late final StreakService _streakService;
   late final bool _ownsStreakService;
+  late final BannerAdService? _bannerAdService;
+  late final bool _ownsBannerAdService;
   late final bool _allWordsKnown;
   LearningRating? _selectedDifficulty;
   bool _isEvaluating = false;
@@ -95,6 +108,15 @@ class _WordCardScreenState extends State<WordCardScreen>
     );
     _ownsStreakService = widget.streakService == null;
     _streakService = widget.streakService ?? StreakService();
+    final isNormalLesson =
+        widget.sessionType == WordLearningSessionType.normalLesson;
+    _ownsBannerAdService = isNormalLesson && widget.bannerAdService == null;
+    _bannerAdService = isNormalLesson
+        ? (widget.bannerAdService ??
+              (widget.interstitialAdService == null
+                  ? null
+                  : GoogleBannerAdService(widget.interstitialAdService!)))
+        : null;
     _isFavorite = widget.wordProgressStore
         .progressFor(_learningEngine.currentWord.id)
         .isFavorite;
@@ -112,6 +134,7 @@ class _WordCardScreenState extends State<WordCardScreen>
   void dispose() {
     unawaited(_ttsService.dispose());
     if (_ownsStreakService) _streakService.dispose();
+    if (_ownsBannerAdService) _bannerAdService?.dispose();
     _flipController.dispose();
     super.dispose();
   }
@@ -303,11 +326,103 @@ class _WordCardScreenState extends State<WordCardScreen>
       return _buildCategoryCompletedScreen(context);
     }
     final word = _learningEngine.currentWord;
-    final isShortViewport = MediaQuery.sizeOf(context).height < 680;
-    final cardMinHeight = isShortViewport ? 280.0 : 360.0;
-    final primaryGap = isShortViewport ? 14.0 : 20.0;
-    final sectionGap = isShortViewport ? 20.0 : 28.0;
-    final bottomPadding = 32.0 + MediaQuery.paddingOf(context).bottom;
+    const bottomPadding = 32.0;
+
+    Widget buildLearningBody(bool bannerLoaded) {
+      return SafeArea(
+        top: false,
+        // The list owns the system inset until a loaded banner takes that
+        // position. This keeps controls reachable in either state.
+        bottom: !bannerLoaded,
+        child: Column(
+          children: [
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  // The constraints here already exclude the loaded banner.
+                  // Keep normal screens roomy, while giving standard phones
+                  // enough room to show every control above a tall iOS ad.
+                  final compact = bannerLoaded && constraints.maxHeight < 720;
+                  final cardMinHeight = compact
+                      ? 250.0
+                      : MediaQuery.sizeOf(context).height < 680
+                      ? 280.0
+                      : 360.0;
+                  final primaryGap = compact ? 10.0 : 20.0;
+                  final sectionGap = compact ? 14.0 : 28.0;
+
+                  return ListView(
+                    padding: const EdgeInsets.fromLTRB(
+                      20,
+                      12,
+                      20,
+                      bottomPadding,
+                    ),
+                    children: [
+                      Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 680),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              LearningFlashcard(
+                                animation: _flipAnimation,
+                                onTap: _flipCard,
+                                word: word,
+                                minHeight: cardMinHeight,
+                              ),
+                              SizedBox(height: primaryGap),
+                              ValueListenableBuilder<bool>(
+                                valueListenable: _ttsService.isSpeaking,
+                                builder: (context, isSpeaking, child) {
+                                  return LearningWordActions(
+                                    isSpeaking: isSpeaking,
+                                    isFavorite: _isFavorite,
+                                    onListen: () => unawaited(_speakWord()),
+                                    onFavorite: () =>
+                                        unawaited(_toggleFavorite()),
+                                  );
+                                },
+                              ),
+                              SizedBox(height: sectionGap),
+                              LearningRatingSection(
+                                selectedRating: _selectedDifficulty,
+                                enabled:
+                                    !_isEvaluating &&
+                                    !_learningEngine.isComplete,
+                                onSelected: (rating) =>
+                                    unawaited(_evaluateWord(rating)),
+                              ),
+                              SizedBox(height: sectionGap),
+                              _WordNavigation(
+                                onPrevious:
+                                    !_learningEngine.canPrevious ||
+                                        _isEvaluating
+                                    ? null
+                                    : _showPreviousWord,
+                                onNext:
+                                    !_learningEngine.canNext || _isEvaluating
+                                    ? null
+                                    : _showNextWord,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+            if (_bannerAdService != null)
+              LearningBannerSlot(
+                key: const ValueKey('learning-banner-slot'),
+                service: _bannerAdService,
+              ),
+          ],
+        ),
+      );
+    }
 
     return GlassBackground(
       child: Scaffold(
@@ -329,59 +444,13 @@ class _WordCardScreenState extends State<WordCardScreen>
             ),
           ],
         ),
-        body: SafeArea(
-          top: false,
-          child: ListView(
-            padding: EdgeInsets.fromLTRB(20, 12, 20, bottomPadding),
-            children: [
-              Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 680),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      LearningFlashcard(
-                        animation: _flipAnimation,
-                        onTap: _flipCard,
-                        word: word,
-                        minHeight: cardMinHeight,
-                      ),
-                      SizedBox(height: primaryGap),
-                      ValueListenableBuilder<bool>(
-                        valueListenable: _ttsService.isSpeaking,
-                        builder: (context, isSpeaking, child) {
-                          return LearningWordActions(
-                            isSpeaking: isSpeaking,
-                            isFavorite: _isFavorite,
-                            onListen: () => unawaited(_speakWord()),
-                            onFavorite: () => unawaited(_toggleFavorite()),
-                          );
-                        },
-                      ),
-                      SizedBox(height: sectionGap),
-                      LearningRatingSection(
-                        selectedRating: _selectedDifficulty,
-                        enabled: !_isEvaluating && !_learningEngine.isComplete,
-                        onSelected: (rating) =>
-                            unawaited(_evaluateWord(rating)),
-                      ),
-                      SizedBox(height: sectionGap),
-                      _WordNavigation(
-                        onPrevious:
-                            !_learningEngine.canPrevious || _isEvaluating
-                            ? null
-                            : _showPreviousWord,
-                        onNext: !_learningEngine.canNext || _isEvaluating
-                            ? null
-                            : _showNextWord,
-                      ),
-                    ],
-                  ),
-                ),
+        body: _bannerAdService == null
+            ? buildLearningBody(false)
+            : AnimatedBuilder(
+                animation: _bannerAdService,
+                builder: (context, child) =>
+                    buildLearningBody(_bannerAdService.isLoaded),
               ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -452,6 +521,7 @@ class _WordNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
+      key: const ValueKey('word-navigation'),
       children: [
         Expanded(
           child: GlassSurface(
