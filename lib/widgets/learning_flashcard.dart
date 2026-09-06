@@ -289,7 +289,7 @@ class _RatingButton extends StatelessWidget {
 
 String learningRatingLabel(LearningRating rating) {
   return switch (rating) {
-    LearningRating.easy => 'Kolay',
+    LearningRating.easy => 'Biliyorum',
     LearningRating.again => 'Tekrar Et',
     LearningRating.hard => 'Zor',
   };

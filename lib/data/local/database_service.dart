@@ -6,7 +6,7 @@ import 'package:sqflite/sqflite.dart';
 
 class DatabaseService {
   static const databaseName = 'kelimo.db';
-  static const databaseVersion = 8;
+  static const databaseVersion = 9;
   static const createRewardedXpClaimsTableSql = '''
     CREATE TABLE IF NOT EXISTS rewarded_xp_claims (
       claim_id TEXT PRIMARY KEY,
@@ -49,6 +49,9 @@ class DatabaseService {
   static const addReviewStageColumnSql =
       'ALTER TABLE word_progress ADD COLUMN review_stage '
       'INTEGER NOT NULL DEFAULT 0';
+  static const addIsKnownColumnSql =
+      'ALTER TABLE word_progress ADD COLUMN '
+      'is_known INTEGER NOT NULL DEFAULT 0';
   static const createAppSettingsTableSql = '''
     CREATE TABLE IF NOT EXISTS app_settings (
       key TEXT PRIMARY KEY,
@@ -102,6 +105,7 @@ class DatabaseService {
     if (version >= 8) {
       await _migrateVersion7To8(database, isNewInstall: true);
     }
+    if (version >= 9) await _migrateVersion8To9(database);
   }
 
   Future<void> _createVersion1(Database database) async {
@@ -161,6 +165,14 @@ class DatabaseService {
     if (oldVersion < 8 && newVersion >= 8) {
       await _migrateVersion7To8(database, isNewInstall: false);
     }
+    if (oldVersion < 9 && newVersion >= 9) {
+      await _migrateVersion8To9(database);
+    }
+  }
+
+  @visibleForTesting
+  Future<void> upgradeForTesting(Database database, {required int oldVersion}) {
+    return _upgradeDatabase(database, oldVersion, databaseVersion);
   }
 
   Future<void> _migrateVersion1To2(Database database) async {
@@ -298,6 +310,12 @@ class DatabaseService {
       'value': isNewInstall ? 'false' : 'true',
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     }, conflictAlgorithm: ConflictAlgorithm.ignore);
+  }
+
+  Future<void> _migrateVersion8To9(Database database) async {
+    final columns = await database.rawQuery('PRAGMA table_info(word_progress)');
+    final hasIsKnown = columns.any((column) => column['name'] == 'is_known');
+    if (!hasIsKnown) await database.execute(addIsKnownColumnSql);
   }
 }
 

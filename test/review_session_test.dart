@@ -176,6 +176,7 @@ WordProgress _dueProgress(
   String wordId,
   DateTime nextReviewAt, {
   bool favorite = false,
+  bool isKnown = false,
 }) {
   return WordProgress(
     wordId: wordId,
@@ -187,6 +188,7 @@ WordProgress _dueProgress(
     lastReviewedAt: nextReviewAt,
     nextReviewAt: nextReviewAt,
     updatedAt: nextReviewAt,
+    isKnown: isKnown,
   );
 }
 
@@ -315,6 +317,22 @@ void main() {
 
       expect(items.single.word.id, 'dog');
       expect(store.initializeCount, 1);
+    });
+
+    test('bilinen vadesi geçmiş kelimeyi savunmacı olarak filtreler', () async {
+      final store = _ReviewWordStore(
+        values: {
+          'dog': _dueProgress('dog', now, isKnown: true),
+          'cat': _dueProgress('cat', now),
+        },
+      );
+
+      final items = await ReviewSessionBuilder(
+        wordProgressStore: store,
+        now: () => now,
+      ).build();
+
+      expect(items.map((item) => item.word.id), ['cat']);
     });
 
     test(
@@ -516,7 +534,8 @@ void main() {
         findsOneWidget,
       );
       expect(store.progressFor('foods_apple').nextReviewAt, now);
-      expect(store.progressFor('dog').nextReviewAt!.isAfter(now), isTrue);
+      expect(store.progressFor('dog').isKnown, isTrue);
+      expect(store.progressFor('dog').nextReviewAt, isNull);
 
       await tester.tap(find.byKey(const ValueKey('review-restart-pending')));
       await tester.pumpAndSettle();

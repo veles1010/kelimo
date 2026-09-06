@@ -14,6 +14,18 @@ WordProgress wordProgressAfterLearningResult(
   final reviewScheduler = scheduler ?? ReviewScheduler();
   final reviewDate = (reviewedAt ?? reviewScheduler.currentTime).toUtc();
   final isCorrect = result.rating == LearningRating.easy;
+  if (result.rating == LearningRating.easy) {
+    return current.copyWith(
+      mastery: 'known',
+      isKnown: true,
+      repetitionCount: current.repetitionCount + 1,
+      correctCount: current.correctCount + 1,
+      lastReviewedAt: reviewDate,
+      reviewStage: 0,
+      clearNextReviewAt: true,
+      updatedAt: reviewDate,
+    );
+  }
   final schedule = reviewScheduler.schedule(
     rating: result.rating,
     currentStage: current.reviewStage,
@@ -27,6 +39,7 @@ WordProgress wordProgressAfterLearningResult(
     lastReviewedAt: reviewDate,
     reviewStage: schedule.reviewStage,
     nextReviewAt: schedule.nextReviewAt,
+    isKnown: false,
     updatedAt: reviewDate,
   );
 }

@@ -15,6 +15,7 @@ int masteryScore(String mastery) {
     'again' => 1,
     'hard' => 2,
     'easy' => 3,
+    'known' => 3,
     _ => 0,
   };
 }
@@ -24,8 +25,9 @@ bool isReviewedProgress(WordProgress progress) {
 }
 
 bool isLearnedProgress(WordProgress progress) {
-  return isReviewedProgress(progress) &&
-      masteryScore(progress.mastery) >= _learnedMasteryScore;
+  return progress.isKnown ||
+      (isReviewedProgress(progress) &&
+          masteryScore(progress.mastery) >= _learnedMasteryScore);
 }
 
 WordLearningDistribution calculateWordDistribution(

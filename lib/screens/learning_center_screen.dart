@@ -208,7 +208,7 @@ class _LearningCenterScreenState extends State<LearningCenterScreen> {
                       key: const ValueKey('learning-filter-learned'),
                       icon: Icons.school_rounded,
                       title: 'Öğrenilenler',
-                      description: 'Kolay olarak tamamladığın kelimeler',
+                      description: 'Öğrendiğin kelimeleri yeniden çalış',
                       count: _snapshot.learnedCount,
                       onTap: () => _openFilter(LearningCenterFilter.learned),
                     ),

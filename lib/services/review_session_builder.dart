@@ -31,6 +31,7 @@ class ReviewSessionBuilder {
       for (var wordIndex = 0; wordIndex < category.words.length; wordIndex++) {
         final word = category.words[wordIndex];
         final progress = progressByWordId[word.id];
+        if (progress?.isKnown ?? false) continue;
         final nextReviewAt = progress?.nextReviewAt;
         if (nextReviewAt == null || nextReviewAt.isAfter(now)) continue;
         if (!seen.add('${category.id}:${word.id}')) continue;

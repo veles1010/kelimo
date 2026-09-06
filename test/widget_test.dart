@@ -395,6 +395,7 @@ WordProgress testWordProgress({
   String mastery = 'new',
   int repetitionCount = 0,
   bool isFavorite = false,
+  bool isKnown = false,
   int reviewStage = 0,
   DateTime? nextReviewAt,
 }) {
@@ -412,6 +413,7 @@ WordProgress testWordProgress({
         ((mastery == 'again' || mastery == 'hard') ? now : null),
     updatedAt: now,
     reviewStage: reviewStage,
+    isKnown: isKnown,
   );
 }
 
@@ -992,13 +994,14 @@ Future<void> pumpLearningSession(WidgetTester tester) async {
       ),
     ),
   );
-  await tester.ensureVisible(find.text('Kolay'));
+  await tester.ensureVisible(find.text('Biliyorum'));
   await tester.pumpAndSettle();
 }
 
 Future<void> selectLearningRating(WidgetTester tester, String rating) async {
-  await tester.ensureVisible(find.text(rating));
-  await tester.tap(find.text(rating));
+  final visibleRating = rating == 'Kolay' ? 'Biliyorum' : rating;
+  await tester.ensureVisible(find.text(visibleRating));
+  await tester.tap(find.text(visibleRating));
   await tester.pumpAndSettle();
 }
 
@@ -1076,22 +1079,13 @@ void main() {
     expect(engine.nextWord().english, 'Cow');
   });
 
-  test('LearningEngine Kolay kelimeyi dokuz kart sonra getirir', () {
+  test('LearningEngine Biliyorum kelimeyi oturum kuyruğundan kaldırır', () {
     final engine = LearningEngine(animalWords);
 
     expect(engine.rateEasy().english, 'Cat');
-    for (final english in [
-      'Bird',
-      'Fish',
-      'Horse',
-      'Cow',
-      'Sheep',
-      'Goat',
-      'Duck',
-      'Chicken',
-      'Dog',
-    ]) {
-      expect(engine.rateEasy().english, english);
+    while (!engine.isComplete) {
+      expect(engine.currentWord.id, isNot(animalWords.first.id));
+      engine.rateEasy();
     }
   });
 
@@ -1110,7 +1104,7 @@ void main() {
     expect(engine.rateEasy().english, 'Dog');
   });
 
-  test('LearningEngine yalnızca tüm kelimeler Kolay olunca tamamlanır', () {
+  test('LearningEngine tüm kelimeler Biliyorum seçilince tamamlanır', () {
     final engine = LearningEngine(animalWords);
     Word? previousWord;
     var evaluationCount = 0;
@@ -1123,9 +1117,62 @@ void main() {
     }
 
     expect(engine.isComplete, isTrue);
-    expect(evaluationCount, 60);
+    expect(evaluationCount, animalWords.length);
     expect(engine.canNext, isFalse);
     expect(engine.canPrevious, isFalse);
+  });
+
+  test(
+    'Biliyorum sonucu kalıcı biliniyor durumu ve boş tekrar tarihi yazar',
+    () {
+      final reviewedAt = DateTime.utc(2026, 9, 6, 10);
+      final progress = wordProgressAfterLearningResult(
+        WordProgress.initial(animalWords.first.id, now: reviewedAt),
+        LearningReviewResult(
+          word: animalWords.first,
+          rating: LearningRating.easy,
+        ),
+        reviewedAt: reviewedAt,
+      );
+
+      expect(progress.mastery, 'known');
+      expect(progress.isKnown, isTrue);
+      expect(progress.nextReviewAt, isNull);
+      expect(progress.repetitionCount, 1);
+    },
+  );
+
+  test('Eski Kolay kaydı migration sonrasında otomatik Biliyorum sayılmaz', () {
+    final legacy = WordProgress.fromMap({
+      'word_id': animalWords.first.id,
+      'is_favorite': 0,
+      'mastery': 'easy',
+      'repetition_count': 1,
+      'correct_count': 1,
+      'wrong_count': 0,
+      'last_reviewed_at': '2026-09-05T10:00:00.000Z',
+      'next_review_at': '2026-09-08T10:00:00.000Z',
+      'updated_at': '2026-09-05T10:00:00.000Z',
+      'review_stage': 2,
+    });
+
+    expect(legacy.isKnown, isFalse);
+    expect(legacy.mastery, 'easy');
+  });
+
+  test('İlerlemeyi sıfırlamak Biliyorum durumunu temizler', () async {
+    final store = FakeWordProgressStore()
+      ..records[animalWords.first.id] = testWordProgress(
+        wordId: animalWords.first.id,
+        mastery: 'known',
+        repetitionCount: 1,
+        isKnown: true,
+      );
+
+    await store.resetProgress(animalWords.first.id);
+
+    expect(store.progressFor(animalWords.first.id).isKnown, isFalse);
+    expect(store.progressFor(animalWords.first.id).mastery, 'new');
   });
 
   test('Word progress toMap ve fromMap değerleri korur', () {
@@ -1142,6 +1189,7 @@ void main() {
       nextReviewAt: nextReviewAt,
       updatedAt: reviewedAt,
       reviewStage: 2,
+      isKnown: true,
     );
 
     final restored = WordProgress.fromMap(progress.toMap());
@@ -1156,8 +1204,10 @@ void main() {
     expect(restored.nextReviewAt, nextReviewAt.toUtc());
     expect(restored.updatedAt, reviewedAt.toUtc());
     expect(restored.reviewStage, 2);
+    expect(restored.isKnown, isTrue);
     expect(progress.toMap()['is_favorite'], 1);
     expect(progress.toMap()['review_stage'], 2);
+    expect(progress.toMap()['is_known'], 1);
     expect(progress.toMap()['next_review_at'], endsWith('Z'));
   });
 
@@ -1191,8 +1241,8 @@ void main() {
     expect(restored.updatedAt, updatedAt);
   });
 
-  test('Veritabanı şema sürümü onboarding ve bonus migration ile 8 olur', () {
-    expect(DatabaseService.databaseVersion, 8);
+  test('Veritabanı şema sürümü Biliyorum migration ile 9 olur', () {
+    expect(DatabaseService.databaseVersion, 9);
     expect(
       DatabaseService.createAppSettingsTableSql,
       contains('CREATE TABLE IF NOT EXISTS app_settings'),
@@ -1222,6 +1272,11 @@ void main() {
       DatabaseService.addReviewStageColumnSql,
       contains('INTEGER NOT NULL DEFAULT 0'),
     );
+    expect(
+      DatabaseService.addIsKnownColumnSql,
+      contains('ALTER TABLE word_progress ADD COLUMN is_known'),
+    );
+    expect(DatabaseService.addIsKnownColumnSql, contains('DEFAULT 0'));
     expect(
       DatabaseService.createAchievementUnlocksTableSql,
       contains('CREATE TABLE IF NOT EXISTS achievement_unlocks'),
@@ -1415,7 +1470,7 @@ void main() {
       expect(storage.values[SettingsRepository.reminderEnabledKey], 'true');
       expect(storage.values[SettingsRepository.reminderHourKey], '8');
       expect(storage.values[SettingsRepository.reminderMinuteKey], '35');
-      expect(DatabaseService.databaseVersion, 8);
+      expect(DatabaseService.databaseVersion, 9);
     },
   );
 
@@ -2303,7 +2358,7 @@ void main() {
       await tester.tap(find.text('Öğrenmeye Başla'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Kolay'));
+      await tester.tap(find.text('Biliyorum'));
       await tester.pump(const Duration(milliseconds: 250));
       await tester.pumpAndSettle();
 
@@ -2415,8 +2470,8 @@ void main() {
         ),
       ),
     );
-    await tester.ensureVisible(find.text('Kolay'));
-    await tester.tap(find.text('Kolay'));
+    await tester.ensureVisible(find.text('Biliyorum'));
+    await tester.tap(find.text('Biliyorum'));
     await tester.pump(const Duration(milliseconds: 250));
 
     expect(
@@ -2427,7 +2482,7 @@ void main() {
     expect(streakService.currentStreak, 1);
   });
 
-  testWidgets('Tüm kelimeler Kolay seçilince kategori tamamlanır', (
+  testWidgets('Tüm kelimeler Biliyorum seçilince kategori tamamlanır', (
     tester,
   ) async {
     await pumpLearningSession(tester);
@@ -2446,6 +2501,81 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets(
+    'Biliyorum etiketi görünür ve kalıcı kelime yeni oturumda atlanır',
+    (tester) async {
+      final category = LearningCategory(
+        id: 'known_test',
+        title: 'Bilinenler',
+        emoji: '✅',
+        words: animalWords.take(2).toList(growable: false),
+      );
+      final store = FakeWordProgressStore()
+        ..records[animalWords.first.id] = testWordProgress(
+          wordId: animalWords.first.id,
+          mastery: 'known',
+          repetitionCount: 1,
+          isKnown: true,
+        );
+      final xpService = await createXpService();
+      addTearDown(xpService.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: WordCardScreen(
+            category: category,
+            wordProgressStore: store,
+            xpService: xpService,
+            ttsService: EnglishTtsService(engine: FakeTtsEngine()),
+          ),
+        ),
+      );
+
+      expect(find.text('Biliyorum'), findsOneWidget);
+      expect(find.text('CAT'), findsOneWidget);
+      expect(find.text('DOG'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'Tüm kelimeler biliniyorsa çalışma ekranı güvenli tamamlanma durumu gösterir',
+    (tester) async {
+      final category = LearningCategory(
+        id: 'all_known_test',
+        title: 'Tamamlananlar',
+        emoji: '✅',
+        words: animalWords.take(2).toList(growable: false),
+      );
+      final store = FakeWordProgressStore();
+      for (final word in category.words) {
+        store.records[word.id] = testWordProgress(
+          wordId: word.id,
+          mastery: 'known',
+          repetitionCount: 1,
+          isKnown: true,
+        );
+      }
+      final xpService = await createXpService();
+      addTearDown(xpService.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: WordCardScreen(
+            category: category,
+            wordProgressStore: store,
+            xpService: xpService,
+            ttsService: EnglishTtsService(engine: FakeTtsEngine()),
+          ),
+        ),
+      );
+
+      expect(
+        find.text('Bu kategorideki tüm kelimeleri biliyorsun!'),
+        findsOneWidget,
+      );
+    },
+  );
 
   test('Quiz sonucu yüzde, yıldız ve motivasyon değerlerini hesaplar', () {
     expect(calculateQuizPercentage(correct: 9, total: 10), 90);

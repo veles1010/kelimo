@@ -10,6 +10,7 @@ class WordProgress {
     required this.nextReviewAt,
     required this.updatedAt,
     this.reviewStage = 0,
+    this.isKnown = false,
   });
 
   factory WordProgress.initial(String wordId, {DateTime? now}) {
@@ -24,6 +25,7 @@ class WordProgress {
       nextReviewAt: null,
       updatedAt: now ?? DateTime.now(),
       reviewStage: 0,
+      isKnown: false,
     );
   }
 
@@ -39,6 +41,7 @@ class WordProgress {
       nextReviewAt: _dateTimeFromDatabase(map['next_review_at']),
       updatedAt: DateTime.parse(map['updated_at']! as String),
       reviewStage: (map['review_stage'] as int?) ?? 0,
+      isKnown: map['is_known'] == 1,
     );
   }
 
@@ -53,6 +56,11 @@ class WordProgress {
   final DateTime updatedAt;
   final int reviewStage;
 
+  /// True only when the learner explicitly marks this word as known.
+  ///
+  /// This intentionally differs from legacy `mastery: 'easy'` records.
+  final bool isKnown;
+
   Map<String, Object?> toMap() {
     return {
       'word_id': wordId,
@@ -65,6 +73,7 @@ class WordProgress {
       'next_review_at': nextReviewAt?.toUtc().toIso8601String(),
       'updated_at': updatedAt.toUtc().toIso8601String(),
       'review_stage': reviewStage,
+      'is_known': isKnown ? 1 : 0,
     };
   }
 
@@ -78,6 +87,8 @@ class WordProgress {
     DateTime? nextReviewAt,
     DateTime? updatedAt,
     int? reviewStage,
+    bool? isKnown,
+    bool clearNextReviewAt = false,
   }) {
     return WordProgress(
       wordId: wordId,
@@ -87,9 +98,12 @@ class WordProgress {
       correctCount: correctCount ?? this.correctCount,
       wrongCount: wrongCount ?? this.wrongCount,
       lastReviewedAt: lastReviewedAt ?? this.lastReviewedAt,
-      nextReviewAt: nextReviewAt ?? this.nextReviewAt,
+      nextReviewAt: clearNextReviewAt
+          ? null
+          : nextReviewAt ?? this.nextReviewAt,
       updatedAt: updatedAt ?? this.updatedAt,
       reviewStage: reviewStage ?? this.reviewStage,
+      isKnown: isKnown ?? this.isKnown,
     );
   }
 }

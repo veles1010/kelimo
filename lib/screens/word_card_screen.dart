@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:kelimo/models/learning_category.dart';
+import 'package:kelimo/models/word.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
 import 'package:kelimo/services/english_tts_service.dart';
 import 'package:kelimo/services/achievement_service.dart';
@@ -24,6 +25,7 @@ class WordCardScreen extends StatefulWidget {
     this.ttsService,
     this.streakService,
     this.initialWordIndex = 0,
+    this.initialWordId,
     this.settingsService,
     this.achievementService,
     this.dailyReminderService,
@@ -38,6 +40,10 @@ class WordCardScreen extends StatefulWidget {
   final EnglishTtsService? ttsService;
   final StreakService? streakService;
   final int initialWordIndex;
+
+  /// Lets a learner manually revisit a known word from a filtered list.
+  /// Automatic category sessions intentionally omit known words.
+  final String? initialWordId;
   final SettingsService? settingsService;
   final AchievementService? achievementService;
   final DailyReminderService? dailyReminderService;
@@ -55,6 +61,7 @@ class _WordCardScreenState extends State<WordCardScreen>
   late final LearningEngine _learningEngine;
   late final StreakService _streakService;
   late final bool _ownsStreakService;
+  late final bool _allWordsKnown;
   LearningRating? _selectedDifficulty;
   bool _isEvaluating = false;
   bool _isFavorite = false;
@@ -65,9 +72,26 @@ class _WordCardScreenState extends State<WordCardScreen>
     _ttsService =
         widget.ttsService ??
         EnglishTtsService(settingsService: widget.settingsService);
+    final requestedWordId =
+        widget.initialWordId ??
+        widget.category.words[widget.initialWordIndex].id;
+    final availableWords = widget.category.words
+        .where(
+          (word) =>
+              !widget.wordProgressStore.progressFor(word.id).isKnown ||
+              word.id == widget.initialWordId,
+        )
+        .toList(growable: false);
+    _allWordsKnown = availableWords.isEmpty;
+    final List<Word> sessionWords = _allWordsKnown
+        ? <Word>[widget.category.words.first]
+        : availableWords;
+    final sessionIndex = sessionWords.indexWhere(
+      (word) => word.id == requestedWordId,
+    );
     _learningEngine = LearningEngine(
-      widget.category.words,
-      initialWordIndex: widget.initialWordIndex,
+      sessionWords,
+      initialWordIndex: sessionIndex < 0 ? 0 : sessionIndex,
     );
     _ownsStreakService = widget.streakService == null;
     _streakService = widget.streakService ?? StreakService();
@@ -108,7 +132,7 @@ class _WordCardScreenState extends State<WordCardScreen>
     setState(() {
       _learningEngine.nextWord();
       _selectedDifficulty = null;
-      _syncFavoriteState();
+      if (!_learningEngine.isComplete) _syncFavoriteState();
     });
   }
 
@@ -120,7 +144,7 @@ class _WordCardScreenState extends State<WordCardScreen>
     setState(() {
       _learningEngine.previousWord();
       _selectedDifficulty = null;
-      _syncFavoriteState();
+      if (!_learningEngine.isComplete) _syncFavoriteState();
     });
   }
 
@@ -153,7 +177,7 @@ class _WordCardScreenState extends State<WordCardScreen>
       learningResult = _learningEngine.lastReview!;
       _selectedDifficulty = null;
       _isEvaluating = false;
-      _syncFavoriteState();
+      if (!_learningEngine.isComplete) _syncFavoriteState();
     });
 
     var progressSaved = false;
@@ -275,6 +299,9 @@ class _WordCardScreenState extends State<WordCardScreen>
         body: Center(child: Text('Bu kategori henüz kilitli.')),
       );
     }
+    if (_allWordsKnown || _learningEngine.isComplete) {
+      return _buildCategoryCompletedScreen(context);
+    }
     final word = _learningEngine.currentWord;
 
     return GlassBackground(
@@ -347,6 +374,62 @@ class _WordCardScreenState extends State<WordCardScreen>
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryCompletedScreen(BuildContext context) {
+    return GlassBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          leading: const BackButton(),
+          title: Text(widget.category.title),
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+        ),
+        body: SafeArea(
+          top: false,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: GlassSurface(
+                borderRadius: BorderRadius.circular(28),
+                child: Padding(
+                  padding: const EdgeInsets.all(28),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.celebration_rounded,
+                        size: 64,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Bu kategorideki tüm kelimeleri biliyorsun!',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'Öğrenilenler listesinden kelimeleri istediğin zaman yeniden açabilirsin.',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 20),
+                      FilledButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('Kategoriye Dön'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       ),

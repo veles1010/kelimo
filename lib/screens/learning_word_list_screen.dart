@@ -83,6 +83,7 @@ class _LearningWordListScreenState extends State<LearningWordListScreen> {
         builder: (_) => WordCardScreen(
           category: entry.category,
           initialWordIndex: initialWordIndex,
+          initialWordId: entry.word.id,
           wordProgressStore: widget.wordProgressStore,
           streakService: widget.streakService,
           xpService: widget.xpService,

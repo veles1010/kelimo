@@ -35,7 +35,9 @@ class LearningCenterService {
             progress: progress,
             status: _statusFor(progress),
             isReviewDue:
-                nextReviewAt != null && !nextReviewAt.isAfter(now.toUtc()),
+                !progress.isKnown &&
+                nextReviewAt != null &&
+                !nextReviewAt.isAfter(now.toUtc()),
             reviewTimeLabel: nextReviewAt == null
                 ? null
                 : reviewTimeLabel(nextReviewAt, now: now),

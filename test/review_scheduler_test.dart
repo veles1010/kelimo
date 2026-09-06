@@ -63,6 +63,7 @@ WordProgress _progress({
   int reviewStage = 0,
   DateTime? nextReviewAt,
   bool isFavorite = false,
+  bool isKnown = false,
 }) {
   final now = DateTime.utc(2026, 7, 16, 9);
   return WordProgress(
@@ -76,6 +77,7 @@ WordProgress _progress({
     nextReviewAt: nextReviewAt,
     updatedAt: now,
     reviewStage: reviewStage,
+    isKnown: isKnown,
   );
 }
 
@@ -201,6 +203,19 @@ void main() {
       );
     });
 
+    test('bilinen ve vadesi geçmiş tutarsız kayıt tekrar listesine girmez', () {
+      final snapshot = load({
+        'dog': _progress(
+          wordId: 'dog',
+          mastery: 'known',
+          isKnown: true,
+          nextReviewAt: now.subtract(const Duration(days: 1)),
+        ),
+      });
+
+      expect(snapshot.repeatPendingCount, 0);
+    });
+
     test(
       'değerlendirme planı servis yeniden oluşturulduğunda korunur',
       () async {
@@ -238,7 +253,7 @@ void main() {
       },
     );
 
-    test('Kolay planlanan güne kadar tekrar listesine girmez', () {
+    test('Biliyorum kalıcıdır ve tekrar listesine yeniden girmez', () {
       final progress = wordProgressAfterLearningResult(
         WordProgress.initial('dog', now: now),
         LearningReviewResult(
@@ -254,8 +269,43 @@ void main() {
           wordProgressStore: _MemoryWordProgressStore({'dog': progress}),
           now: () => now.add(const Duration(days: 1)),
         ).load().repeatPendingCount,
-        1,
+        0,
       );
+      expect(progress.isKnown, isTrue);
+      expect(progress.nextReviewAt, isNull);
+    });
+
+    test('bilinen kelime Tekrar Et veya Zor ile bilinmiyor durumuna döner', () {
+      final known = wordProgressAfterLearningResult(
+        WordProgress.initial('dog', now: now),
+        LearningReviewResult(
+          word: animalWords.first,
+          rating: LearningRating.easy,
+        ),
+        reviewedAt: now,
+      );
+
+      final again = wordProgressAfterLearningResult(
+        known,
+        LearningReviewResult(
+          word: animalWords.first,
+          rating: LearningRating.again,
+        ),
+        reviewedAt: now,
+      );
+      expect(again.isKnown, isFalse);
+      expect(again.nextReviewAt, now);
+
+      final hard = wordProgressAfterLearningResult(
+        known,
+        LearningReviewResult(
+          word: animalWords.first,
+          rating: LearningRating.hard,
+        ),
+        reviewedAt: now,
+      );
+      expect(hard.isKnown, isFalse);
+      expect(hard.nextReviewAt, now.add(const Duration(days: 1)));
     });
   });
 

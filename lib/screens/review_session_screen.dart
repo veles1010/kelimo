@@ -432,7 +432,7 @@ class _ReviewSessionScreenState extends State<ReviewSessionScreen>
                   ),
                   _ResultRow(
                     key: const ValueKey('review-result-easy'),
-                    label: 'Kolay',
+                    label: 'Biliyorum',
                     value: '${summary.easyCount}',
                   ),
                   _ResultRow(

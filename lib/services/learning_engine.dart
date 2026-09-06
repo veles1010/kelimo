@@ -24,7 +24,6 @@ class LearningEngine {
   final List<Word> _allWords;
   final List<Word> _sessionQueue;
   final List<Word> _manualHistory = [];
-  final Set<Word> _easyConfirmations = {};
   bool _isComplete = false;
   LearningReviewResult? _lastReview;
 
@@ -63,21 +62,13 @@ class LearningEngine {
       word: current,
       rating: LearningRating.easy,
     );
-    final isConfirmed = _easyConfirmations.contains(current);
-
-    if (_sessionQueue.length == 1) {
+    _sessionQueue.removeWhere((word) => word.id == current.id);
+    _manualHistory.removeWhere((word) => word.id == current.id);
+    if (_sessionQueue.isEmpty) {
       _isComplete = true;
-      return currentWord;
+      return current;
     }
-
-    if (isConfirmed) {
-      _easyConfirmations.remove(current);
-      _sessionQueue.removeAt(0);
-      return currentWord;
-    }
-
-    _easyConfirmations.add(current);
-    return _rescheduleCurrentWord(9);
+    return currentWord;
   }
 
   Word rateAgain() {
@@ -86,7 +77,6 @@ class LearningEngine {
       word: currentWord,
       rating: LearningRating.again,
     );
-    _easyConfirmations.remove(currentWord);
     return _rescheduleCurrentWord(2);
   }
 
@@ -96,7 +86,6 @@ class LearningEngine {
       word: currentWord,
       rating: LearningRating.hard,
     );
-    _easyConfirmations.remove(currentWord);
     return _rescheduleCurrentWord(1);
   }
 
