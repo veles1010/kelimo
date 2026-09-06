@@ -222,6 +222,7 @@ Future<void> _pumpSession(
   required StreakService streak,
   EnglishTtsService? tts,
   Size size = const Size(430, 900),
+  double textScale = 1,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -230,6 +231,12 @@ Future<void> _pumpSession(
   await tester.pumpWidget(
     MaterialApp(
       theme: AppTheme.light,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(
+          context,
+        ).copyWith(textScaler: TextScaler.linear(textScale)),
+        child: child!,
+      ),
       home: ReviewSessionScreen(
         initialItems: items,
         sessionBuilder: builder,
@@ -673,6 +680,42 @@ void main() {
     expect(find.text('1 / 1'), findsOneWidget);
     expect(find.text('🔥 Günlük hedef tamamlandı!'), findsOneWidget);
     expect(find.byKey(const ValueKey('review-restart-pending')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('tekrar oturumu kısa ekranda büyük metinle erişilebilir kalır', (
+    tester,
+  ) async {
+    final item = _item('home', 19, now);
+    final store = _ReviewWordStore(
+      now: now,
+      values: {item.word.id: _dueProgress(item.word.id, now)},
+    );
+    final services = await _services();
+    addTearDown(services.settings.dispose);
+    addTearDown(services.xp.dispose);
+    final streak = StreakService(dailyGoal: 5);
+    addTearDown(streak.dispose);
+    await _pumpSession(
+      tester,
+      items: [item],
+      wordStore: store,
+      builder: ReviewSessionBuilder(wordProgressStore: store, now: () => now),
+      settings: services.settings,
+      xp: services.xp,
+      streak: streak,
+      size: const Size(320, 568),
+      textScale: 1.5,
+    );
+
+    expect(find.text('WASHING MACHINE'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('learning-rating-hard')),
+      180,
+    );
+    expect(find.text('Biliyorum'), findsOneWidget);
+    expect(find.text('Tekrar Et'), findsOneWidget);
+    expect(find.text('Zor'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

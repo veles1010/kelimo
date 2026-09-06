@@ -6470,6 +6470,104 @@ void main() {
     },
   );
 
+  testWidgets(
+    'Kelime çalışma ekranı kısa viewport ve büyük metinde kaydırılarak erişilebilir kalır',
+    (tester) async {
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final xpService = await createXpService();
+      addTearDown(xpService.dispose);
+      const viewports = <(Size, double)>[
+        (Size(360, 740), 1),
+        (Size(320, 568), 1),
+        (Size(360, 640), 1.3),
+        (Size(320, 568), 1.5),
+      ];
+
+      for (final viewport in viewports) {
+        await tester.binding.setSurfaceSize(viewport.$1);
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: AppTheme.light,
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: TextScaler.linear(viewport.$2)),
+              child: child!,
+            ),
+            home: WordCardScreen(
+              category: CategoryCatalog.animals,
+              wordProgressStore: FakeWordProgressStore(),
+              xpService: xpService,
+              ttsService: EnglishTtsService(engine: FakeTtsEngine()),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('DOG'), findsOneWidget);
+        expect(find.text('Dinle'), findsOneWidget);
+        await tester.scrollUntilVisible(find.text('Sonraki'), 180);
+        expect(find.text('Biliyorum'), findsOneWidget);
+        expect(find.text('Tekrar Et'), findsOneWidget);
+        expect(find.text('Zor'), findsOneWidget);
+        expect(find.text('Sonraki'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      }
+    },
+  );
+
+  testWidgets(
+    'Kategori quizi kısa viewport ve büyük metinde son seçeneğe erişim sağlar',
+    (tester) async {
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final xpService = await createXpService();
+      addTearDown(xpService.dispose);
+      const viewports = <(Size, double)>[
+        (Size(360, 740), 1),
+        (Size(320, 568), 1),
+        (Size(360, 640), 1.3),
+        (Size(320, 568), 1.5),
+      ];
+
+      for (final viewport in viewports) {
+        await tester.binding.setSurfaceSize(viewport.$1);
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: AppTheme.light,
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: TextScaler.linear(viewport.$2)),
+              child: child!,
+            ),
+            home: CategoryQuizScreen(
+              category: CategoryCatalog.animals,
+              quizStore: FakeQuizStore(FakeQuizStorage(), FakeXpStorage()),
+              xpService: xpService,
+              random: NoShuffleRandom(),
+              ttsService: EnglishTtsService(engine: FakeTtsEngine()),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final options = find.byWidgetPredicate(
+          (widget) =>
+              widget is InkWell &&
+              widget.key is ValueKey<String> &&
+              (widget.key! as ValueKey<String>).value.startsWith(
+                'quiz-option-',
+              ),
+        );
+        expect(options, findsNWidgets(4));
+        await tester.ensureVisible(options.last);
+        expect(find.text('Doğru Türkçe karşılığı seç'), findsOneWidget);
+        expect(options.last, findsOneWidget);
+        expect(tester.takeException(), isNull);
+      }
+    },
+  );
+
   testWidgets('Quiz seçimi kilitlenir ve doğru cevap gösterilir', (
     tester,
   ) async {

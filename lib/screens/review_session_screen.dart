@@ -339,58 +339,70 @@ class _ReviewSessionScreenState extends State<ReviewSessionScreen>
 
   Widget _buildSession() {
     final item = _currentItem;
-    return SafeArea(
-      top: false,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-        children: [
-          Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 680),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  LinearProgressIndicator(value: (_index + 1) / _items.length),
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Chip(
-                      key: const ValueKey('review-category-chip'),
-                      avatar: Text(item.category.emoji),
-                      label: Text(item.category.title),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  LearningFlashcard(
-                    animation: _flipAnimation,
-                    onTap: _flipCard,
-                    word: item.word,
-                  ),
-                  const SizedBox(height: 20),
-                  ValueListenableBuilder<bool>(
-                    valueListenable: _ttsService.isSpeaking,
-                    builder: (context, isSpeaking, child) {
-                      return LearningWordActions(
-                        isSpeaking: isSpeaking,
-                        isFavorite: _isFavorite,
+    return Builder(
+      builder: (context) {
+        final isShortViewport = MediaQuery.sizeOf(context).height < 680;
+        final cardMinHeight = isShortViewport ? 280.0 : 360.0;
+        final primaryGap = isShortViewport ? 14.0 : 20.0;
+        final sectionGap = isShortViewport ? 20.0 : 28.0;
+        final bottomPadding = 32.0 + MediaQuery.paddingOf(context).bottom;
+        return SafeArea(
+          top: false,
+          child: ListView(
+            padding: EdgeInsets.fromLTRB(20, 8, 20, bottomPadding),
+            children: [
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 680),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      LinearProgressIndicator(
+                        value: (_index + 1) / _items.length,
+                      ),
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Chip(
+                          key: const ValueKey('review-category-chip'),
+                          avatar: Text(item.category.emoji),
+                          label: Text(item.category.title),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      LearningFlashcard(
+                        animation: _flipAnimation,
+                        onTap: _flipCard,
+                        word: item.word,
+                        minHeight: cardMinHeight,
+                      ),
+                      SizedBox(height: primaryGap),
+                      ValueListenableBuilder<bool>(
+                        valueListenable: _ttsService.isSpeaking,
+                        builder: (context, isSpeaking, child) {
+                          return LearningWordActions(
+                            isSpeaking: isSpeaking,
+                            isFavorite: _isFavorite,
+                            enabled: !_isEvaluating && !_isSavingFavorite,
+                            onListen: () => unawaited(_speakWord()),
+                            onFavorite: () => unawaited(_toggleFavorite()),
+                          );
+                        },
+                      ),
+                      SizedBox(height: sectionGap),
+                      LearningRatingSection(
+                        selectedRating: _selectedRating,
                         enabled: !_isEvaluating && !_isSavingFavorite,
-                        onListen: () => unawaited(_speakWord()),
-                        onFavorite: () => unawaited(_toggleFavorite()),
-                      );
-                    },
+                        onSelected: (rating) => unawaited(_evaluate(rating)),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 28),
-                  LearningRatingSection(
-                    selectedRating: _selectedRating,
-                    enabled: !_isEvaluating && !_isSavingFavorite,
-                    onSelected: (rating) => unawaited(_evaluate(rating)),
-                  ),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 

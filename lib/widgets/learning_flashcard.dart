@@ -12,12 +12,14 @@ class LearningFlashcard extends StatelessWidget {
     required this.animation,
     required this.onTap,
     required this.word,
+    this.minHeight = 360,
     super.key,
   });
 
   final Animation<double> animation;
   final VoidCallback onTap;
   final Word word;
+  final double minHeight;
 
   @override
   Widget build(BuildContext context) {
@@ -55,14 +57,17 @@ class LearningFlashcard extends StatelessWidget {
                 child: InkWell(
                   onTap: onTap,
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 360),
+                    constraints: BoxConstraints(minHeight: minHeight),
                     child: showBack
                         ? Transform(
                             alignment: Alignment.center,
                             transform: Matrix4.rotationY(math.pi),
-                            child: _CardBack(word: word),
+                            child: _CardBack(
+                              word: word,
+                              compact: minHeight < 320,
+                            ),
                           )
-                        : _CardFront(word: word),
+                        : _CardFront(word: word, compact: minHeight < 320),
                   ),
                 ),
               ),
@@ -296,20 +301,21 @@ String learningRatingLabel(LearningRating rating) {
 }
 
 class _CardFront extends StatelessWidget {
-  const _CardFront({required this.word});
+  const _CardFront({required this.word, required this.compact});
 
   final Word word;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     return Padding(
-      padding: const EdgeInsets.all(32),
+      padding: EdgeInsets.all(compact ? 20 : 32),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(word.emoji, style: const TextStyle(fontSize: 80)),
-          const SizedBox(height: 20),
+          Text(word.emoji, style: TextStyle(fontSize: compact ? 64 : 80)),
+          SizedBox(height: compact ? 12 : 20),
           ScaleDownSingleLineText(
             word.english.toUpperCase(),
             style: textTheme.displayMedium?.copyWith(
@@ -317,7 +323,7 @@ class _CardFront extends StatelessWidget {
               letterSpacing: 2,
             ),
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: compact ? 12 : 20),
           Text(
             'Kartı çevirmek için dokun',
             textAlign: TextAlign.center,
@@ -330,16 +336,17 @@ class _CardFront extends StatelessWidget {
 }
 
 class _CardBack extends StatelessWidget {
-  const _CardBack({required this.word});
+  const _CardBack({required this.word, required this.compact});
 
   final Word word;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     return Padding(
-      padding: const EdgeInsets.all(32),
+      padding: EdgeInsets.all(compact ? 20 : 32),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -351,7 +358,7 @@ class _CardBack extends StatelessWidget {
               letterSpacing: 1.5,
             ),
           ),
-          const SizedBox(height: 28),
+          SizedBox(height: compact ? 16 : 28),
           Text(
             word.exampleSentence,
             textAlign: TextAlign.center,

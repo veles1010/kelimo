@@ -303,6 +303,11 @@ class _WordCardScreenState extends State<WordCardScreen>
       return _buildCategoryCompletedScreen(context);
     }
     final word = _learningEngine.currentWord;
+    final isShortViewport = MediaQuery.sizeOf(context).height < 680;
+    final cardMinHeight = isShortViewport ? 280.0 : 360.0;
+    final primaryGap = isShortViewport ? 14.0 : 20.0;
+    final sectionGap = isShortViewport ? 20.0 : 28.0;
+    final bottomPadding = 32.0 + MediaQuery.paddingOf(context).bottom;
 
     return GlassBackground(
       child: Scaffold(
@@ -327,7 +332,7 @@ class _WordCardScreenState extends State<WordCardScreen>
         body: SafeArea(
           top: false,
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+            padding: EdgeInsets.fromLTRB(20, 12, 20, bottomPadding),
             children: [
               Center(
                 child: ConstrainedBox(
@@ -339,8 +344,9 @@ class _WordCardScreenState extends State<WordCardScreen>
                         animation: _flipAnimation,
                         onTap: _flipCard,
                         word: word,
+                        minHeight: cardMinHeight,
                       ),
-                      const SizedBox(height: 20),
+                      SizedBox(height: primaryGap),
                       ValueListenableBuilder<bool>(
                         valueListenable: _ttsService.isSpeaking,
                         builder: (context, isSpeaking, child) {
@@ -352,14 +358,14 @@ class _WordCardScreenState extends State<WordCardScreen>
                           );
                         },
                       ),
-                      const SizedBox(height: 28),
+                      SizedBox(height: sectionGap),
                       LearningRatingSection(
                         selectedRating: _selectedDifficulty,
                         enabled: !_isEvaluating && !_learningEngine.isComplete,
                         onSelected: (rating) =>
                             unawaited(_evaluateWord(rating)),
                       ),
-                      const SizedBox(height: 28),
+                      SizedBox(height: sectionGap),
                       _WordNavigation(
                         onPrevious:
                             !_learningEngine.canPrevious || _isEvaluating

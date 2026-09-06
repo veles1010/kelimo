@@ -246,6 +246,8 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
       );
     }
     final options = _currentQuestion.options;
+    final isShortViewport = MediaQuery.sizeOf(context).height < 680;
+    final bottomPadding = 32.0 + MediaQuery.paddingOf(context).bottom;
 
     return GlassBackground(
       child: Scaffold(
@@ -267,7 +269,7 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
         body: SafeArea(
           top: false,
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+            padding: EdgeInsets.fromLTRB(20, 12, 20, bottomPadding),
             children: [
               Center(
                 child: ConstrainedBox(
@@ -280,13 +282,14 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
                         minHeight: 8,
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      const SizedBox(height: 24),
+                      SizedBox(height: isShortViewport ? 16 : 24),
                       _QuestionCard(
                         word: _currentWord,
+                        compact: isShortViewport,
                         onSpeak: () =>
                             unawaited(_ttsService.speak(_currentWord.english)),
                       ),
-                      const SizedBox(height: 20),
+                      SizedBox(height: isShortViewport ? 14 : 20),
                       for (final option in options) ...[
                         _AnswerOption(
                           option: option,
@@ -294,7 +297,7 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
                           selectedAnswer: _selectedAnswer,
                           onTap: () => _selectAnswer(option),
                         ),
-                        const SizedBox(height: 12),
+                        SizedBox(height: isShortViewport ? 8 : 12),
                       ],
                       const SizedBox(height: 8),
                       FilledButton(
@@ -323,9 +326,14 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
 }
 
 class _QuestionCard extends StatelessWidget {
-  const _QuestionCard({required this.word, required this.onSpeak});
+  const _QuestionCard({
+    required this.word,
+    required this.compact,
+    required this.onSpeak,
+  });
 
   final Word word;
+  final bool compact;
   final VoidCallback onSpeak;
 
   @override
@@ -351,11 +359,14 @@ class _QuestionCard extends StatelessWidget {
             ),
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+            padding: EdgeInsets.symmetric(
+              horizontal: 24,
+              vertical: compact ? 20 : 36,
+            ),
             child: Column(
               children: [
-                Text(word.emoji, style: const TextStyle(fontSize: 48)),
-                const SizedBox(height: 12),
+                Text(word.emoji, style: TextStyle(fontSize: compact ? 40 : 48)),
+                SizedBox(height: compact ? 8 : 12),
                 ScaleDownSingleLineText(
                   word.english.toUpperCase(),
                   key: ValueKey('quiz-question-${word.id}'),
@@ -370,7 +381,7 @@ class _QuestionCard extends StatelessWidget {
                   onPressed: onSpeak,
                   icon: const Icon(Icons.volume_up_rounded),
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: compact ? 8 : 12),
                 Text(
                   'Doğru Türkçe karşılığı seç',
                   textAlign: TextAlign.center,
