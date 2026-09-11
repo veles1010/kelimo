@@ -713,7 +713,7 @@ void main() {
       find.byKey(const ValueKey('learning-rating-hard')),
       180,
     );
-    expect(find.text('Biliyorum'), findsOneWidget);
+    expect(find.text('Öğrendim'), findsOneWidget);
     expect(find.text('Tekrar Et'), findsOneWidget);
     expect(find.text('Zor'), findsOneWidget);
     expect(tester.takeException(), isNull);

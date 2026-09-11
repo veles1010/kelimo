@@ -12,6 +12,8 @@ class LearningFlashcard extends StatelessWidget {
     required this.animation,
     required this.onTap,
     required this.word,
+    this.isSpeakingExample = false,
+    this.onSpeakExample,
     this.minHeight = 360,
     super.key,
   });
@@ -19,6 +21,8 @@ class LearningFlashcard extends StatelessWidget {
   final Animation<double> animation;
   final VoidCallback onTap;
   final Word word;
+  final bool isSpeakingExample;
+  final VoidCallback? onSpeakExample;
   final double minHeight;
 
   @override
@@ -65,6 +69,8 @@ class LearningFlashcard extends StatelessWidget {
                             child: _CardBack(
                               word: word,
                               compact: minHeight < 320,
+                              isSpeakingExample: isSpeakingExample,
+                              onSpeakExample: onSpeakExample,
                             ),
                           )
                         : _CardFront(word: word, compact: minHeight < 320),
@@ -294,7 +300,7 @@ class _RatingButton extends StatelessWidget {
 
 String learningRatingLabel(LearningRating rating) {
   return switch (rating) {
-    LearningRating.easy => 'Biliyorum',
+    LearningRating.easy => 'Öğrendim',
     LearningRating.again => 'Tekrar Et',
     LearningRating.hard => 'Zor',
   };
@@ -336,10 +342,17 @@ class _CardFront extends StatelessWidget {
 }
 
 class _CardBack extends StatelessWidget {
-  const _CardBack({required this.word, required this.compact});
+  const _CardBack({
+    required this.word,
+    required this.compact,
+    required this.isSpeakingExample,
+    required this.onSpeakExample,
+  });
 
   final Word word;
   final bool compact;
+  final bool isSpeakingExample;
+  final VoidCallback? onSpeakExample;
 
   @override
   Widget build(BuildContext context) {
@@ -359,10 +372,32 @@ class _CardBack extends StatelessWidget {
             ),
           ),
           SizedBox(height: compact ? 16 : 28),
-          Text(
-            word.exampleSentence,
-            textAlign: TextAlign.center,
-            style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  word.exampleSentence,
+                  textAlign: TextAlign.center,
+                  style: textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              if (word.exampleSentence.trim().isNotEmpty &&
+                  onSpeakExample != null)
+                IconButton(
+                  key: const ValueKey('example-sentence-pronunciation-button'),
+                  tooltip: 'Örnek cümleyi dinle',
+                  onPressed: isSpeakingExample ? null : onSpeakExample,
+                  icon: isSpeakingExample
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.volume_up_rounded),
+                ),
+            ],
           ),
           const SizedBox(height: 8),
           Text(

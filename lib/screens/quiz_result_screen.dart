@@ -119,13 +119,15 @@ class _QuizResultScreenState extends State<QuizResultScreen> {
       total: widget.totalQuestionCount,
     );
     final textTheme = Theme.of(context).textTheme;
+    final compact = MediaQuery.sizeOf(context).height < 850;
+    final sectionGap = compact ? 12.0 : 20.0;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: GlassBackground(
         child: SafeArea(
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 32, 20, 32),
+            padding: EdgeInsets.fromLTRB(20, compact ? 16 : 24, 20, 20),
             children: [
               Center(
                 child: ConstrainedBox(
@@ -136,17 +138,17 @@ class _QuizResultScreenState extends State<QuizResultScreen> {
                       const Text(
                         '🎉',
                         textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 64),
+                        style: TextStyle(fontSize: 44),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 4),
                       Text(
                         'Tebrikler!',
                         textAlign: TextAlign.center,
-                        style: textTheme.headlineMedium?.copyWith(
+                        style: textTheme.headlineSmall?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 2),
                       Text(
                         '${widget.categoryName} Quizi Tamamlandı',
                         textAlign: TextAlign.center,
@@ -161,14 +163,15 @@ class _QuizResultScreenState extends State<QuizResultScreen> {
                           progress: widget.categoryUnlockCreditProgress!,
                         ),
                       ],
-                      const SizedBox(height: 24),
+                      SizedBox(height: sectionGap),
                       _ScoreCard(
                         correctAnswerCount: widget.correctAnswerCount,
                         totalQuestionCount: widget.totalQuestionCount,
                         percentage: widget.successPercentage,
                         starCount: starCount,
+                        compact: compact,
                       ),
-                      const SizedBox(height: 20),
+                      SizedBox(height: compact ? 10 : 16),
                       Text(
                         quizMotivation(widget.successPercentage),
                         textAlign: TextAlign.center,
@@ -178,7 +181,7 @@ class _QuizResultScreenState extends State<QuizResultScreen> {
                         ),
                       ),
                       if (widget.xpAwarded > 0) ...[
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 6),
                         Text(
                           widget.successPercentage == 100
                               ? '🏆 Kusursuz sonuç! '
@@ -191,7 +194,7 @@ class _QuizResultScreenState extends State<QuizResultScreen> {
                           ),
                         ),
                       ],
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 4),
                       Text(
                         formatQuizTotalXp(
                           totalXpBefore: widget.totalXpBefore,
@@ -203,27 +206,33 @@ class _QuizResultScreenState extends State<QuizResultScreen> {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      SizedBox(height: sectionGap),
                       _SummaryCards(
                         xpAwarded: widget.xpAwarded,
                         longestCorrectStreak: widget.longestCorrectStreak,
                         elapsedDuration: widget.elapsedDuration,
                       ),
-                      const SizedBox(height: 28),
+                      SizedBox(height: compact ? 14 : 20),
                       FilledButton(
+                        key: const ValueKey('quiz-retry-action'),
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48),
+                        ),
                         onPressed: _isLeaving
                             ? null
                             : () => _leave(widget.onRetry),
                         child: const Text('Tekrar Çöz'),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
                       GlassSurface(
                         enableBlur: false,
                         showShadow: false,
                         borderRadius: BorderRadius.circular(16),
                         child: OutlinedButton(
+                          key: const ValueKey('quiz-return-category-action'),
                           style: OutlinedButton.styleFrom(
                             side: BorderSide.none,
+                            minimumSize: const Size.fromHeight(48),
                           ),
                           onPressed: _isLeaving
                               ? null
@@ -231,8 +240,12 @@ class _QuizResultScreenState extends State<QuizResultScreen> {
                           child: const Text('Kategoriye Dön'),
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 2),
                       TextButton(
+                        key: const ValueKey('quiz-return-home-action'),
+                        style: TextButton.styleFrom(
+                          minimumSize: const Size.fromHeight(40),
+                        ),
                         onPressed: _isLeaving
                             ? null
                             : () => _leave(widget.onReturnHome),
@@ -314,12 +327,14 @@ class _ScoreCard extends StatelessWidget {
     required this.totalQuestionCount,
     required this.percentage,
     required this.starCount,
+    required this.compact,
   });
 
   final int correctAnswerCount;
   final int totalQuestionCount;
   final int percentage;
   final int starCount;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -347,7 +362,10 @@ class _ScoreCard extends StatelessWidget {
             ),
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+            padding: EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: compact ? 14 : 20,
+            ),
             child: Column(
               children: [
                 Text(
@@ -356,7 +374,7 @@ class _ScoreCard extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(height: 6),
+                SizedBox(height: compact ? 2 : 6),
                 Text(
                   '%$percentage başarı',
                   style: textTheme.titleLarge?.copyWith(
@@ -364,7 +382,7 @@ class _ScoreCard extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(height: 18),
+                SizedBox(height: compact ? 8 : 14),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -378,7 +396,7 @@ class _ScoreCard extends StatelessWidget {
                           color: index < starCount
                               ? Colors.amber.shade700
                               : emptyStarColor,
-                          size: 36,
+                          size: compact ? 28 : 32,
                         ),
                       ),
                   ],
@@ -405,7 +423,7 @@ class _SummaryCards extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cards = [
+    final metrics = [
       _SummaryCard(
         icon: Icons.local_fire_department_rounded,
         label: 'Seri',
@@ -423,32 +441,36 @@ class _SummaryCards extends StatelessWidget {
       ),
     ];
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth >= 520) {
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: cards[0]),
-              const SizedBox(width: 12),
-              Expanded(child: cards[1]),
-              const SizedBox(width: 12),
-              Expanded(child: cards[2]),
-            ],
-          );
-        }
+    return GlassSurface(
+      key: const ValueKey('quiz-summary-panel'),
+      enableBlur: false,
+      showShadow: false,
+      borderRadius: BorderRadius.circular(18),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: metrics[0]),
+          _SummaryDivider(color: Theme.of(context).colorScheme.outlineVariant),
+          Expanded(child: metrics[1]),
+          _SummaryDivider(color: Theme.of(context).colorScheme.outlineVariant),
+          Expanded(child: metrics[2]),
+        ],
+      ),
+    );
+  }
+}
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            cards[0],
-            const SizedBox(height: 12),
-            cards[1],
-            const SizedBox(height: 12),
-            cards[2],
-          ],
-        );
-      },
+class _SummaryDivider extends StatelessWidget {
+  const _SummaryDivider({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 52,
+      color: color.withValues(alpha: 0.65),
     );
   }
 }
@@ -469,31 +491,28 @@ class _SummaryCard extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    return GlassSurface(
-      enableBlur: false,
-      showShadow: false,
-      padding: EdgeInsets.zero,
-      child: Card(
-        color: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              Icon(icon, color: colorScheme.primary),
-              const SizedBox(height: 8),
-              Text(label, style: textTheme.labelLarge),
-              const SizedBox(height: 2),
-              Text(
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+      child: Column(
+        children: [
+          Icon(icon, size: 20, color: colorScheme.primary),
+          const SizedBox(height: 2),
+          Text(label, style: textTheme.labelMedium),
+          const SizedBox(height: 2),
+          SizedBox(
+            width: double.infinity,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
                 value,
                 textAlign: TextAlign.center,
                 style: textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

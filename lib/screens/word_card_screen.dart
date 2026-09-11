@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:kelimo/models/learning_category.dart';
 import 'package:kelimo/models/word.dart';
 import 'package:kelimo/repositories/word_progress_repository.dart';
+import 'package:kelimo/repositories/quiz_repository.dart';
+import 'package:kelimo/screens/category_quiz_screen.dart';
 import 'package:kelimo/services/english_tts_service.dart';
 import 'package:kelimo/services/achievement_service.dart';
 import 'package:kelimo/services/daily_reminder_service.dart';
@@ -37,6 +39,7 @@ class WordCardScreen extends StatefulWidget {
     this.categoryAccessService,
     this.interstitialAdService,
     this.bannerAdService,
+    this.quizStore,
     this.sessionType = WordLearningSessionType.manualWord,
   }) : assert(
          initialWordIndex >= 0 && initialWordIndex < category.words.length,
@@ -58,6 +61,7 @@ class WordCardScreen extends StatefulWidget {
   final CategoryAccessService? categoryAccessService;
   final InterstitialAdService? interstitialAdService;
   final BannerAdService? bannerAdService;
+  final QuizStore? quizStore;
   final WordLearningSessionType sessionType;
 
   @override
@@ -239,8 +243,6 @@ class _WordCardScreenState extends State<WordCardScreen>
 
     if (progressSaved) await _evaluateAchievements();
     if (progressSaved) await widget.dailyReminderService?.refreshSchedule();
-
-    if (_learningEngine.isComplete) await _showCompletionDialog();
   }
 
   void _syncFavoriteState() {
@@ -277,30 +279,6 @@ class _WordCardScreenState extends State<WordCardScreen>
     } catch (_) {
       // Başarım kontrolü temel öğrenme akışını engellememeli.
     }
-  }
-
-  Future<void> _showCompletionDialog() {
-    return showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        icon: Icon(
-          Icons.celebration_rounded,
-          color: Theme.of(context).colorScheme.primary,
-        ),
-        title: const Text('Kategori Tamamlandı'),
-        content: Text(
-          '${widget.category.title} kategorisindeki tüm kelimeleri '
-          'tamamladın!',
-          textAlign: TextAlign.center,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Tamam'),
-          ),
-        ],
-      ),
-    );
   }
 
   Future<void> _speakWord() async {
@@ -365,11 +343,19 @@ class _WordCardScreenState extends State<WordCardScreen>
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              LearningFlashcard(
-                                animation: _flipAnimation,
-                                onTap: _flipCard,
-                                word: word,
-                                minHeight: cardMinHeight,
+                              ValueListenableBuilder<bool>(
+                                valueListenable: _ttsService.isSpeaking,
+                                builder: (context, isSpeaking, child) {
+                                  return LearningFlashcard(
+                                    animation: _flipAnimation,
+                                    onTap: _flipCard,
+                                    word: word,
+                                    minHeight: cardMinHeight,
+                                    isSpeakingExample: isSpeaking,
+                                    onSpeakExample: () =>
+                                        unawaited(_speakExampleSentence()),
+                                  );
+                                },
                               ),
                               SizedBox(height: primaryGap),
                               ValueListenableBuilder<bool>(
@@ -484,19 +470,27 @@ class _WordCardScreenState extends State<WordCardScreen>
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'Bu kategorideki tüm kelimeleri biliyorsun!',
+                        'Kategori Tamamlandı',
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       const SizedBox(height: 10),
-                      const Text(
-                        'Öğrenilenler listesinden kelimeleri istediğin zaman yeniden açabilirsin.',
+                      Text(
+                        '${widget.category.title} kategorisindeki tüm kelimeleri '
+                        'tamamladın. Şimdi öğrendiklerini quiz ile pekiştirebilirsin.',
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 20),
-                      FilledButton(
+                      if (widget.quizStore != null) ...[
+                        FilledButton(
+                          onPressed: _openCategoryQuiz,
+                          child: Text('${widget.category.title} Quizini Çöz'),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+                      OutlinedButton(
                         onPressed: () => Navigator.of(context).pop(),
                         child: const Text('Kategoriye Dön'),
                       ),
@@ -506,6 +500,35 @@ class _WordCardScreenState extends State<WordCardScreen>
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _speakExampleSentence() async {
+    final sentence = _learningEngine.currentWord.exampleSentence;
+    if (sentence.trim().isEmpty) return;
+    final didSpeak = await _ttsService.speak(sentence);
+    if (!didSpeak && mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Ses oynatılamadı')));
+    }
+  }
+
+  void _openCategoryQuiz() {
+    final quizStore = widget.quizStore;
+    if (quizStore == null) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute<void>(
+        builder: (_) => CategoryQuizScreen(
+          category: widget.category,
+          quizStore: quizStore,
+          xpService: widget.xpService,
+          achievementService: widget.achievementService,
+          interstitialAdService: widget.interstitialAdService,
+          streakService: widget.streakService,
+          categoryAccessService: widget.categoryAccessService,
         ),
       ),
     );

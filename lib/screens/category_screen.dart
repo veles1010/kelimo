@@ -130,6 +130,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
                                 interstitialAdService:
                                     widget.interstitialAdService,
                                 bannerAdService: widget.bannerAdService,
+                                quizStore: quizStore,
                                 sessionType:
                                     WordLearningSessionType.normalLesson,
                               ),
@@ -157,6 +158,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
                                     widget.interstitialAdService,
                                 streakService: streakService,
                                 categoryAccessService: access,
+                                bannerAdService: widget.bannerAdService,
                               ),
                             ),
                           );

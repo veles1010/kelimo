@@ -1061,12 +1061,12 @@ Future<void> pumpLearningSession(WidgetTester tester) async {
       ),
     ),
   );
-  await tester.ensureVisible(find.text('Biliyorum'));
+  await tester.ensureVisible(find.text('Öğrendim'));
   await tester.pumpAndSettle();
 }
 
 Future<void> selectLearningRating(WidgetTester tester, String rating) async {
-  final visibleRating = rating == 'Kolay' ? 'Biliyorum' : rating;
+  final visibleRating = rating == 'Kolay' ? 'Öğrendim' : rating;
   await tester.ensureVisible(find.text(visibleRating));
   await tester.tap(find.text(visibleRating));
   await tester.pumpAndSettle();
@@ -2421,7 +2421,7 @@ void main() {
       await tester.tap(find.text('Öğrenmeye Başla'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Biliyorum'));
+      await tester.tap(find.text('Öğrendim'));
       await tester.pump(const Duration(milliseconds: 250));
       await tester.pumpAndSettle();
 
@@ -2533,8 +2533,8 @@ void main() {
         ),
       ),
     );
-    await tester.ensureVisible(find.text('Biliyorum'));
-    await tester.tap(find.text('Biliyorum'));
+    await tester.ensureVisible(find.text('Öğrendim'));
+    await tester.tap(find.text('Öğrendim'));
     await tester.pump(const Duration(milliseconds: 250));
 
     expect(
@@ -2545,10 +2545,22 @@ void main() {
     expect(streakService.currentStreak, 1);
   });
 
-  testWidgets('Tüm kelimeler Biliyorum seçilince kategori tamamlanır', (
+  testWidgets('Tüm kelimeler Öğrendim seçilince kategori tamamlanır', (
     tester,
   ) async {
-    await pumpLearningSession(tester);
+    final xpService = await createXpService();
+    addTearDown(xpService.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WordCardScreen(
+          category: CategoryCatalog.animals,
+          wordProgressStore: FakeWordProgressStore(),
+          xpService: xpService,
+          quizStore: FakeQuizStore(FakeQuizStorage(), FakeXpStorage()),
+          ttsService: EnglishTtsService(engine: FakeTtsEngine()),
+        ),
+      ),
+    );
 
     for (
       var index = 0;
@@ -2559,14 +2571,54 @@ void main() {
     }
 
     expect(find.text('Kategori Tamamlandı'), findsOneWidget);
+    expect(find.byType(AlertDialog), findsNothing);
     expect(
-      find.text('Hayvanlar kategorisindeki tüm kelimeleri tamamladın!'),
+      find.text(
+        'Hayvanlar kategorisindeki tüm kelimeleri tamamladın. Şimdi öğrendiklerini quiz ile pekiştirebilirsin.',
+      ),
       findsOneWidget,
     );
+    expect(find.text('Hayvanlar Quizini Çöz'), findsOneWidget);
+    expect(find.text('Kategoriye Dön'), findsOneWidget);
+    await tester.tap(find.text('Hayvanlar Quizini Çöz'));
+    await tester.pumpAndSettle();
+    expect(find.byType(CategoryQuizScreen), findsOneWidget);
+  });
+
+  testWidgets('Örnek İngilizce cümle yalnızca hoparlör isteğiyle okunur', (
+    tester,
+  ) async {
+    final engine = FakeTtsEngine();
+    final xpService = await createXpService();
+    addTearDown(xpService.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WordCardScreen(
+          category: CategoryCatalog.animals,
+          wordProgressStore: FakeWordProgressStore(),
+          xpService: xpService,
+          ttsService: EnglishTtsService(engine: engine),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('word-card')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('example-sentence-pronunciation-button')),
+      findsOneWidget,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('example-sentence-pronunciation-button')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(engine.spokenTexts, contains('The dog is sleeping.'));
+    expect(engine.spokenTexts, isNot(contains('Köpek uyuyor.')));
   });
 
   testWidgets(
-    'Biliyorum etiketi görünür ve kalıcı kelime yeni oturumda atlanır',
+    'Öğrendim etiketi görünür ve kalıcı kelime yeni oturumda atlanır',
     (tester) async {
       final category = LearningCategory(
         id: 'known_test',
@@ -2595,7 +2647,7 @@ void main() {
         ),
       );
 
-      expect(find.text('Biliyorum'), findsOneWidget);
+      expect(find.text('Öğrendim'), findsOneWidget);
       expect(find.text('CAT'), findsOneWidget);
       expect(find.text('DOG'), findsNothing);
     },
@@ -2633,10 +2685,7 @@ void main() {
         ),
       );
 
-      expect(
-        find.text('Bu kategorideki tüm kelimeleri biliyorsun!'),
-        findsOneWidget,
-      );
+      expect(find.text('Kategori Tamamlandı'), findsOneWidget);
     },
   );
 
@@ -6559,7 +6608,7 @@ void main() {
         expect(find.text('Dinle'), findsOneWidget);
         expect(find.text('Favori'), findsOneWidget);
         expect(find.text('Bu kelime nasıldı?'), findsOneWidget);
-        expect(find.text('Biliyorum'), findsOneWidget);
+        expect(find.text('Öğrendim'), findsOneWidget);
         expect(find.text('Tekrar Et'), findsOneWidget);
         expect(find.text('Zor'), findsOneWidget);
         expect(find.text('Önceki'), findsOneWidget);
@@ -6614,7 +6663,7 @@ void main() {
         find.byKey(const ValueKey('word-navigation')),
         180,
       );
-      expect(find.text('Biliyorum'), findsOneWidget);
+      expect(find.text('Öğrendim'), findsOneWidget);
       expect(find.text('Sonraki'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
@@ -6723,7 +6772,7 @@ void main() {
         expect(find.text('DOG'), findsOneWidget);
         expect(find.text('Dinle'), findsOneWidget);
         await tester.scrollUntilVisible(find.text('Sonraki'), 180);
-        expect(find.text('Biliyorum'), findsOneWidget);
+        expect(find.text('Öğrendim'), findsOneWidget);
         expect(find.text('Tekrar Et'), findsOneWidget);
         expect(find.text('Zor'), findsOneWidget);
         expect(find.text('Sonraki'), findsOneWidget);
@@ -6783,6 +6832,82 @@ void main() {
       }
     },
   );
+
+  testWidgets(
+    'iPhone 13 mini güvenli alanında 100px quiz banner içeriğin üzerine binmez',
+    (tester) async {
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.binding.setSurfaceSize(const Size(375, 812));
+      final xpService = await createXpService();
+      addTearDown(xpService.dispose);
+      final banner = FakeBannerAdService(bannerHeight: 100);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(padding: const EdgeInsets.only(bottom: 34)),
+            child: child!,
+          ),
+          home: CategoryQuizScreen(
+            category: CategoryCatalog.animals,
+            quizStore: FakeQuizStore(FakeQuizStorage(), FakeXpStorage()),
+            xpService: xpService,
+            random: NoShuffleRandom(),
+            ttsService: EnglishTtsService(engine: FakeTtsEngine()),
+            bannerAdService: banner,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final word = currentQuizWord(tester, animalWords);
+      expect(find.text(word.english.toUpperCase()), findsOneWidget);
+      expect(find.text(word.emoji), findsNothing);
+      expect(
+        find.byKey(const ValueKey('quiz-pronunciation-button')),
+        findsOneWidget,
+      );
+      final nextQuestion = find.text('Sonraki Soru');
+      final bannerSlot = find.byKey(const ValueKey('quiz-banner-slot'));
+      expect(bannerSlot, findsOneWidget);
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, -260));
+      await tester.pumpAndSettle();
+      expect(
+        tester.getBottomLeft(nextQuestion).dy,
+        lessThanOrEqualTo(tester.getTopLeft(bannerSlot).dy),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('Yüklenmemiş quiz banner alan ayırmadan ekranı çalıştırır', (
+    tester,
+  ) async {
+    final xpService = await createXpService();
+    addTearDown(xpService.dispose);
+    final banner = FakeBannerAdService(bannerHeight: 100, loaded: false);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CategoryQuizScreen(
+          category: CategoryCatalog.animals,
+          quizStore: FakeQuizStore(FakeQuizStorage(), FakeXpStorage()),
+          xpService: xpService,
+          random: NoShuffleRandom(),
+          ttsService: EnglishTtsService(engine: FakeTtsEngine()),
+          bannerAdService: banner,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final bannerSlot = find.byKey(const ValueKey('quiz-banner-slot'));
+    expect(bannerSlot, findsOneWidget);
+    expect(tester.getSize(bannerSlot).height, 0);
+    expect(find.text('Sonraki Soru'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('Quiz seçimi kilitlenir ve doğru cevap gösterilir', (
     tester,
@@ -6873,6 +6998,107 @@ void main() {
       find.widgetWithText(FilledButton, 'Sonraki Soru'),
     );
     expect(nextButton.onPressed, isNull);
+  });
+
+  testWidgets(
+    'Quiz sonucu küçük ekranda tek kompakt panel ve üç aksiyonu gösterir',
+    (tester) async {
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.binding.setSurfaceSize(const Size(375, 812));
+      var retryCount = 0;
+      var categoryCount = 0;
+      var homeCount = 0;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: QuizResultScreen(
+            categoryName: 'Renkler',
+            correctAnswerCount: 10,
+            totalQuestionCount: 10,
+            successPercentage: 100,
+            xpAwarded: 25,
+            totalXpBefore: 250,
+            totalXpAfter: 275,
+            longestCorrectStreak: 10,
+            elapsedDuration: const Duration(seconds: 51),
+            onRetry: () => retryCount++,
+            onReturnToCategory: () => categoryCount++,
+            onReturnHome: () => homeCount++,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('quiz-summary-panel')), findsOneWidget);
+      expect(find.text('Mükemmel!'), findsOneWidget);
+      expect(find.text('🏆 Kusursuz sonuç! +25 XP kazandın.'), findsOneWidget);
+      expect(find.text('Toplam XP: 250 → 275'), findsOneWidget);
+      expect(find.text('10 doğru'), findsOneWidget);
+      expect(find.text('51 sn'), findsOneWidget);
+      expect(find.text('+25 XP'), findsOneWidget);
+
+      final viewportHeight = tester.getSize(find.byType(Scaffold)).height;
+      for (final action in <Finder>[
+        find.byKey(const ValueKey('quiz-retry-action')),
+        find.byKey(const ValueKey('quiz-return-category-action')),
+        find.byKey(const ValueKey('quiz-return-home-action')),
+      ]) {
+        expect(action, findsOneWidget);
+        expect(
+          tester.getBottomLeft(action).dy,
+          lessThanOrEqualTo(viewportHeight),
+        );
+      }
+
+      await tester.tap(find.byKey(const ValueKey('quiz-retry-action')));
+      await tester.tap(
+        find.byKey(const ValueKey('quiz-return-category-action')),
+      );
+      await tester.tap(find.byKey(const ValueKey('quiz-return-home-action')));
+      expect(retryCount, 1);
+      expect(categoryCount, 1);
+      expect(homeCount, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('Quiz sonucu büyük metinde kaydırılabilir ve taşmaz', (
+    tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(320, 568));
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: const TextScaler.linear(1.5)),
+          child: child!,
+        ),
+        home: QuizResultScreen(
+          categoryName: 'Tatiller ve Kutlamalar',
+          correctAnswerCount: 10,
+          totalQuestionCount: 10,
+          successPercentage: 100,
+          xpAwarded: 25,
+          totalXpBefore: 250,
+          totalXpAfter: 275,
+          longestCorrectStreak: 10,
+          elapsedDuration: const Duration(seconds: 72),
+          onRetry: () {},
+          onReturnToCategory: () {},
+          onReturnHome: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(find.text('Ana Sayfa'), 180);
+    expect(find.byKey(const ValueKey('quiz-summary-panel')), findsOneWidget);
+    expect(find.text('Ana Sayfa'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('Quiz gerçek süreyi gösterir ve tekrar çöz sayaçları sıfırlar', (

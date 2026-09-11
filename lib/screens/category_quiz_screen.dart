@@ -17,6 +17,7 @@ import 'package:kelimo/widgets/achievement_notification.dart';
 import 'package:kelimo/widgets/glass_surface.dart';
 import 'package:kelimo/services/category_access_service.dart';
 import 'package:kelimo/services/english_tts_service.dart';
+import 'package:kelimo/services/banner_ad_service.dart';
 
 class CategoryQuizScreen extends StatefulWidget {
   CategoryQuizScreen({
@@ -31,6 +32,7 @@ class CategoryQuizScreen extends StatefulWidget {
     this.streakService,
     this.categoryAccessService,
     this.ttsService,
+    this.bannerAdService,
   }) : now = now ?? DateTime.now,
        random = random ?? Random(),
        assert(category.words.length >= 4);
@@ -45,6 +47,7 @@ class CategoryQuizScreen extends StatefulWidget {
   final StreakService? streakService;
   final CategoryAccessService? categoryAccessService;
   final EnglishTtsService? ttsService;
+  final BannerAdService? bannerAdService;
 
   @override
   State<CategoryQuizScreen> createState() => _CategoryQuizScreenState();
@@ -81,6 +84,8 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
   late final QuizSession _session;
   late final EnglishTtsService _ttsService;
   late final bool _ownsTtsService;
+  late final BannerAdService? _bannerAdService;
+  late final bool _ownsBannerAdService;
   Timer? _autoAdvanceTimer;
   bool _isAutoAdvancing = false;
 
@@ -91,6 +96,12 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
     _startedAt = widget.now();
     _ownsTtsService = widget.ttsService == null;
     _ttsService = widget.ttsService ?? EnglishTtsService();
+    _ownsBannerAdService = widget.bannerAdService == null;
+    _bannerAdService =
+        widget.bannerAdService ??
+        (widget.interstitialAdService == null
+            ? null
+            : GoogleBannerAdService(widget.interstitialAdService!));
   }
 
   @override
@@ -98,6 +109,7 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
     _autoAdvanceTimer?.cancel();
     unawaited(_ttsService.stop());
     if (_ownsTtsService) unawaited(_ttsService.dispose());
+    if (_ownsBannerAdService) _bannerAdService?.dispose();
     super.dispose();
   }
 
@@ -219,6 +231,7 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
                     interstitialAdService: widget.interstitialAdService,
                     streakService: widget.streakService,
                     categoryAccessService: widget.categoryAccessService,
+                    bannerAdService: widget.bannerAdService,
                   ),
                 ),
               );
@@ -249,6 +262,65 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
     final isShortViewport = MediaQuery.sizeOf(context).height < 680;
     final bottomPadding = 32.0 + MediaQuery.paddingOf(context).bottom;
 
+    Widget buildQuizBody(bool bannerLoaded) {
+      final contentBottomPadding = bannerLoaded ? 24.0 : bottomPadding;
+      return SafeArea(
+        top: false,
+        bottom: !bannerLoaded,
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(20, 12, 20, contentBottomPadding),
+          children: [
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 680),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    LinearProgressIndicator(
+                      value: (_questionIndex + 1) / _questionCount,
+                      minHeight: 8,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    SizedBox(height: isShortViewport ? 16 : 24),
+                    _QuestionCard(
+                      word: _currentWord,
+                      compact: isShortViewport || bannerLoaded,
+                      onSpeak: () =>
+                          unawaited(_ttsService.speak(_currentWord.english)),
+                    ),
+                    SizedBox(height: isShortViewport ? 14 : 20),
+                    for (final option in options) ...[
+                      _AnswerOption(
+                        option: option,
+                        correctAnswer: _currentQuestion.correctAnswer,
+                        selectedAnswer: _selectedAnswer,
+                        onTap: () => _selectAnswer(option),
+                      ),
+                      SizedBox(height: isShortViewport ? 8 : 12),
+                    ],
+                    const SizedBox(height: 8),
+                    FilledButton(
+                      onPressed:
+                          _selectedAnswer == null ||
+                              _isCompleting ||
+                              _isAutoAdvancing
+                          ? null
+                          : _continueQuiz,
+                      child: Text(
+                        _questionIndex == _questionCount - 1
+                            ? 'Sonucu Gör'
+                            : 'Sonraki Soru',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return GlassBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
@@ -266,60 +338,19 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
             ),
           ],
         ),
-        body: SafeArea(
-          top: false,
-          child: ListView(
-            padding: EdgeInsets.fromLTRB(20, 12, 20, bottomPadding),
-            children: [
-              Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 680),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      LinearProgressIndicator(
-                        value: (_questionIndex + 1) / _questionCount,
-                        minHeight: 8,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      SizedBox(height: isShortViewport ? 16 : 24),
-                      _QuestionCard(
-                        word: _currentWord,
-                        compact: isShortViewport,
-                        onSpeak: () =>
-                            unawaited(_ttsService.speak(_currentWord.english)),
-                      ),
-                      SizedBox(height: isShortViewport ? 14 : 20),
-                      for (final option in options) ...[
-                        _AnswerOption(
-                          option: option,
-                          correctAnswer: _currentQuestion.correctAnswer,
-                          selectedAnswer: _selectedAnswer,
-                          onTap: () => _selectAnswer(option),
-                        ),
-                        SizedBox(height: isShortViewport ? 8 : 12),
-                      ],
-                      const SizedBox(height: 8),
-                      FilledButton(
-                        onPressed:
-                            _selectedAnswer == null ||
-                                _isCompleting ||
-                                _isAutoAdvancing
-                            ? null
-                            : _continueQuiz,
-                        child: Text(
-                          _questionIndex == _questionCount - 1
-                              ? 'Sonucu Gör'
-                              : 'Sonraki Soru',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+        body: _bannerAdService == null
+            ? buildQuizBody(false)
+            : AnimatedBuilder(
+                animation: _bannerAdService,
+                builder: (context, child) =>
+                    buildQuizBody(_bannerAdService.isLoaded),
               ),
-            ],
-          ),
-        ),
+        bottomNavigationBar: _bannerAdService == null
+            ? null
+            : LearningBannerSlot(
+                key: const ValueKey('quiz-banner-slot'),
+                service: _bannerAdService,
+              ),
       ),
     );
   }
@@ -361,12 +392,10 @@ class _QuestionCard extends StatelessWidget {
           child: Padding(
             padding: EdgeInsets.symmetric(
               horizontal: 24,
-              vertical: compact ? 20 : 36,
+              vertical: compact ? 16 : 22,
             ),
             child: Column(
               children: [
-                Text(word.emoji, style: TextStyle(fontSize: compact ? 40 : 48)),
-                SizedBox(height: compact ? 8 : 12),
                 ScaleDownSingleLineText(
                   word.english.toUpperCase(),
                   key: ValueKey('quiz-question-${word.id}'),
@@ -381,7 +410,7 @@ class _QuestionCard extends StatelessWidget {
                   onPressed: onSpeak,
                   icon: const Icon(Icons.volume_up_rounded),
                 ),
-                SizedBox(height: compact ? 8 : 12),
+                SizedBox(height: compact ? 4 : 8),
                 Text(
                   'Doğru Türkçe karşılığı seç',
                   textAlign: TextAlign.center,
