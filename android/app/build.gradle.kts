@@ -4,6 +4,8 @@ import java.util.Properties
 val googleTestAdMobAppId = "ca-app-pub-3940256099942544~3347511713"
 val googleTestAndroidInterstitialAdUnitId =
     "ca-app-pub-3940256099942544/1033173712"
+val googleTestAndroidBannerAdUnitId =
+    "ca-app-pub-3940256099942544/6300978111"
 
 val releaseSigningPropertiesFile = rootProject.file("key.properties")
 val releaseSigningProperties = Properties()
@@ -85,6 +87,27 @@ if (isReleaseBuildRequested) {
         throw GradleException(
             "Release build must not use the Google test interstitial Ad Unit ID.",
         )
+    }
+
+    val releaseLearningBannerAdUnitId =
+        releaseDartDefines["ADMOB_ANDROID_LEARNING_BANNER_AD_UNIT_ID"]
+    val releaseQuizBannerAdUnitId =
+        releaseDartDefines["ADMOB_ANDROID_QUIZ_BANNER_AD_UNIT_ID"]
+    val releaseBannerAdUnitIds = listOf(
+        "ADMOB_ANDROID_LEARNING_BANNER_AD_UNIT_ID" to releaseLearningBannerAdUnitId,
+        "ADMOB_ANDROID_QUIZ_BANNER_AD_UNIT_ID" to releaseQuizBannerAdUnitId,
+    )
+    releaseBannerAdUnitIds.forEach { (name, value) ->
+        if (value.isNullOrBlank()) {
+            throw GradleException(
+                "Release build requires --dart-define=$name=<production-ad-unit-id>.",
+            )
+        }
+        if (value == googleTestAndroidBannerAdUnitId) {
+            throw GradleException(
+                "Release build must not use the Google test banner Ad Unit ID for $name.",
+            )
+        }
     }
 }
 

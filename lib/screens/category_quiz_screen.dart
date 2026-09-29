@@ -101,7 +101,10 @@ class _CategoryQuizScreenState extends State<CategoryQuizScreen> {
         widget.bannerAdService ??
         (widget.interstitialAdService == null
             ? null
-            : GoogleBannerAdService(widget.interstitialAdService!));
+            : GoogleBannerAdService(
+                widget.interstitialAdService!,
+                placement: BannerPlacement.quiz,
+              ));
   }
 
   @override

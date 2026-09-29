@@ -40,6 +40,82 @@ class _FakeBannerAdService extends BannerAdService {
 }
 
 void main() {
+  group('BannerAdUnitConfiguration', () {
+    const configuration = BannerAdUnitConfiguration(
+      androidLearningAdUnitId: 'android-learning-production',
+      iosLearningAdUnitId: 'ios-learning-production',
+      androidQuizAdUnitId: 'android-quiz-production',
+      iosQuizAdUnitId: 'ios-quiz-production',
+    );
+
+    test('uses the official platform test IDs outside release mode', () {
+      expect(
+        configuration.resolve(
+          placement: BannerPlacement.learning,
+          useTestAds: true,
+          isAndroid: true,
+          isIos: false,
+        ),
+        BannerAdUnitConfiguration.androidTestBannerAdUnitId,
+      );
+      expect(
+        configuration.resolve(
+          placement: BannerPlacement.quiz,
+          useTestAds: true,
+          isAndroid: false,
+          isIos: true,
+        ),
+        BannerAdUnitConfiguration.iosTestBannerAdUnitId,
+      );
+    });
+
+    test('resolves separate production units for every placement', () {
+      expect(
+        configuration.resolve(
+          placement: BannerPlacement.learning,
+          useTestAds: false,
+          isAndroid: true,
+          isIos: false,
+        ),
+        'android-learning-production',
+      );
+      expect(
+        configuration.resolve(
+          placement: BannerPlacement.quiz,
+          useTestAds: false,
+          isAndroid: true,
+          isIos: false,
+        ),
+        'android-quiz-production',
+      );
+    });
+
+    test('rejects missing and Google test units in release mode', () {
+      const invalid = BannerAdUnitConfiguration(
+        androidLearningAdUnitId:
+            BannerAdUnitConfiguration.androidTestBannerAdUnitId,
+      );
+      expect(
+        invalid.resolve(
+          placement: BannerPlacement.learning,
+          useTestAds: false,
+          isAndroid: true,
+          isIos: false,
+        ),
+        isNull,
+      );
+      expect(
+        invalid.resolve(
+          placement: BannerPlacement.quiz,
+          useTestAds: false,
+          isAndroid: true,
+          isIos: false,
+        ),
+        isNull,
+      );
+    });
+  });
+
   testWidgets('banner slot reserves space only after successful load', (
     tester,
   ) async {

@@ -119,7 +119,10 @@ class _WordCardScreenState extends State<WordCardScreen>
         ? (widget.bannerAdService ??
               (widget.interstitialAdService == null
                   ? null
-                  : GoogleBannerAdService(widget.interstitialAdService!)))
+                  : GoogleBannerAdService(
+                      widget.interstitialAdService!,
+                      placement: BannerPlacement.learning,
+                    )))
         : null;
     _isFavorite = widget.wordProgressStore
         .progressFor(_learningEngine.currentWord.id)

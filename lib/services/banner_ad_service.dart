@@ -7,6 +7,61 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import 'interstitial_ad_service.dart';
 
+/// The screen requesting a banner. Each placement can use its own release
+/// inventory while sharing the same adaptive-banner lifecycle.
+enum BannerPlacement { learning, quiz }
+
+/// Resolves platform-specific banner units without placing production values
+/// in source control. The default values are populated with `--dart-define`.
+class BannerAdUnitConfiguration {
+  const BannerAdUnitConfiguration({
+    this.androidLearningAdUnitId = const String.fromEnvironment(
+      'ADMOB_ANDROID_LEARNING_BANNER_AD_UNIT_ID',
+    ),
+    this.iosLearningAdUnitId = const String.fromEnvironment(
+      'ADMOB_IOS_LEARNING_BANNER_AD_UNIT_ID',
+    ),
+    this.androidQuizAdUnitId = const String.fromEnvironment(
+      'ADMOB_ANDROID_QUIZ_BANNER_AD_UNIT_ID',
+    ),
+    this.iosQuizAdUnitId = const String.fromEnvironment(
+      'ADMOB_IOS_QUIZ_BANNER_AD_UNIT_ID',
+    ),
+  });
+
+  static const androidTestBannerAdUnitId =
+      'ca-app-pub-3940256099942544/6300978111';
+  static const iosTestBannerAdUnitId = 'ca-app-pub-3940256099942544/2934735716';
+  static const _googleTestPrefix = 'ca-app-pub-3940256099942544/';
+
+  final String androidLearningAdUnitId;
+  final String iosLearningAdUnitId;
+  final String androidQuizAdUnitId;
+  final String iosQuizAdUnitId;
+
+  String? resolve({
+    required BannerPlacement placement,
+    required bool useTestAds,
+    required bool isAndroid,
+    required bool isIos,
+  }) {
+    if (useTestAds) {
+      if (isAndroid) return androidTestBannerAdUnitId;
+      if (isIos) return iosTestBannerAdUnitId;
+      return null;
+    }
+
+    final value = switch ((placement, isAndroid, isIos)) {
+      (BannerPlacement.learning, true, _) => androidLearningAdUnitId,
+      (BannerPlacement.learning, _, true) => iosLearningAdUnitId,
+      (BannerPlacement.quiz, true, _) => androidQuizAdUnitId,
+      (BannerPlacement.quiz, _, true) => iosQuizAdUnitId,
+      _ => '',
+    };
+    return value.isEmpty || value.startsWith(_googleTestPrefix) ? null : value;
+  }
+}
+
 /// Small abstraction around a banner so screens can be tested without ads.
 abstract class BannerAdService extends ChangeNotifier {
   bool get isLoaded;
@@ -18,11 +73,17 @@ abstract class BannerAdService extends ChangeNotifier {
 }
 
 class GoogleBannerAdService extends BannerAdService {
-  GoogleBannerAdService(this._adsService) {
+  GoogleBannerAdService(
+    this._adsService, {
+    this.placement = BannerPlacement.learning,
+    this.configuration = const BannerAdUnitConfiguration(),
+  }) {
     _adsService.addListener(_handleAdsStateChanged);
   }
 
   final InterstitialAdService _adsService;
+  final BannerPlacement placement;
+  final BannerAdUnitConfiguration configuration;
   BannerAd? _ad;
   AdSize? _size;
   bool _isLoading = false;
@@ -96,21 +157,19 @@ class GoogleBannerAdService extends BannerAdService {
   }
 
   String? get _adUnitId {
-    if (kDebugMode) {
-      if (Platform.isAndroid) return 'ca-app-pub-3940256099942544/6300978111';
-      if (Platform.isIOS) return 'ca-app-pub-3940256099942544/2934735716';
-      return null;
+    final adUnitId = configuration.resolve(
+      placement: placement,
+      useTestAds: !kReleaseMode,
+      isAndroid: Platform.isAndroid,
+      isIos: Platform.isIOS,
+    );
+    if (adUnitId == null) {
+      debugPrint(
+        '[Ads] Banner disabled: ${placement.name} release ad unit is not '
+        'configured or is a Google test unit.',
+      );
     }
-    final value = Platform.isAndroid
-        ? const String.fromEnvironment('ADMOB_ANDROID_BANNER_AD_UNIT_ID')
-        : Platform.isIOS
-        ? const String.fromEnvironment('ADMOB_IOS_BANNER_AD_UNIT_ID')
-        : '';
-    if (value.isEmpty || value.startsWith('ca-app-pub-3940256099942544/')) {
-      debugPrint('[Ads] Banner disabled: release ad unit is not configured.');
-      return null;
-    }
-    return value;
+    return adUnitId;
   }
 
   @override
