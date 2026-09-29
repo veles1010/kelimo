@@ -14,6 +14,7 @@ import 'package:kelimo/data/home_words.dart';
 import 'package:kelimo/data/transportation_words.dart';
 import 'package:kelimo/data/local/database_service.dart';
 import 'package:kelimo/main.dart';
+import 'package:kelimo/config/feature_flags.dart';
 import 'package:kelimo/models/category_hub_snapshot.dart';
 import 'package:kelimo/models/daily_progress.dart';
 import 'package:kelimo/models/achievement.dart';
@@ -247,21 +248,38 @@ class FakeAdRemovalStore implements AdRemovalStore {
 }
 
 class FakeStorePurchaseGateway implements StorePurchaseGateway {
-  final controller = StreamController<List<StorePurchase>>.broadcast();
+  FakeStorePurchaseGateway({this.available = false, this.products = const []})
+    : controller = StreamController<List<StorePurchase>>.broadcast();
+
+  final StreamController<List<StorePurchase>> controller;
   bool available;
   List<StoreProduct> products;
+  int purchaseStreamAccesses = 0;
+  int availabilityChecks = 0;
+  int productQueries = 0;
 
-  FakeStorePurchaseGateway({this.available = false, this.products = const []});
   @override
-  Stream<List<StorePurchase>> get purchaseStream => controller.stream;
+  Stream<List<StorePurchase>> get purchaseStream {
+    purchaseStreamAccesses++;
+    return controller.stream;
+  }
+
   @override
-  Future<bool> isAvailable() async => available;
+  Future<bool> isAvailable() async {
+    availabilityChecks++;
+    return available;
+  }
+
   @override
   Future<bool> buyNonConsumable(StoreProduct product) async => false;
   @override
   Future<void> completePurchase(StorePurchase purchase) async {}
   @override
-  Future<List<StoreProduct>> queryProducts(Set<String> ids) async => products;
+  Future<List<StoreProduct>> queryProducts(Set<String> ids) async {
+    productQueries++;
+    return products;
+  }
+
   @override
   Future<void> restorePurchases() async {}
 }
@@ -945,6 +963,7 @@ Future<void> pumpKelimoApp(
   InterstitialAdService? interstitialAdService,
   AdRemovalStore? adRemovalStore,
   StorePurchaseGateway? storePurchaseGateway,
+  FeatureFlags? featureFlags,
 }) async {
   final sharedXpStorage = xpStorage ?? FakeXpStorage();
   final notifications = notificationService ?? FakeNotificationService();
@@ -986,6 +1005,7 @@ Future<void> pumpKelimoApp(
       ),
       adRemovalStore: adRemovalStore ?? FakeAdRemovalStore(),
       storePurchaseGateway: storePurchaseGateway ?? FakeStorePurchaseGateway(),
+      featureFlags: featureFlags ?? const FeatureFlags(),
     ),
   );
   await tester.pumpAndSettle();
@@ -4436,6 +4456,7 @@ void main() {
       tester,
       adRemovalStore: entitlement,
       storePurchaseGateway: store,
+      featureFlags: const FeatureFlags(removeAdsEnabled: true),
     );
 
     await tester.tap(find.text('Ayarlar'));
@@ -4463,6 +4484,42 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Reklamlar kaldırıldı'), findsOneWidget);
   });
+
+  testWidgets(
+    'reklam kaldırma varsayılan olarak kapalıyken mağaza başlatılmaz ve reklamlar hazır kalır',
+    (tester) async {
+      final store = FakeStorePurchaseGateway(available: true);
+      final ads = FakeInterstitialAdService();
+      addTearDown(store.controller.close);
+      addTearDown(ads.dispose);
+
+      await pumpKelimoApp(
+        tester,
+        interstitialAdService: ads,
+        storePurchaseGateway: store,
+      );
+
+      expect(removeAdsFeatureEnabled, isFalse);
+      expect(store.purchaseStreamAccesses, 0);
+      expect(store.availabilityChecks, 0);
+      expect(store.productQueries, 0);
+      expect(ads.isAdsRemoved, isFalse);
+      expect(ads.initializeCalls, 1);
+
+      await tester.tap(find.text('Ayarlar'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Reklamları Kaldır'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('purchase-remove-ads-button')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('restore-purchases-button')),
+        findsNothing,
+      );
+    },
+  );
 
   testWidgets(
     'Sesi dene seçili telaffuz hızını kullanır ve küçük ekranda taşmaz',

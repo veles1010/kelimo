@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:kelimo/config/feature_flags.dart';
 import 'package:kelimo/data/local/database_service.dart';
 import 'package:kelimo/repositories/daily_progress_repository.dart';
 import 'package:kelimo/repositories/achievement_repository.dart';
@@ -50,6 +51,7 @@ class KelimoApp extends StatefulWidget {
     this.categoryUnlockStore,
     this.adRemovalStore,
     this.storePurchaseGateway,
+    this.featureFlags = const FeatureFlags(),
   });
 
   final WordProgressStore? wordProgressStore;
@@ -65,6 +67,7 @@ class KelimoApp extends StatefulWidget {
   final CategoryUnlockStore? categoryUnlockStore;
   final AdRemovalStore? adRemovalStore;
   final StorePurchaseGateway? storePurchaseGateway;
+  final FeatureFlags featureFlags;
 
   @override
   State<KelimoApp> createState() => _KelimoAppState();
@@ -87,7 +90,7 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
   late final AppNavigationController _navigationController;
   late final bool _ownsNavigationController;
   late final InterstitialAdService _interstitialAdService;
-  late final AdRemovalService _adRemovalService;
+  late final AdRemovalService? _adRemovalService;
   late final CategoryAccessService _categoryAccessService;
   late final bool _ownsInterstitialAdService;
   late final StreamSubscription<String> _notificationPayloadSubscription;
@@ -113,10 +116,14 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
     );
     final xpStore = widget.xpStore ?? XpRepository(databaseService);
     _xpService = XpService(repository: xpStore);
-    _adRemovalService = AdRemovalService(
-      repository: widget.adRemovalStore ?? AdRemovalRepository(databaseService),
-      gateway: widget.storePurchaseGateway ?? GoogleStorePurchaseGateway(),
-    );
+    _adRemovalService = widget.featureFlags.removeAdsEnabled
+        ? AdRemovalService(
+            repository:
+                widget.adRemovalStore ?? AdRemovalRepository(databaseService),
+            gateway:
+                widget.storePurchaseGateway ?? GoogleStorePurchaseGateway(),
+          )
+        : null;
     _quizStore = widget.quizStore ?? QuizRepository(databaseService);
     _categoryAccessService = CategoryAccessService(
       repository:
@@ -196,12 +203,12 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
     await _settingsService.initialize();
     await _streakService.initialize();
     await _xpService.initialize();
-    await _adRemovalService.initialize();
+    await _adRemovalService?.initialize();
     await _categoryAccessService.initialize();
     await _achievementService.initialize();
     await _dailyReminderService.initialize();
     if (_settingsService.onboardingCompleted &&
-        !_adRemovalService.isAdsRemoved) {
+        !(_adRemovalService?.isAdsRemoved ?? false)) {
       await _initializeAdsOnce();
     }
     try {
@@ -223,7 +230,9 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
 
   Future<void> _completeInitialOnboarding() async {
     await _settingsService.completeOnboarding();
-    if (!_adRemovalService.isAdsRemoved) unawaited(_initializeAdsOnce());
+    if (!(_adRemovalService?.isAdsRemoved ?? false)) {
+      unawaited(_initializeAdsOnce());
+    }
   }
 
   @override
@@ -241,7 +250,7 @@ class _KelimoAppState extends State<KelimoApp> with WidgetsBindingObserver {
     unawaited(_notificationPayloadSubscription.cancel());
     _streakService.dispose();
     _xpService.dispose();
-    _adRemovalService.dispose();
+    _adRemovalService?.dispose();
     _categoryAccessService.dispose();
     _statisticsService.dispose();
     _settingsService.dispose();
