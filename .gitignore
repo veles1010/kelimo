@@ -44,3 +44,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Local AdMob iOS application ID (shared by debug and release).
+/ios/Flutter/AdMob.xcconfig

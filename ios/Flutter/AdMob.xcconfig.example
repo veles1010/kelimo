@@ -1,0 +1,3 @@
+// Copy to AdMob.xcconfig and replace the placeholder with Kelimo's iOS app ID.
+// The local file is ignored by Git. Ad unit IDs are supplied with --dart-define.
+ADMOB_IOS_APP_ID=REPLACE_WITH_KELIMO_IOS_ADMOB_APP_ID

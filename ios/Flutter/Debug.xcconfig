@@ -1,3 +1,6 @@
 #include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"
 #include "Generated.xcconfig"
-ADMOB_APP_ID=ca-app-pub-3940256099942544~1458002511
+// Use the local app ID for UMP messages; Dart still uses demo ad units in debug.
+ADMOB_IOS_APP_ID=ca-app-pub-3940256099942544~1458002511
+#include? "AdMob.xcconfig"
+ADMOB_APP_ID=$(ADMOB_IOS_APP_ID)
