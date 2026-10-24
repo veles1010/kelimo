@@ -1110,6 +1110,12 @@ class _GlassBottomNavigationState extends State<GlassBottomNavigation>
     }
   }
 
+  void _cancelDrag() {
+    if (!_isDragging) return;
+    _isDragging = false;
+    _settle(widget.selectedIndex);
+  }
+
   @override
   void dispose() {
     _position.dispose();
@@ -1153,127 +1159,129 @@ class _GlassBottomNavigationState extends State<GlassBottomNavigation>
         child: LayoutBuilder(
           builder: (context, constraints) {
             final itemWidth = constraints.maxWidth / destinations.length;
-            return GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              excludeFromSemantics: true,
-              dragStartBehavior: DragStartBehavior.down,
-              onHorizontalDragStart: (details) {
-                _position.stop();
-                _isDragging = true;
-                _dragOrigin = details.localPosition.dx;
-                _dragStartPosition = _position.value;
-              },
-              onHorizontalDragUpdate: (details) {
-                if (!_isDragging || itemWidth <= 0) return;
-                final distance = details.localPosition.dx - _dragOrigin;
-                _position.value = (_dragStartPosition +
-                        (rtl ? -distance : distance) / itemWidth)
-                    .clamp(0.0, 3.0)
-                    .toDouble();
-              },
-              // Preview continuously; change the page only once, on release.
-              onHorizontalDragEnd: (_) {
-                if (!_isDragging) return;
-                _isDragging = false;
-                _select(_position.value.round().clamp(0, 3).toInt());
-              },
-              onHorizontalDragCancel: () {
-                _isDragging = false;
-                _settle(widget.selectedIndex);
-              },
-              child: SizedBox(
-                height: 70,
-                child: AnimatedBuilder(
-                  animation: _position,
-                  builder: (context, _) {
-                    final position = _position.value.clamp(0.0, 3.0).toDouble();
-                    return Stack(
-                      children: [
-                        Positioned(
-                          key: const ValueKey('bottom-nav-selection-indicator'),
-                          left: (rtl ? 3 - position : position) * itemWidth,
-                          top: 3,
-                          bottom: 3,
-                          width: itemWidth,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 3),
-                            child: GlassSurface(
-                              enableBlur: true,
-                              blurSigma: 10,
-                              borderRadius: BorderRadius.circular(22),
-                              padding: EdgeInsets.zero,
-                              fillColor: colorScheme.primary.withValues(alpha: 0.22),
-                              borderColor: colorScheme.primary.withValues(alpha: 0.36),
-                              child: const SizedBox.expand(),
+            return Listener(
+              // DragGestureRecognizer can report an accepted pointer cancellation
+              // through onEnd. Record the raw cancellation before gesture routing.
+              onPointerCancel: (_) => _cancelDrag(),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                excludeFromSemantics: true,
+                dragStartBehavior: DragStartBehavior.down,
+                onHorizontalDragStart: (details) {
+                  _position.stop();
+                  _isDragging = true;
+                  _dragOrigin = details.localPosition.dx;
+                  _dragStartPosition = _position.value;
+                },
+                onHorizontalDragUpdate: (details) {
+                  if (!_isDragging || itemWidth <= 0) return;
+                  final distance = details.localPosition.dx - _dragOrigin;
+                  _position.value = (_dragStartPosition +
+                          (rtl ? -distance : distance) / itemWidth)
+                      .clamp(0.0, 3.0)
+                      .toDouble();
+                },
+                // Preview continuously; change the page only once, on release.
+                onHorizontalDragEnd: (_) {
+                  if (!_isDragging) return;
+                  _isDragging = false;
+                  _select(_position.value.round().clamp(0, 3).toInt());
+                },
+                onHorizontalDragCancel: _cancelDrag,
+                child: SizedBox(
+                  height: 70,
+                  child: AnimatedBuilder(
+                    animation: _position,
+                    builder: (context, _) {
+                      final position = _position.value.clamp(0.0, 3.0).toDouble();
+                      return Stack(
+                        children: [
+                          Positioned(
+                            key: const ValueKey('bottom-nav-selection-indicator'),
+                            left: (rtl ? 3 - position : position) * itemWidth,
+                            top: 3,
+                            bottom: 3,
+                            width: itemWidth,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 3),
+                              child: GlassSurface(
+                                enableBlur: true,
+                                blurSigma: 10,
+                                borderRadius: BorderRadius.circular(22),
+                                padding: EdgeInsets.zero,
+                                fillColor: colorScheme.primary.withValues(alpha: 0.22),
+                                borderColor: colorScheme.primary.withValues(alpha: 0.36),
+                                child: const SizedBox.expand(),
+                              ),
                             ),
                           ),
-                        ),
-                        Row(
-                          children: List.generate(destinations.length, (index) {
-                            final destination = destinations[index];
-                            final selected = index == widget.selectedIndex;
-                            final proximity = (1 - (position - index).abs())
-                                .clamp(0.0, 1.0)
-                                .toDouble();
-                            final foreground = Color.lerp(
-                              colorScheme.onSurfaceVariant,
-                              colorScheme.onPrimaryContainer,
-                              proximity,
-                            )!;
-                            return Expanded(
-                              child: Semantics(
-                                button: true,
-                                selected: selected,
-                                label: destination.label,
-                                excludeSemantics: true,
-                                onTap: () => _select(index),
-                                child: InkWell(
-                                  key: ValueKey('bottom-nav-item-$index'),
-                                  borderRadius: BorderRadius.circular(22),
+                          Row(
+                            children: List.generate(destinations.length, (index) {
+                              final destination = destinations[index];
+                              final selected = index == widget.selectedIndex;
+                              final proximity = (1 - (position - index).abs())
+                                  .clamp(0.0, 1.0)
+                                  .toDouble();
+                              final foreground = Color.lerp(
+                                colorScheme.onSurfaceVariant,
+                                colorScheme.onPrimaryContainer,
+                                proximity,
+                              )!;
+                              return Expanded(
+                                child: Semantics(
+                                  button: true,
+                                  selected: selected,
+                                  label: destination.label,
+                                  excludeSemantics: true,
                                   onTap: () => _select(index),
-                                  child: Center(
-                                    child: Transform.scale(
-                                      scale: 0.94 + 0.06 * proximity,
-                                      child: Opacity(
-                                        opacity: 0.72 + 0.28 * proximity,
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(
-                                              selected
-                                                  ? destination.selectedIcon
-                                                  : destination.icon,
-                                              color: foreground,
-                                            ),
-                                            const SizedBox(height: 3),
-                                            Text(
-                                              destination.label,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              textAlign: TextAlign.center,
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .labelSmall
-                                                  ?.copyWith(
-                                                    color: foreground,
-                                                    fontWeight: proximity >= 0.5
-                                                        ? FontWeight.w700
-                                                        : FontWeight.w500,
-                                                  ),
-                                            ),
-                                          ],
+                                  child: InkWell(
+                                    key: ValueKey('bottom-nav-item-$index'),
+                                    borderRadius: BorderRadius.circular(22),
+                                    onTap: () => _select(index),
+                                    child: Center(
+                                      child: Transform.scale(
+                                        scale: 0.94 + 0.06 * proximity,
+                                        child: Opacity(
+                                          opacity: 0.72 + 0.28 * proximity,
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                selected
+                                                    ? destination.selectedIcon
+                                                    : destination.icon,
+                                                color: foreground,
+                                              ),
+                                              const SizedBox(height: 3),
+                                              Text(
+                                                destination.label,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                textAlign: TextAlign.center,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .labelSmall
+                                                    ?.copyWith(
+                                                      color: foreground,
+                                                      fontWeight: proximity >= 0.5
+                                                          ? FontWeight.w700
+                                                          : FontWeight.w500,
+                                                    ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ),
                                   ),
                                 ),
-                              ),
-                            );
-                          }),
-                        ),
-                      ],
-                    );
-                  },
+                              );
+                            }),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
                 ),
               ),
             );

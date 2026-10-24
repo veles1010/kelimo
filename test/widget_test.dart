@@ -4387,10 +4387,12 @@ void main() {
       expect(find.byKey(const ValueKey('privacy-options-button')), findsNothing);
       expect(ads.testShowCalls, 0);
 
-      await tester.scrollUntilVisible(
-        find.byKey(const ValueKey('settings-privacy-center')), -250,
+      final privacyCenter = find.byKey(
+        const ValueKey('settings-privacy-center'),
       );
-      await tester.tap(find.byKey(const ValueKey('settings-privacy-center')));
+      await tester.ensureVisible(privacyCenter);
+      await tester.pumpAndSettle();
+      await tester.tap(privacyCenter);
       await tester.pumpAndSettle();
       final options = find.byKey(const ValueKey('privacy-center-ad-options'));
       await tester.scrollUntilVisible(options, 250);

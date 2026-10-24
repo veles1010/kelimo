@@ -150,24 +150,27 @@ void main() {
       await tester.binding.setSurfaceSize(const Size(320, 568));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       final semantics = tester.ensureSemantics();
-      addTearDown(semantics.dispose);
-      final state = await pumpBar(
-        tester, dark: dark, reducedMotion: true, textScale: 1.5,
-      );
-      await tester.tap(item(2));
-      await tester.pump();
-      expect(state.commits, [2]);
-      expect(
-        tester.getTopLeft(indicator()).dx,
-        closeTo(tester.getTopLeft(item(2)).dx, .01),
-      );
-      expect(
-        tester.getSemantics(find.bySemanticsLabel('İlerleme'))
-            .flagsCollection.isSelected.toBoolOrNull(),
-        isTrue,
-      );
-      expect(tester.getSize(item(0)).height, greaterThanOrEqualTo(48));
-      expect(tester.takeException(), isNull);
+      try {
+        final state = await pumpBar(
+          tester, dark: dark, reducedMotion: true, textScale: 1.5,
+        );
+        await tester.tap(item(2));
+        await tester.pump();
+        expect(state.commits, [2]);
+        expect(
+          tester.getTopLeft(indicator()).dx,
+          closeTo(tester.getTopLeft(item(2)).dx, .01),
+        );
+        expect(
+          tester.getSemantics(find.bySemanticsLabel('İlerleme'))
+              .flagsCollection.isSelected.toBoolOrNull(),
+          isTrue,
+        );
+        expect(tester.getSize(item(0)).height, greaterThanOrEqualTo(48));
+        expect(tester.takeException(), isNull);
+      } finally {
+        semantics.dispose();
+      }
     });
   }
 }
