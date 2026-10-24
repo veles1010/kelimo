@@ -2,5 +2,5 @@
 #include "Generated.xcconfig"
 // Supply ADMOB_IOS_APP_ID through the local file or release/CI build settings.
 #include? "AdMob.xcconfig"
-# Google sample App IDs must never ship in a release build.
+// Google sample App IDs must never ship in a release build.
 ADMOB_APP_ID=$(ADMOB_IOS_APP_ID)
