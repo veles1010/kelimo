@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:kelimo/data/category_catalog.dart';
 import 'package:kelimo/models/category_hub_snapshot.dart';
@@ -1054,7 +1055,7 @@ class _GlassCard extends StatelessWidget {
   }
 }
 
-class GlassBottomNavigation extends StatelessWidget {
+class GlassBottomNavigation extends StatefulWidget {
   const GlassBottomNavigation({
     required this.selectedIndex,
     required this.onDestinationSelected,
@@ -1065,9 +1066,60 @@ class GlassBottomNavigation extends StatelessWidget {
   final ValueChanged<int> onDestinationSelected;
 
   @override
+  State<GlassBottomNavigation> createState() => _GlassBottomNavigationState();
+}
+
+class _GlassBottomNavigationState extends State<GlassBottomNavigation>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _position = AnimationController.unbounded(
+    vsync: this,
+    value: widget.selectedIndex.toDouble(),
+  );
+  double _dragOrigin = 0;
+  double _dragStartPosition = 0;
+  bool _isDragging = false;
+  int? _settlingTo;
+
+  @override
+  void didUpdateWidget(GlassBottomNavigation oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedIndex != widget.selectedIndex) {
+      _isDragging = false;
+      _settle(widget.selectedIndex);
+    }
+  }
+
+  void _settle(int index) {
+    if (_position.isAnimating && _settlingTo == index) return;
+    _settlingTo = index;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _position.value = index.toDouble();
+    } else {
+      _position.animateTo(
+        index.toDouble(),
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeOutCubic,
+      );
+    }
+  }
+
+  void _select(int index) {
+    _settle(index);
+    if (index != widget.selectedIndex) {
+      widget.onDestinationSelected(index);
+    }
+  }
+
+  @override
+  void dispose() {
+    _position.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final disableAnimations = MediaQuery.of(context).disableAnimations;
+    final rtl = Directionality.of(context) == TextDirection.rtl;
     const destinations = [
       _BottomNavigationDestination(
         label: 'Ana Sayfa',
@@ -1090,9 +1142,6 @@ class GlassBottomNavigation extends StatelessWidget {
         selectedIcon: Icons.settings_rounded,
       ),
     ];
-    final duration = disableAnimations
-        ? Duration.zero
-        : const Duration(milliseconds: 320);
     return SafeArea(
       top: false,
       minimum: const EdgeInsets.fromLTRB(12, 4, 12, 10),
@@ -1104,98 +1153,128 @@ class GlassBottomNavigation extends StatelessWidget {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final itemWidth = constraints.maxWidth / destinations.length;
-            return SizedBox(
-              height: 70,
-              child: Stack(
-                children: [
-                  AnimatedPositioned(
-                    key: const ValueKey('bottom-nav-selection-indicator'),
-                    duration: duration,
-                    curve: Curves.easeOutCubic,
-                    left: selectedIndex * itemWidth,
-                    top: 3,
-                    bottom: 3,
-                    width: itemWidth,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 3),
-                      child: GlassSurface(
-                        enableBlur: true,
-                        blurSigma: 10,
-                        borderRadius: BorderRadius.circular(22),
-                        padding: EdgeInsets.zero,
-                        fillColor: colorScheme.primary.withValues(alpha: 0.22),
-                        borderColor: colorScheme.primary.withValues(
-                          alpha: 0.36,
-                        ),
-                        child: const SizedBox.expand(),
-                      ),
-                    ),
-                  ),
-                  Row(
-                    children: List.generate(destinations.length, (index) {
-                      final destination = destinations[index];
-                      final selected = index == selectedIndex;
-                      return Expanded(
-                        child: Semantics(
-                          button: true,
-                          selected: selected,
-                          label: destination.label,
-                          child: InkWell(
-                            key: ValueKey('bottom-nav-item-$index'),
-                            borderRadius: BorderRadius.circular(22),
-                            onTap: selected
-                                ? null
-                                : () => onDestinationSelected(index),
-                            child: Center(
-                              child: AnimatedScale(
-                                duration: duration,
-                                curve: Curves.easeOutCubic,
-                                scale: selected ? 1 : 0.94,
-                                child: AnimatedOpacity(
-                                  duration: duration,
-                                  opacity: selected ? 1 : 0.72,
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        selected
-                                            ? destination.selectedIcon
-                                            : destination.icon,
-                                        color: selected
-                                            ? colorScheme.onPrimaryContainer
-                                            : colorScheme.onSurfaceVariant,
-                                      ),
-                                      const SizedBox(height: 3),
-                                      Text(
-                                        destination.label,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        textAlign: TextAlign.center,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .labelSmall
-                                            ?.copyWith(
-                                              color: selected
-                                                  ? colorScheme
-                                                        .onPrimaryContainer
-                                                  : colorScheme
-                                                        .onSurfaceVariant,
-                                              fontWeight: selected
-                                                  ? FontWeight.w700
-                                                  : FontWeight.w500,
-                                            ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              excludeFromSemantics: true,
+              dragStartBehavior: DragStartBehavior.down,
+              onHorizontalDragStart: (details) {
+                _position.stop();
+                _isDragging = true;
+                _dragOrigin = details.localPosition.dx;
+                _dragStartPosition = _position.value;
+              },
+              onHorizontalDragUpdate: (details) {
+                if (!_isDragging || itemWidth <= 0) return;
+                final distance = details.localPosition.dx - _dragOrigin;
+                _position.value = (_dragStartPosition +
+                        (rtl ? -distance : distance) / itemWidth)
+                    .clamp(0.0, 3.0)
+                    .toDouble();
+              },
+              // Preview continuously; change the page only once, on release.
+              onHorizontalDragEnd: (_) {
+                if (!_isDragging) return;
+                _isDragging = false;
+                _select(_position.value.round().clamp(0, 3).toInt());
+              },
+              onHorizontalDragCancel: () {
+                _isDragging = false;
+                _settle(widget.selectedIndex);
+              },
+              child: SizedBox(
+                height: 70,
+                child: AnimatedBuilder(
+                  animation: _position,
+                  builder: (context, _) {
+                    final position = _position.value.clamp(0.0, 3.0).toDouble();
+                    return Stack(
+                      children: [
+                        Positioned(
+                          key: const ValueKey('bottom-nav-selection-indicator'),
+                          left: (rtl ? 3 - position : position) * itemWidth,
+                          top: 3,
+                          bottom: 3,
+                          width: itemWidth,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 3),
+                            child: GlassSurface(
+                              enableBlur: true,
+                              blurSigma: 10,
+                              borderRadius: BorderRadius.circular(22),
+                              padding: EdgeInsets.zero,
+                              fillColor: colorScheme.primary.withValues(alpha: 0.22),
+                              borderColor: colorScheme.primary.withValues(alpha: 0.36),
+                              child: const SizedBox.expand(),
                             ),
                           ),
                         ),
-                      );
-                    }),
-                  ),
-                ],
+                        Row(
+                          children: List.generate(destinations.length, (index) {
+                            final destination = destinations[index];
+                            final selected = index == widget.selectedIndex;
+                            final proximity = (1 - (position - index).abs())
+                                .clamp(0.0, 1.0)
+                                .toDouble();
+                            final foreground = Color.lerp(
+                              colorScheme.onSurfaceVariant,
+                              colorScheme.onPrimaryContainer,
+                              proximity,
+                            )!;
+                            return Expanded(
+                              child: Semantics(
+                                button: true,
+                                selected: selected,
+                                label: destination.label,
+                                excludeSemantics: true,
+                                onTap: () => _select(index),
+                                child: InkWell(
+                                  key: ValueKey('bottom-nav-item-$index'),
+                                  borderRadius: BorderRadius.circular(22),
+                                  onTap: () => _select(index),
+                                  child: Center(
+                                    child: Transform.scale(
+                                      scale: 0.94 + 0.06 * proximity,
+                                      child: Opacity(
+                                        opacity: 0.72 + 0.28 * proximity,
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              selected
+                                                  ? destination.selectedIcon
+                                                  : destination.icon,
+                                              color: foreground,
+                                            ),
+                                            const SizedBox(height: 3),
+                                            Text(
+                                              destination.label,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              textAlign: TextAlign.center,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .labelSmall
+                                                  ?.copyWith(
+                                                    color: foreground,
+                                                    fontWeight: proximity >= 0.5
+                                                        ? FontWeight.w700
+                                                        : FontWeight.w500,
+                                                  ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }),
+                        ),
+                      ],
+                    );
+                  },
+                ),
               ),
             );
           },

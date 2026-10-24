@@ -195,38 +195,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _showPrivacyOptions() async {
-    final service = widget.interstitialAdService;
-    if (service == null || _isBusy) return;
-    setState(() => _isBusy = true);
-    final shown = await service.showPrivacyOptions();
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          shown
-              ? 'Gizlilik seçenekleri güncellendi'
-              : 'Gizlilik seçenekleri açılamadı',
-        ),
-      ),
-    );
-    setState(() => _isBusy = false);
-  }
-
-  Future<void> _showTestAd() async {
-    final service = widget.interstitialAdService;
-    if (service == null || _isBusy) return;
-    setState(() => _isBusy = true);
-    final shown = await service.showTestAd();
-    if (!mounted) return;
-    if (!shown) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Test reklamı henüz hazır değil')),
-      );
-    }
-    setState(() => _isBusy = false);
-  }
-
   Future<void> _purchaseAdRemoval() async {
     final service = widget.adRemovalService;
     if (service == null || _isBusy) return;
@@ -644,46 +612,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      if (widget.interstitialAdService
-                          case final adService?) ...[
-                        _Section(
-                          title: 'Gizlilik ve Reklamlar',
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              const Text(
-                                'Geçiş reklamları yalnızca quiz sonrasındaki '
-                                'doğal çıkışlarda ve seyrek olarak gösterilebilir.',
-                              ),
-                              if (adService.privacyOptionsRequired) ...[
-                                const SizedBox(height: 12),
-                                OutlinedButton.icon(
-                                  key: const ValueKey('privacy-options-button'),
-                                  onPressed: _isBusy
-                                      ? null
-                                      : () => unawaited(_showPrivacyOptions()),
-                                  icon: const Icon(Icons.privacy_tip_outlined),
-                                  label: const Text('Gizlilik seçenekleri'),
-                                ),
-                              ],
-                              if (kDebugMode) ...[
-                                const SizedBox(height: 10),
-                                OutlinedButton.icon(
-                                  key: const ValueKey(
-                                    'test-interstitial-button',
-                                  ),
-                                  onPressed: _isBusy
-                                      ? null
-                                      : () => unawaited(_showTestAd()),
-                                  icon: const Icon(Icons.ad_units_outlined),
-                                  label: const Text('Test reklamını göster'),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                      ],
                       _Section(
                         key: _dataManagementKey,
                         title: 'Veri Yönetimi',

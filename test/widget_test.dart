@@ -4371,30 +4371,35 @@ void main() {
   });
 
   testWidgets(
-    'Ayarlar gizlilik seçeneklerini ve debug test reklamını kullanır',
+    'Ayarlar reklam kartını kaldırır ve izin seçeneklerini Gizlilik Merkezinde tutar',
     (tester) async {
-      final ads = FakeInterstitialAdService();
+      final ads = FakeInterstitialAdService(privacyRequired: true);
       await pumpKelimoApp(tester, interstitialAdService: ads);
       addTearDown(ads.dispose);
 
       await tester.tap(find.text('Ayarlar'));
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('Gizlilik ve Reklamlar'), 250);
+      await tester.scrollUntilVisible(find.text('Veri Yönetimi'), 250);
       await tester.pumpAndSettle();
 
-      expect(find.text('Gizlilik ve Reklamlar'), findsOneWidget);
-      expect(find.text('Gizlilik seçenekleri'), findsOneWidget);
-      expect(find.text('Test reklamını göster'), findsOneWidget);
+      expect(find.text('Gizlilik ve Reklamlar'), findsNothing);
+      expect(find.byKey(const ValueKey('test-interstitial-button')), findsNothing);
+      expect(find.byKey(const ValueKey('privacy-options-button')), findsNothing);
+      expect(ads.testShowCalls, 0);
 
-      await tester.tap(find.text('Gizlilik seçenekleri'));
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('settings-privacy-center')), -250,
+      );
+      await tester.tap(find.byKey(const ValueKey('settings-privacy-center')));
+      await tester.pumpAndSettle();
+      final options = find.byKey(const ValueKey('privacy-center-ad-options'));
+      await tester.scrollUntilVisible(options, 250);
+      await tester.ensureVisible(options);
+      await tester.pumpAndSettle();
+      await tester.tap(options);
       await tester.pump();
       expect(ads.privacyCalls, 1);
-
-      await tester.pump(const Duration(seconds: 5));
-      await tester.ensureVisible(find.text('Test reklamını göster'));
-      await tester.tap(find.text('Test reklamını göster'));
-      await tester.pump();
-      expect(ads.testShowCalls, 1);
+      expect(ads.testShowCalls, 0);
     },
   );
 
