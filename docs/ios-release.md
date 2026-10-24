@@ -29,6 +29,7 @@ Birim kimlikleri `ca-app-pub-…/…` biçimindedir. iOS arşivine bu iOS biriml
 
 ```bash
 flutter build ipa --release \
+  --dart-define=ENABLE_REMOVE_ADS=false \
   --dart-define=ADMOB_IOS_LEARNING_BANNER_AD_UNIT_ID=YOUR_IOS_LEARNING_BANNER_AD_UNIT_ID \
   --dart-define=ADMOB_IOS_QUIZ_BANNER_AD_UNIT_ID=YOUR_IOS_QUIZ_BANNER_AD_UNIT_ID \
   --dart-define=ADMOB_INTERSTITIAL_AD_UNIT_ID=YOUR_IOS_INTERSTITIAL_AD_UNIT_ID
@@ -79,3 +80,18 @@ uygulama/app-ads.txt doğrulaması tamamlanır.
 
 SKAdNetwork listesi 24 Ekim 2026 tarihinde Google'ın resmi iOS kurulum sayfasındaki
 50 kimlikle eşleştirilmiştir.
+
+## İlk iOS sürümünün kapsamı
+
+İlk sürüm ücretsiz ve reklamlıdır. Reklam kaldırma ürünü gönderime eklenmez;
+banka hesabı ve vergi formu adımları bekletilir. Ürünün gelecekteki sürüm için
+hazırlandığı App Review notlarında açıklanır.
+
+Mağaza taslakları: [Türkçe mağaza bilgileri](app-store-tr.md).
+Politika ve destek sayfaları main dalındaki docs klasörü Pages'e yayımlandıktan
+sonra canlı URL'lerden doğrulanır.
+
+Gizlilik Merkezi'ndeki tam politika bağlantısı url_launcher ile cihazın
+tarayıcısını açar. Bağlantı başarısız olursa URL kullanıcıya gösterilir.
+Yeni bağımlılık için Mac'te flutter pub get çalıştırılıp oluşan pubspec.lock
+ve platform kayıt değişiklikleri kontrol edilerek kaydedilmelidir.

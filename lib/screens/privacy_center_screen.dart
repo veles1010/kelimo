@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:kelimo/services/interstitial_ad_service.dart';
 import 'package:kelimo/theme/app_theme.dart';
 import 'package:kelimo/widgets/glass_surface.dart';
@@ -9,11 +10,13 @@ class PrivacyCenterScreen extends StatefulWidget {
   const PrivacyCenterScreen({
     this.interstitialAdService,
     this.onManageData,
+    this.policyLauncher,
     super.key,
   });
 
   final InterstitialAdService? interstitialAdService;
   final VoidCallback? onManageData;
+  final Future<bool> Function(Uri)? policyLauncher;
 
   @override
   State<PrivacyCenterScreen> createState() => _PrivacyCenterScreenState();
@@ -21,6 +24,33 @@ class PrivacyCenterScreen extends StatefulWidget {
 
 class _PrivacyCenterScreenState extends State<PrivacyCenterScreen> {
   bool _isOpeningPrivacyOptions = false;
+  bool _isOpeningPolicy = false;
+  static final _policyUri = Uri.parse(
+    'https://veles1010.github.io/kelimo/privacy-policy.html',
+  );
+
+  Future<void> _openPolicy() async {
+    if (_isOpeningPolicy) return;
+    setState(() => _isOpeningPolicy = true);
+    var opened = false;
+    try {
+      final launcher = widget.policyLauncher;
+      opened = launcher != null
+          ? await launcher(_policyUri)
+          : await launchUrl(_policyUri, mode: LaunchMode.externalApplication);
+    } catch (error) {
+      debugPrint('Gizlilik politikası açılamadı: $error');
+    }
+    if (!mounted) return;
+    setState(() => _isOpeningPolicy = false);
+    if (!opened) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Bağlantı açılamadı. Adres: $_policyUri'),
+        ),
+      );
+    }
+  }
 
   Future<void> _showPrivacyOptions() async {
     final service = widget.interstitialAdService;
@@ -80,6 +110,22 @@ class _PrivacyCenterScreenState extends State<PrivacyCenterScreen> {
                         'seçeneklerini nasıl yönetebileceğini burada görebilirsin.',
                       ),
                       const SizedBox(height: 18),
+                      _PrivacySection(
+                        icon: Icons.description_outlined,
+                        title: 'Tam gizlilik politikası',
+                        description:
+                            'Verilerin, reklam hizmetleri ve gizlilik hakların '
+                            'hakkındaki tam metni tarayıcıda okuyabilirsin.',
+                        action: OutlinedButton.icon(
+                          key: const ValueKey('privacy-policy-link'),
+                          onPressed: _isOpeningPolicy
+                              ? null
+                              : () => unawaited(_openPolicy()),
+                          icon: const Icon(Icons.open_in_new_rounded),
+                          label: const Text('Gizlilik Politikasını Aç'),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
                       const _PrivacySection(
                         icon: Icons.storage_rounded,
                         title: 'Öğrenme verilerin',
@@ -110,8 +156,8 @@ class _PrivacyCenterScreenState extends State<PrivacyCenterScreen> {
                         icon: Icons.privacy_tip_outlined,
                         title: 'Reklamlar ve seçimlerin',
                         description:
-                            'Kelimo, seyrek geçiş reklamları için Google Mobile '
-                            'Ads kullanır. Uygun olduğunda reklam gizliliği ve izin '
+                            'Kelimo, banner ve seyrek geçiş reklamları için '
+                            'Google Mobile Ads kullanır. Uygun olduğunda izin '
                             'seçeneklerini gözden geçirebilirsin.',
                         action: adService?.privacyOptionsRequired == true
                             ? Semantics(
