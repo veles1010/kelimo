@@ -40,8 +40,15 @@ abstract interface class NotificationService {
 }
 
 class LocalNotificationService implements NotificationService {
-  LocalNotificationService({FlutterLocalNotificationsPlugin? plugin})
-    : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
+  LocalNotificationService({
+    FlutterLocalNotificationsPlugin? plugin,
+    Future<String> Function()? timezoneIdentifierLoader,
+  }) : _plugin = plugin ?? FlutterLocalNotificationsPlugin(),
+       _timezoneIdentifierLoader =
+           timezoneIdentifierLoader ?? _loadTimezoneIdentifier;
+
+  static Future<String> _loadTimezoneIdentifier() async =>
+      (await FlutterTimezone.getLocalTimezone()).identifier;
 
   static const dailyReminderId = 42001;
   static const testReminderId = 42002;
@@ -49,6 +56,8 @@ class LocalNotificationService implements NotificationService {
   static const dailyReminderPayload = 'daily_review';
 
   final FlutterLocalNotificationsPlugin _plugin;
+  final Future<String> Function() _timezoneIdentifierLoader;
+  Future<void>? _initialization;
   final StreamController<String> _payloadController =
       StreamController<String>.broadcast();
   bool _initialized = false;
@@ -57,15 +66,21 @@ class LocalNotificationService implements NotificationService {
   Stream<String> get payloads => _payloadController.stream;
 
   @override
-  Future<void> initialize() async {
-    if (_initialized) return;
+  Future<void> initialize() {
+    if (_initialized) return Future<void>.value();
+    return _initialization ??= _initialize().whenComplete(() {
+      _initialization = null;
+    });
+  }
+
+  Future<void> _initialize() async {
     timezone_data.initializeTimeZones();
     try {
-      final localTimezone = await FlutterTimezone.getLocalTimezone();
-      final location = resolveTimezoneLocation(localTimezone.identifier);
+      final identifier = await _timezoneIdentifierLoader();
+      final location = resolveTimezoneLocation(identifier);
       timezone.setLocalLocation(location);
       debugPrint(
-        'Algılanan cihaz saat dilimi: ${localTimezone.identifier} | '
+        'Algılanan cihaz saat dilimi: $identifier | '
         'Seçilen konum: ${location.name}',
       );
     } catch (error, stackTrace) {
@@ -115,6 +130,7 @@ class LocalNotificationService implements NotificationService {
 
   @override
   Future<NotificationPermissionStatus> notificationPermissionStatus() async {
+    await initialize();
     final android = _plugin
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
@@ -141,6 +157,7 @@ class LocalNotificationService implements NotificationService {
 
   @override
   Future<NotificationPermissionStatus> requestPermission() async {
+    await initialize();
     final android = _plugin
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
@@ -177,6 +194,7 @@ class LocalNotificationService implements NotificationService {
     required String body,
     required String payload,
   }) async {
+    await initialize();
     final now = timezone.TZDateTime.now(timezone.local);
     final next = nextDailyReminderTime(
       now: now,
@@ -228,6 +246,7 @@ class LocalNotificationService implements NotificationService {
     required String payload,
     Duration delay = const Duration(seconds: 10),
   }) async {
+    await initialize();
     final scheduledDate = timezone.TZDateTime.now(timezone.local).add(delay);
     await cancelTestNotification();
     debugPrint(
@@ -272,6 +291,7 @@ class LocalNotificationService implements NotificationService {
 
   @override
   Future<String?> getLaunchPayload() async {
+    await initialize();
     final details = await _plugin.getNotificationAppLaunchDetails();
     if (details?.didNotificationLaunchApp != true) return null;
     final payload = details?.notificationResponse?.payload;
